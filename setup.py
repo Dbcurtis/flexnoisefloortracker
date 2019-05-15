@@ -19,14 +19,14 @@ with codecs.open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='repeater_ctr_access',
+    name='flex_noise_floor_tracker',
 
     # Versions should comply with PEP440.  For a discussion on single-sourcing
     # the version across setup.py and the project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
     version='1.0a1.dev1',
 
-    description='A utility to transfer commands and files to an arcom or TBD** repeater controller',
+    description='A utility to determine and log the noise floor from the flex radio',
 
     # The project's main homepage.
     url='https://gitlab.com/TBD',
@@ -57,13 +57,11 @@ setup(
 
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
     ],
 
     # What does your project relate to?
-    keywords='Radio Arcom Controller Repeater serial',
+    keywords='Radio flex serial noise_floor',
 
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
@@ -91,7 +89,7 @@ setup(
         'test': ['coverage'],
     },
 
-    Python_requires='>=3.4',
+    Python_requires='>=3.6',
 
     # If there are data files included in your packages that need to be
     # installed, specify them here.  If using Python 2.6 or less, then these
