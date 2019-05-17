@@ -97,7 +97,13 @@ class MySerial(serial.Serial):  # pylint: disable=too-many-ancestors
             cmd1 = cmd1 + ';'
 
         _sp.write(string_2_byte(cmd1))
+        cmd2 = cmd1[0:4] + ';'
+        _sp.write(string_2_byte(cmd2))
         result = byte_2_string(_sp.dread(9999))
+        jj = result.split(';')
+
+        if len(jj) > 1 and jj[0] == jj[1]:
+            result = jj[0] + ';'
         return result
 
 
