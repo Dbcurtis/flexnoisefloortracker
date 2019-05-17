@@ -6,7 +6,7 @@ import logging
 import logging.handlers
 import myserial
 import getports
-import knowncontrollers
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -55,15 +55,15 @@ class UserInput:
     def _inputa(self, query):
         return _USER_INPUT_IFD.get(isinstance(self._td, list))(self._td, query)
 
-    def __init__(self, ctype=None, testdata=None, testing=False):
+    def __init__(self, testdata=None, testing=False):
         self.testing = testing
         self.comm_port = ""
         self.inputfn = ""
-        self.controller_type = ctype
-        if self.controller_type is None:
-            self.serial_port = None
-        else:
-            self.serial_port = myserial.MySerial(self.controller_type)
+        ##self.controller_type = ctype
+        #if self.controller_type is None:
+            #self.serial_port = None
+        #else:
+        self.serial_port = myserial.MySerial()
 
         self._td = None
         if testdata:
@@ -82,7 +82,7 @@ class UserInput:
     def request(self):
         """request()
 
-        Request comm port id, repeater controller type, and filename containing controller commands
+        Request comm port id
         """
         while 1:
             tups = []
@@ -90,7 +90,7 @@ class UserInput:
             if available and len(available) > 1:
                 print('Available comport(s) are: {}'.format(available))
                 tups = [(_.strip(), _.strip().lower()) for _ in available]
-                useri = self._inputa("Comm Port for repeater?>").strip()
+                useri = self._inputa("Comm Port for SmartCat slice?>").strip()
             elif available:
                 tups = [(_.strip(), _.strip().lower()) for _ in available]
                 useri = tups[0][1]
@@ -106,20 +106,7 @@ class UserInput:
                 print('Using serial port: {}'.format(self.comm_port))
                 break
 
-        print('Known controlers: \n\t'
-              +'\n\t'.join(knowncontrollers.get_controller_ids()))
-
-        _msg = 'Controler options: ' + str(knowncontrollers.get_known())
-        while 1:
-            print(_msg)
-            useri = self._inputa("Controller type?>")
-            ctrl = knowncontrollers.select_controller(useri)
-            if ctrl:
-                self.controller_type = ctrl[1]
-                self.serial_port = myserial.MySerial(self.controller_type)
-                break
-
-        self.inputfn = self._inputa("file name to send to repeater or blank?>")
+        self.inputfn = ''
 
     def close(self):
         """close()
@@ -153,7 +140,7 @@ class UserInput:
         try:
             sport.port = self.comm_port  # '/dev/ttyACM0'
             sport.timeout = .2
-            sport.baudrate = 9600
+            sport.baudrate = 19200
             _CLOSE_IFD.get(self.serial_port.isOpen())(self.serial_port)
             sport.open()
 
@@ -165,6 +152,10 @@ class UserInput:
         if _detect_br and not sport.find_baud_rate():
             raise OSError('Unable to match controller baud rate')
         return True
+
+
+
+
 
 if __name__ == '__main__':
     if not os.path.isdir(LOG_DIR):

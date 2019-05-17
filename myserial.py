@@ -2,14 +2,33 @@
 """ Module for interfacing to the serial handlers """
 
 import os
+import sys
 import logging
 import logging.handlers
 import serial
+# from userinput import UserInput
+
 
 LOGGER = logging.getLogger(__name__)
 
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/myserial'
+
+def byte_2_string(byte_string):
+    """byte_2_string(byte_string)
+
+    Takes a byte array (byte_string) and returns the corrosponding string
+    """
+    return "".join([chr(int(b)) for b in byte_string if int(b) != 13])
+
+# String_2_Byte(st): return bytes([ord(s) for s in st])
+
+def string_2_byte(str_in):
+    """string_2_byte(str_in)
+
+    Takes a string (str_in) and returns a corrosponding byte array
+    """
+    return bytes([ord(s) for s in str_in])
 
 class MySerial(serial.Serial):  # pylint: disable=too-many-ancestors
     """MySerial(controller_info)
@@ -23,23 +42,27 @@ class MySerial(serial.Serial):  # pylint: disable=too-many-ancestors
     _NO = -1
 
 
-    """Byte_2_String(bs)
+    #def Byte_2_String(self, bs):
+        #"""Byte_2_String(bs)
 
-    Takes a byte array (bs) and returns the corrosponding string
-    """
-    def Byte_2_String(bs): return "".join([chr(int(b)) for b in bs if int(b) != 13])
+        #Takes a byte array (bs) and returns the corrosponding string
+        #"""
+        #return "".join([chr(int(b)) for b in bs if int(b) != 13])
 
-    String_2_Byte = lambda st: bytes([ord(s) for s in st])
-    """String_2_Byte(st)
+    #String_2_Byte = lambda st: bytes([ord(s) for s in st])
 
-    Takes a string (st) and returns a corrosponding byte array
-    """
-    def String_2_Byte(st): return bytes([ord(s) for s in st])
+    #def String_2_Byte(self, st):
+        #"""String_2_Byte(st)
 
-    def __init__(self, controller_info):
+        #Takes a string (st) and returns a corrosponding byte array
+        #"""
+        #return bytes([ord(s) for s in st])
+
+    def __init__(self):
         super(MySerial, self).__init__()
-        self.controller_info = controller_info
-        self.cont_prompt = self.controller_info.newcmd_dict.get('prompt')
+        #self.controller_info = controller_info
+        #self.cont_prompt = self.controller_info.newcmd_dict.get('prompt')
+        self.cont_prompt = ';'
 
     def __str__(self):
         #_aa = super(MySerial, self).__str__()
@@ -55,18 +78,36 @@ class MySerial(serial.Serial):  # pylint: disable=too-many-ancestors
             return self.read(numchar)
 
         if MySerial._dbidx < 0:
-            return  [b'OK\nDTMF>']
+            return [b'?-?;']
         result = MySerial._debugreturns[MySerial._dbidx]
         MySerial._dbidx += 1
         return result
 
+    def docmd(self, cmd):
+        """docmd(cmd)
+
+        cmd is a command string that can be terminated by a ; but if not
+        it will be added
+
+        returns the response to the command
+        """
+        _sp = self
+        cmd1 = cmd
+        if not cmd.endswith(';'):
+            cmd1 = cmd1 + ';'
+
+        _sp.write(string_2_byte(cmd1))
+        result = byte_2_string(_sp.dread(9999))
+        return result
+
+
     def sp_ok(self):  # assume the sp is open
         """spOK()
 
-        Checks to see if an open serial port is communicating with the controller
+        Checks to see if an open serial port is communicating with flex
 
-        Writes a \r to the serial port and reads the result
-        If the result ends with the controller prompt (i.e. DTMF>)
+        Writes a ' ;' to the serial port and reads the result
+        If the result ends with the controller prompt (i.e. ?;)
         the port and repeater are communicating
 
         Returns True if communicating, False if not
@@ -78,14 +119,15 @@ class MySerial(serial.Serial):  # pylint: disable=too-many-ancestors
         _sp.timeout = 0.25 + (110.0/_sp.baudrate)
         _sp.open()
         _sp.dread(9999)
-        _sp.write(MySerial.String_2_Byte('\r'))
+        _sp.write(string_2_byte('s;'))
         #will generate some response
-        #ending in DTMF> if the cps rate is correct (for controllers like the dlxii)
+        # probably ?; if the cps rate is correct
 
-        ctrlresult = MySerial.Byte_2_String(_sp.dread(9999))
+        ctrlresult = byte_2_string(_sp.dread(9999))
         _sp.close()
         _sp.timeout = _to
         _sp.open()
+
         return ctrlresult.endswith(self.cont_prompt)
 
     def find_baud_rate(self):
@@ -110,7 +152,6 @@ class MySerial(serial.Serial):  # pylint: disable=too-many-ancestors
         returns True if a matching baud rate is found, otherwise returns False
         """
         _sp = self
-        _ci = self.controller_info
 
         is_open = _sp.isOpen()
         if not is_open:
@@ -130,7 +171,7 @@ class MySerial(serial.Serial):  # pylint: disable=too-many-ancestors
         scps = MySerial._NO  # setup for storing the selected baud rate and timeout
         sto = 0.0
         # at this point the serial port is always closed
-        for cpsd in _ci.cps_data:
+        for cpsd in []:  # _ci.cps_data:
             _sp.baudrate = cpsd.bps
             _sp.timeout = cpsd.cpsDelay
             cnt = 2
@@ -173,4 +214,37 @@ class MySerial(serial.Serial):  # pylint: disable=too-many-ancestors
         return result
 
 if __name__ == '__main__':
-    pass
+    if not os.path.isdir(LOG_DIR):
+        os.mkdir(LOG_DIR)
+    LF_HANDLER = logging.handlers.RotatingFileHandler(
+        ''.join([LOG_DIR, LOG_FILE, ]),
+        maxBytes=10000,
+        backupCount=5,
+    )
+    LF_HANDLER.setLevel(logging.DEBUG)
+    LC_HANDLER = logging.StreamHandler()
+    LC_HANDLER.setLevel(logging.DEBUG)  #(logging.ERROR)
+    LF_FORMATTER = logging.Formatter(
+        '%(asctime)s - %(name)s - %(funcName)s - %(levelname)s - %(message)s')
+    LC_FORMATTER = logging.Formatter('%(name)s: %(levelname)s - %(message)s')
+    LC_HANDLER.setFormatter(LC_FORMATTER)
+    LF_HANDLER.setFormatter(LF_FORMATTER)
+    THE_LOGGER = logging.getLogger()
+    THE_LOGGER.setLevel(logging.DEBUG)
+    THE_LOGGER.addHandler(LF_HANDLER)
+    THE_LOGGER.addHandler(LC_HANDLER)
+    THE_LOGGER.info('userinput executed as main')
+    # LOGGER.setLevel(logging.DEBUG)
+    MS = MySerial()
+    MS.open()
+    from userinput import UserInput
+    _UI = UserInput()
+    try:
+        _UI.request()
+        _UI.open()
+        print("Requested Port can be opened")
+        _UI.close()
+
+    except(Exception, KeyboardInterrupt) as exc:
+        _UI.close()
+        sys.exit(str(exc))

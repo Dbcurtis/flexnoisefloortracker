@@ -36,6 +36,7 @@ class GetPorts:
             self._old_serial = True
         if self._old_serial:
             LOGGER.debug('Detected Python 3.4')
+            raise NameError('require Python 3.6 and higher')
 
     def get(self):
         """get()
@@ -46,10 +47,10 @@ class GetPorts:
         ports = serial.tools.list_ports.comports()
         devs = []
 
-        if self._old_serial:
-            devs = [p for p in [port[0] for port in ports]]
-        else:
-            devs = [port.device for port in ports]
+        #if self._old_serial:
+            #devs = [p for p in [port[0] for port in ports]]
+        #else:
+        devs = [port.device for port in ports]
 
         self.devs = [p for p in devs]
         LOGGER.debug('exited get with %s', self.devs)
