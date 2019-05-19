@@ -154,9 +154,6 @@ class UserInput:
         return True
 
 
-
-
-
 if __name__ == '__main__':
     if not os.path.isdir(LOG_DIR):
         os.mkdir(LOG_DIR)
