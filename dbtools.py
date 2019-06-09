@@ -2,7 +2,6 @@
 
 """tools for accessing the database"""
 import os
-import sys
 import logging
 import logging.handlers
 import mysql.connector as mariadb
@@ -17,12 +16,13 @@ class DBTools:
 
     """
     def __init__(self):
-        self.db = mariadb.connect(
+        self.dbase = mariadb.connect(
             host="localhost",
             user="dbcurtis",
             passwd="YAqGJ7brzOBDnUJnwXQT",
             database="python1")
-        self.cursor = self.db.cursor()
+        self.cursor = self.dbase.cursor()
+        self.opened = False
 
     def __str__(self):
         return 'DBTools: str'  # '[signal: {:.5f}dBm, {}]'.format(self.dBm, self.sl)
@@ -34,11 +34,14 @@ class DBTools:
         """open()
 
         """
-        pass
+        self.opened = True
+
 
     def close(self):
         """close()
 
         """
-        self.db.commit()
-        self.db.disconnect()
+        if self.opened:
+            self.dbase.commit()
+            self.dbase.disconnect()
+            self.opened = False

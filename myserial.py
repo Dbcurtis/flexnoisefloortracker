@@ -100,10 +100,10 @@ class MySerial(serial.Serial):  # pylint: disable=too-many-ancestors
         cmd2 = cmd1[0:4] + ';'
         _sp.write(string_2_byte(cmd2))
         result = byte_2_string(_sp.dread(9999))
-        jj = result.split(';')
+        _ = result.split(';')
 
-        if len(jj) > 1 and jj[0] == jj[1]:
-            result = jj[0] + ';'
+        if len(_) > 1 and _[0] == _[1]:
+            result = _[0] + ';'
         return result
 
 

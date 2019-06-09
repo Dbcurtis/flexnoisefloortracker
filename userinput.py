@@ -153,8 +153,25 @@ class UserInput:
             raise OSError('Unable to match controller baud rate')
         return True
 
+def main():
+    """main()
+
+    """
+    _ui = UserInput()
+    try:
+        _ui.request()
+        _ui.open()
+        print("Requested Port can be opened")
+        _ui.close()
+
+    except(Exception, KeyboardInterrupt) as exc:
+        _ui.close()
+        sys.exit(str(exc))
+
 
 if __name__ == '__main__':
+
+
     if not os.path.isdir(LOG_DIR):
         os.mkdir(LOG_DIR)
     LF_HANDLER = logging.handlers.RotatingFileHandler(
@@ -175,14 +192,16 @@ if __name__ == '__main__':
     THE_LOGGER.addHandler(LF_HANDLER)
     THE_LOGGER.addHandler(LC_HANDLER)
     THE_LOGGER.info('userinput executed as main')
-    #LOGGER.setLevel(logging.DEBUG)
-    UI = UserInput()
-    try:
-        UI.request()
-        UI.open()
-        print("Requested Port can be opened")
-        UI.close()
+    # LOGGER.setLevel(logging.DEBUG)
 
-    except(Exception, KeyboardInterrupt) as exc:
-        UI.close()
-        sys.exit(str(exc))
+    main()
+
+    # try:
+        # UI.request()
+        # UI.open()
+        #print("Requested Port can be opened")
+        # UI.close()
+
+    # except(Exception, KeyboardInterrupt) as exc:
+        # UI.close()
+        # sys.exit(str(exc))
