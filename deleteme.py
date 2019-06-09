@@ -1,60 +1,34 @@
 #!/usr/bin/env python3
 
-"""tools for accessing the database"""
+"""This script prompts for user input for serial port etc."""
+
+import sys
 import os
 import logging
 import logging.handlers
-import mysql.connector as mariadb
+
+
 
 LOGGER = logging.getLogger(__name__)
 
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
-LOG_FILE = '/dbtools'
+LOG_FILE = '/deleteme'
 
-class DBTools:
-    """DBTools
-
-    """
+class Deleteme:
     def __init__(self):
-        self.dbid = "python1"
-        self.dbase = mariadb.connect(
-            host="localhost",
-            user="dbcurtis",
-            passwd="YAqGJ7brzOBDnUJnwXQT",
-            database=self.dbid)
-        self.cursor = self.dbase.cursor()
-        self.opened = False
-        self.connected = True
+        self.thing = 'thing is'
 
     def __str__(self):
-        return f'Schema is {self.dbid}, opened = {self.opened}, connected = {self.connected}'
+        return self.thing
 
     def __repr__(self):
-        return f'DBTools: Schema is {self.dbid}, opened = {self.opened}, connected = {self.connected}'
-
-    def open(self):
-        """open()
-
-        """
-        self.opened = self.connected and True
-
-
-    def close(self):
-        """close()
-
-        """
-        if self.opened:
-            self.dbase.commit()
-            self.dbase.disconnect()
-            self.connected = False
-            self.opened = False
-        elif self.connected:
-            self.dbase.disconnect()
-            self.connected = False
-
+        return 'Deleteme: ' + self.thing
 
 def main():
-    pass
+    dm = Deleteme()
+    aa = str(dm)
+    aa = repr(dm)
+    a = 0
 
 
 if __name__ == '__main__':
@@ -83,6 +57,7 @@ if __name__ == '__main__':
 
     try:
         main()
+
 
     except(Exception, KeyboardInterrupt) as exc:
         sys.exit(str(exc))
