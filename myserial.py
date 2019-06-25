@@ -14,6 +14,7 @@ LOGGER = logging.getLogger(__name__)
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/myserial'
 
+
 def byte_2_string(byte_string):
     """byte_2_string(byte_string)
 
@@ -23,12 +24,14 @@ def byte_2_string(byte_string):
 
 # String_2_Byte(st): return bytes([ord(s) for s in st])
 
+
 def string_2_byte(str_in):
     """string_2_byte(str_in)
 
     Takes a string (str_in) and returns a corrosponding byte array
     """
     return bytes([ord(s) for s in str_in])
+
 
 class MySerial(serial.Serial):  # pylint: disable=too-many-ancestors
     """MySerial(controller_info)
@@ -41,22 +44,21 @@ class MySerial(serial.Serial):  # pylint: disable=too-many-ancestors
     _dbidx = 0
     _NO = -1
 
+    # def Byte_2_String(self, bs):
+    # """Byte_2_String(bs)
 
-    #def Byte_2_String(self, bs):
-        #"""Byte_2_String(bs)
-
-        #Takes a byte array (bs) and returns the corrosponding string
-        #"""
-        #return "".join([chr(int(b)) for b in bs if int(b) != 13])
+    # Takes a byte array (bs) and returns the corrosponding string
+    # """
+    # return "".join([chr(int(b)) for b in bs if int(b) != 13])
 
     #String_2_Byte = lambda st: bytes([ord(s) for s in st])
 
-    #def String_2_Byte(self, st):
-        #"""String_2_Byte(st)
+    # def String_2_Byte(self, st):
+    # """String_2_Byte(st)
 
-        #Takes a string (st) and returns a corrosponding byte array
-        #"""
-        #return bytes([ord(s) for s in st])
+    # Takes a string (st) and returns a corrosponding byte array
+    # """
+    # return bytes([ord(s) for s in st])
 
     def __init__(self):
         super(MySerial, self).__init__()
@@ -67,7 +69,6 @@ class MySerial(serial.Serial):  # pylint: disable=too-many-ancestors
     def __str__(self):
         #_aa = super(MySerial, self).__str__()
         return "testing:" + str(MySerial._debugging) + ", " + super(MySerial, self).__str__()
-
 
     def dread(self, numchar):
         """dread(numchar)
@@ -106,7 +107,6 @@ class MySerial(serial.Serial):  # pylint: disable=too-many-ancestors
             result = _[0] + ';'
         return result
 
-
     def sp_ok(self):  # assume the sp is open
         """spOK()
 
@@ -122,11 +122,11 @@ class MySerial(serial.Serial):  # pylint: disable=too-many-ancestors
         _sp.flushInput()
         _sp.close()
         _to = _sp.timeout
-        _sp.timeout = 0.25 + (110.0/_sp.baudrate)
+        _sp.timeout = 0.25 + (110.0 / _sp.baudrate)
         _sp.open()
         _sp.dread(9999)
         _sp.write(string_2_byte('s;'))
-        #will generate some response
+        # will generate some response
         # probably ?; if the cps rate is correct
 
         ctrlresult = byte_2_string(_sp.dread(9999))
@@ -192,7 +192,7 @@ class MySerial(serial.Serial):  # pylint: disable=too-many-ancestors
                     scps = cpsd.bps  # setting worked, so save and break the loop
                     sto = cpsd.cpsDelay
                     #print("found one");
-                    #print(str(sp))
+                    # print(str(sp))
                     _sp.close()
                     cnt = -10
                     break
@@ -219,6 +219,7 @@ class MySerial(serial.Serial):  # pylint: disable=too-many-ancestors
             _sp.flushInput()
         return result
 
+
 if __name__ == '__main__':
     if not os.path.isdir(LOG_DIR):
         os.mkdir(LOG_DIR)
@@ -229,7 +230,7 @@ if __name__ == '__main__':
     )
     LF_HANDLER.setLevel(logging.DEBUG)
     LC_HANDLER = logging.StreamHandler()
-    LC_HANDLER.setLevel(logging.DEBUG)  #(logging.ERROR)
+    LC_HANDLER.setLevel(logging.DEBUG)  # (logging.ERROR)
     LF_FORMATTER = logging.Formatter(
         '%(asctime)s - %(name)s - %(funcName)s - %(levelname)s - %(message)s')
     LC_FORMATTER = logging.Formatter('%(name)s: %(levelname)s - %(message)s')

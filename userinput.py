@@ -13,23 +13,28 @@ LOGGER = logging.getLogger(__name__)
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/userinput'
 
+
 def _ignore(_ignoreme):
     return
+
 
 def _pop_test_data(queue, ignore):
     # pylint: disable=W0613
     return queue.pop()
 
+
 def _inputg(ignore, _a):
     # pylint: disable=W0613
     return input(_a)
 
+
 _CLOSE_IFD = {True: lambda a: a.close(),
-              False: _ignore,}
+              False: _ignore, }
 
 _USER_INPUT_IFD = {
     True: _pop_test_data,
-    False: _inputg,}
+    False: _inputg, }
+
 
 class UserInput:
     """UserInput( ctype=controller, testdata=string, testing=TF)
@@ -59,10 +64,7 @@ class UserInput:
         self.testing = testing
         self.comm_port = ""
         self.inputfn = ""
-        ##self.controller_type = ctype
-        #if self.controller_type is None:
-            #self.serial_port = None
-        #else:
+
         self.serial_port = myserial.MySerial()
 
         self._td = None
@@ -79,11 +81,17 @@ class UserInput:
     def __repr__(self):
         return '[UserInput: {}, {}]'.format(self.comm_port, self.inputfn)
 
-    def request(self):
+    def request(self, port=None):
         """request()
 
         Request comm port id
         """
+        self.inputfn = ''
+        if port:
+            self.comm_port = port
+            print('Using serial port: {}'.format(self.comm_port))
+            return
+
         while 1:
             tups = []
             available = getports.GetPorts().get()
@@ -106,15 +114,12 @@ class UserInput:
                 print('Using serial port: {}'.format(self.comm_port))
                 break
 
-        self.inputfn = ''
-
     def close(self):
         """close()
 
         Closes the serial port if it is open
         """
         _CLOSE_IFD.get(self.serial_port.isOpen())(self.serial_port)
-
 
     def open(self, detect_br=True):
         """open()
@@ -153,6 +158,7 @@ class UserInput:
             raise OSError('Unable to match controller baud rate')
         return True
 
+
 def main():
     """main()
 
@@ -171,7 +177,6 @@ def main():
 
 if __name__ == '__main__':
 
-
     if not os.path.isdir(LOG_DIR):
         os.mkdir(LOG_DIR)
     LF_HANDLER = logging.handlers.RotatingFileHandler(
@@ -181,7 +186,7 @@ if __name__ == '__main__':
     )
     LF_HANDLER.setLevel(logging.DEBUG)
     LC_HANDLER = logging.StreamHandler()
-    LC_HANDLER.setLevel(logging.DEBUG)  #(logging.ERROR)
+    LC_HANDLER.setLevel(logging.DEBUG)  # (logging.ERROR)
     LF_FORMATTER = logging.Formatter(
         '%(asctime)s - %(name)s - %(funcName)s - %(levelname)s - %(message)s')
     LC_FORMATTER = logging.Formatter('%(name)s: %(levelname)s - %(message)s')
@@ -197,11 +202,11 @@ if __name__ == '__main__':
     main()
 
     # try:
-        # UI.request()
-        # UI.open()
-        #print("Requested Port can be opened")
-        # UI.close()
+    # UI.request()
+    # UI.open()
+    #print("Requested Port can be opened")
+    # UI.close()
 
     # except(Exception, KeyboardInterrupt) as exc:
-        # UI.close()
-        # sys.exit(str(exc))
+    # UI.close()
+    # sys.exit(str(exc))

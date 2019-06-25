@@ -5,16 +5,19 @@ import os
 import logging
 import logging.handlers
 import mysql.connector as mariadb
+import datetime
 
 LOGGER = logging.getLogger(__name__)
 
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/dbtools'
 
+
 class DBTools:
     """DBTools
 
     """
+
     def __init__(self):
         self.dbid = "python1"
         self.dbase = mariadb.connect(
@@ -38,7 +41,6 @@ class DBTools:
         """
         self.opened = self.connected and True
 
-
     def close(self):
         """close()
 
@@ -51,6 +53,18 @@ class DBTools:
         elif self.connected:
             self.dbase.disconnect()
             self.connected = False
+
+    def getrecid(self):
+        """getrecid()
+
+        """
+        date_string = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        sql = 'INSERT INTO TIMES(timescol) Values (\"{}\");'.format(date_string)
+        self.cursor.execute(sql)
+        self.dbase.commit()
+        self.cursor.execute('SELECT RECID FROM TIMES ORDER BY RECID DESC LIMIT 1;')
+        records = self.cursor.fetchall()
+        return records[0][0]
 
 
 def main():

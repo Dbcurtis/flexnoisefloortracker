@@ -8,18 +8,10 @@ import logging
 import logging.handlers
 import datetime
 
-
-
 LOGGER = logging.getLogger(__name__)
 
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/smeter'
-
-#_DT = dbtools.DBTools()
-#_DB = _DT.dbase
-#_CU = _DT.cursor
-
-
 
 _SREAD = (
     (-127.0, -121.0, 0),
@@ -58,6 +50,7 @@ class SMeter:
 
 
     """
+
     def __init__(self, argin):
 
         arg = argin[0]
@@ -78,11 +71,9 @@ class SMeter:
         else:
             for _ in _SREAD:
                 if self.signal_st.get('dBm') >= _[0] \
-                and self.signal_st.get('dBm') < _[1]:
+                   and self.signal_st.get('dBm') < _[1]:
                     self.signal_st['sl'] = 'S{}'.format(_[2])
                     break
-
-        a = 0
 
     def __str__(self):
         return '[SMeter: freq:{}, {:.5f}dBm, {}]' \
@@ -95,6 +86,7 @@ class SMeter:
 
 def main():
     pass
+
 
 if __name__ == '__main__':
     if not os.path.isdir(LOG_DIR):
