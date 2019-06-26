@@ -22,10 +22,21 @@ LOGGER = logging.getLogger(__name__)
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/flex'
 
-FLEX_CAT = {'ZZAG', 'ZZAI', 'ZZAR', 'ZZAS', 'ZZBI', 'ZZDE', 'ZZFA', 'ZZFB', 'ZZFI', 'ZZFJ',
-            'ZZFR', 'ZZFT', 'ZZGT', 'ZZIF', 'ZZLB', 'ZZLE', 'ZZLF', 'ZZMA', 'ZZMD', 'ZZME',
-            'ZZMG', 'ZZNL', 'ZZNR', 'ZZPC', 'ZZRC', 'ZZRD', 'ZZRG', 'ZZRT', 'ZZRU', 'ZZRW',
-            'ZZRX', 'ZZRY', 'ZZSM', 'ZZSW', 'ZZTX', 'ZZXC', 'ZZXG', 'ZZXS', }
+FLEX_CAT_ALL = frozenset(
+    [
+        'ZZAG', 'ZZAI', 'ZZAR', 'ZZAS', 'ZZBI', 'ZZDE', 'ZZFA', 'ZZFB', 'ZZFI',
+        'ZZFJ', 'ZZFR', 'ZZFT', 'ZZGT', 'ZZIF', 'ZZLB', 'ZZLE', 'ZZLF', 'ZZMA',
+        'ZZMD', 'ZZME', 'ZZMG', 'ZZNL', 'ZZNR', 'ZZPC', 'ZZRC', 'ZZRD', 'ZZRG',
+        'ZZRT', 'ZZRU', 'ZZRW', 'ZZRX', 'ZZRY', 'ZZSM', 'ZZSW', 'ZZTX', 'ZZXC',
+        'ZZXG', 'ZZXS',
+    ]
+)
+
+FLEX_CAT_WRITE = frozenset(
+    ['ZZFR', 'ZZFT', 'ZZPE', 'ZZRC', 'ZZRD', 'ZZRU', 'ZZSM', 'ZZSW', 'ZZTX', 'ZZXC',]
+)
+
+FLEX_CAT_READ_ONLY = FLEX_CAT_ALL - FLEX_CAT_WRITE
 
 class Flex:
     """
@@ -38,19 +49,20 @@ class Flex:
         ui is a UserInput object that is connected to the CAT port for the flex
         """
         self._ui = ui
-        self.isOpen = False
+        self.is_open = False
+        self.saved_state = []
 
 
     def __str__(self):
         cp = self._ui.comm_port if self._ui.comm_port else "unspecified"
-        return f'Flex cat: {cp}, opened: {self.isOpen}'
+        return f'Flex cat: {cp}, opened: {self.is_open}'
 
     def __repr__(self):
         cp = self._ui.comm_port if self._ui.comm_port else "unspecified"
-        return f'[Flex] Flex cat: {cp}, opened: {self.isOpen}'
+        return f'[Flex] Flex cat: {cp}, opened: {self.is_open}'
 
     def open(self, detect_br=False):
-        """open( detect_br)
+        """open(detect_br)
 
         Configures and opens the serial port if able, otherwise
          displays error with reason.
@@ -69,7 +81,7 @@ class Flex:
 
         try:
             self._ui.open(detect_br)
-            self.isOpen = self._ui.serial_port.is_open
+            self.is_open = self._ui.serial_port.is_open
 
 
         except Exception as sex:
@@ -79,12 +91,68 @@ class Flex:
 
         return True
 
-    def close(self):
+    def do_cmd(self, cmd):
+        """do_cmd(cmd)
+
         """
+        if cmd[0:4] not in FLEX_CAT_ALL:
+            return '??;'
+        if ';' != cmd[-1]:
+            cmd = f'{cmd};'
+        return self._ui.serial_port.docmd(cmd)
+
+
+
+    def do_cmd_list(self, cset):
+        """do_cmd_list(clist)
+
+        """
+        resultlst = []
+        if not self.is_open:
+            return self.saved_state
+
+        clist = sorted([i for i in cset])
+        for cmd in clist:
+            # acmd = f'{cmd};'
+            # cmdreply = self._ui.serial_port.docmd(f'{cmd};')
+            cmdreply = self.do_cmd(cmd)
+            if cmdreply != '?;':
+                resultlst.append(cmdreply)
+
+        return resultlst[:]
+
+    def save_current_state(self):
+        """save_current_state()
+
+        """
+        self.saved_state = self.do_cmd_list(FLEX_CAT_READ_ONLY)
+        return self.saved_state[:]
+
+
+    def restore_saved_state(self):
+        """restore_saved_state()
+
+        """
+        self.restore_state(self.saved_state)
+
+    def restore_state(self, cmdlst):
+        """restore_state()
+
+        """
+        results = []
+        for cmd in cmdlst:
+            if cmd[0:4] in 'ZZIF':
+                continue
+            cmdreply = self._ui.serial_port.docmd(cmd)
+            results.append(cmdreply)
+        return results
+
+    def close(self):
+        """close()
 
         """
         self._ui.close()
-        self.isOpen = self._ui.serial_port.is_open
+        self.is_open = self._ui.serial_port.is_open
 
 
     def get_cat_data(self, cmd_list, freq):
@@ -99,7 +167,7 @@ class Flex:
                 delay = float(cmd[0][4:])
                 time.sleep(delay)
                 continue
-            if cmd[0][0:4] not in FLEX_CAT:
+            if cmd[0][0:4] not in FLEX_CAT_ALL:
                 raise Exception('illegal flex command')
             result = self._ui.serial_port.docmd(cmd[0])
             if cmd[1]:  # process the result if provided
