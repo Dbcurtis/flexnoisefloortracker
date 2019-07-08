@@ -13,7 +13,7 @@ import time
 import mysql.connector as mariadb
 from userinput import UserInput
 # from smeter import SMeter, _SREAD
-from bandreadings import Bandreadings
+# from bandreadings import Bandreadings
 import dbtools
 import postproc
 
@@ -106,18 +106,20 @@ class Flex:
     def do_cmd_list(self, cset):
         """do_cmd_list(clist)
 
+        cset is a list or a set.
+        If a set, it is converted into a list and sorted.
+
         """
         resultlst = []
         if not self.is_open:
             return self.saved_state
 
-        clist = sorted([i for i in cset])
-        for cmd in clist:
-            # acmd = f'{cmd};'
-            # cmdreply = self._ui.serial_port.docmd(f'{cmd};')
-            cmdreply = self.do_cmd(cmd)
-            if cmdreply != '?;':
-                resultlst.append(cmdreply)
+        clist = [_ for _ in cset]
+        if isinstance(cset, set):
+            clist.sort()
+
+        # resultlst = [self.do_cmd(cmd) for cmd in clist]
+        resultlst = [_ for _ in [self.do_cmd(cmd) for cmd in clist] if _ != '?;']
 
         return resultlst[:]
 
@@ -140,11 +142,13 @@ class Flex:
 
         """
         results = []
-        for cmd in cmdlst:
-            if cmd[0:4] in 'ZZIF':
-                continue
-            cmdreply = self._ui.serial_port.docmd(cmd)
-            results.append(cmdreply)
+        if self._ui.serial_port.is_open:
+            for cmd in cmdlst:
+                if cmd[0:4] in 'ZZIF':
+                    continue
+                cmdreply = self._ui.serial_port.docmd(cmd)
+                results.append(cmdreply)
+            self.save_current_state()
         return results
 
     def close(self):
@@ -183,33 +187,25 @@ class Flex:
 
         return results
 
-    #def docmd(self, cmd):
-        #"""docmd(cmd)
 
-        #cmd is a command string that can be terminated by a ; but if not
-        #it will be added
-
-        #returns the response to the command
-        #"""
-
-        #cmd1 = cmd
-        #if not cmd.endswith(';'):
-            #cmd1 = cmd1 + ';'
-
-        #self.write(string_2_byte(cmd1))
-        #cmd2 = cmd1[0:4] + ';'
-        #_sp.write(string_2_byte(cmd2))
-        #result = byte_2_string(_sp.dread(9999))
-        #_ = result.split(';')
-
-        #if len(_) > 1 and _[0] == _[1]:
-            #result = _[0] + ';'
-        #return result
 
 
 def main():
-    flex = Flex(UserInput())
-    pass
+    """main()
+
+    """
+
+    ui = UserInput()
+    ui.request(port='com4')
+    flex = None
+    try:
+
+        flex = Flex(ui)
+        flex.open()
+    finally:
+        if flex:
+            flex.close()
+
 
 if __name__ == '__main__':
     if not os.path.isdir(LOG_DIR):

@@ -8,6 +8,7 @@ import logging
 import logging.handlers
 import datetime
 
+
 LOGGER = logging.getLogger(__name__)
 
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
@@ -85,7 +86,10 @@ class SMeter:
 
 
 def main():
-    pass
+    """main()
+
+    """
+
 
 
 if __name__ == '__main__':

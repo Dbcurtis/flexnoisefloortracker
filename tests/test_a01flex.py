@@ -2,8 +2,7 @@
 """
 Test file for need
 """
-import os
-import sys
+
 import time
 import unittest
 import context
@@ -13,12 +12,33 @@ import postproc
 
 
 class Testflex(unittest.TestCase):
+    """Testflex
+
+    unit testing for the flex class
+
+    """
+
+    #def initialize_flex(self):
+        #"""initialize_flex()
+
+        #"""
+
+        #_ui = UserInput()
+        #_ui.request('com4')
+        #self.flex = Flex(_ui)
+        #self.flex.open()
+        ## self.initialize_flex()
+        #self.flex.do_cmd_list(postproc.INITIALZE_FLEX)
+        #results = self.flex.do_cmd_list(postproc.INITIALZE_FLEX)
+        #return results
+
     def setUp(self):
         _ui = UserInput()
         _ui.request('com4')
         self.flex = Flex(_ui)
         self.flex.open()
-
+        _ = self.flex.do_cmd_list(postproc.INITIALZE_FLEX)
+        self.assertEqual(13, len(_))
 
     def tearDown(self):
         self.flex.close()
@@ -26,33 +46,46 @@ class Testflex(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        a = 0
-        pass
+        _ui = UserInput()
+        _ui.request('com4')
+        flex = Flex(_ui)
+        flex.open()
+        cls.initial_state = flex.save_current_state()
+        flex.close()
+
 
     @classmethod
     def tearDownClass(cls):
-        a = 0
-        pass
+        _ui = UserInput()
+        _ui.request('com4')
+        flex = Flex(_ui)
+        flex.open()
+        flex.restore_state(cls.initial_state)
+        flex.close()
 
-    def test_instantiate(self):
+
+    def test01_instantiate(self):
         """test_instantiate()
+
+        check if Flex instiantiates and has expected str and repr without flex being opened
 
         """
         _ui = UserInput()
         _ui.request('com4')
-        self.flex = Flex(_ui)
+        flex = Flex(_ui)
 
-        self.assertEqual('Flex cat: com4, opened: False', str(self.flex))
-        self.assertEqual('[Flex] Flex cat: com4, opened: False', repr(self.flex))
+        self.assertEqual('Flex cat: com4, opened: False', str(flex))
+        self.assertEqual('[Flex] Flex cat: com4, opened: False', repr(flex))
+        flex.close()
 
-    def test_open_close(self):
+    def test02_open_close(self):
         """test_open_close()
 
+        check if Flex instiantiates and opens and has expected str and repr flex
+        verifies that flex closes
+        verifies re-open and can do a simple do_cmd
         """
-        #_ui = UserInput()
-        #_ui.request('com4')
-        #self.flex = Flex(_ui)
-        #self.flex.open()
+
         self.assertEqual('Flex cat: com4, opened: True', str(self.flex))
         self.assertEqual('[Flex] Flex cat: com4, opened: True', repr(self.flex))
 
@@ -77,9 +110,10 @@ class Testflex(unittest.TestCase):
         result = self.flex.do_cmd('ZZIF;')
         self.assertEqual(41, len(result))
 
-    def test_do_cmd(self):
+    def test03_do_cmd(self):
         """test_do_cmd()
 
+        checks error conditions on do_cmd
         """
         result = self.flex.do_cmd('ZZIF;')
 
@@ -91,14 +125,13 @@ class Testflex(unittest.TestCase):
         result = self.flex.do_cmd('junk')
         self.assertEqual('??;', result)
 
-    def test_save_current_state(self):
+    def test04_save_current_state(self):
         """test_save_current_state()
 
+        checks that flex state can be saved, modified and restored
+
         """
-        #_ui = UserInput()
-        #_ui.request('com4')
-        #self.flex = Flex(_ui)
-        #self.flex.open()
+
         savedstate = self.flex.save_current_state()
         self.assertEqual(savedstate, self.flex.saved_state[:])
 
@@ -108,20 +141,18 @@ class Testflex(unittest.TestCase):
 
         _aa = int([i for i in newsavedstate if 'ZZFA' in i][0][-12:-1])
         _aa = 14000000 if _aa != 14000000 else 15000000
-        aat = f'ZZFA{aa:011};'
+        # aat = f'ZZFA{_aa:011};'
 
 
-        self.flex.do_cmd(aat)
+        self.flex.do_cmd(f'ZZFA{_aa:011};')
         modstate = self.flex.save_current_state()
         self.assertNotEqual(modstate, newsavedstate)
 
-        self.flex.restore_state(newsavedstate)
+        restore_results = self.flex.restore_state(newsavedstate)
+        self.assertEqual(19, len(restore_results))
+        self.assertEqual(newsavedstate, self.flex.saved_state)
 
-
-        a = 0
-
-
-    def testget_cat_data(self):
+    def test10_get_cat_data(self):
         """testget_cat_data()
         """
         gdata1 = [
@@ -129,22 +160,24 @@ class Testflex(unittest.TestCase):
             ('ZZIF;', postproc.zzifpost, ),
             ]
 
-        #_ui = UserInput()
-        #_ui.request('com4')
-        #self.flex = Flex(_ui)
-        #self.flex.open()
-        stim = time.localtime
-        results = self.flex.get_cat_data([], 14_000_000)
-        etime = time.localtime
 
-        stim = time.localtime
+        stime = time.perf_counter()
+        results = self.flex.get_cat_data([], 14_000_000)
+        etime = time.perf_counter()
+        dtime = etime - stime
+        self.assertAlmostEqual(0.00, dtime, delta=0.001)
+
+        stime = time.perf_counter()
         results = self.flex.get_cat_data([('wait0.5', None, ), ], 14_000_000)
-        etime = time.localtime
+        etime = time.perf_counter()
+        dtime = etime - stime
+        self.assertAlmostEqual(0.50, dtime, delta=0.1)
 
         results = self.flex.get_cat_data(gdata1, 14_000_000)
-        pass
+        dtime = etime - stime
+        self.assertAlmostEqual(0.50, dtime, delta=0.1)
+        self.assertEqual(1, len(results))
 
 
 if __name__ == '__main__':
     unittest.main()
-
