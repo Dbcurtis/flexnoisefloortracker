@@ -23,7 +23,6 @@ class TestBandreadings(unittest.TestCase):
 
     """
 
-
     def setUp(self):
         """setUp()
 
@@ -64,7 +63,6 @@ class TestBandreadings(unittest.TestCase):
         flex.restore_state(cls.initial_state)
         flex.close()
 
-
     def test01_instat(self):
         """test01_instat()
 
@@ -84,7 +82,6 @@ class TestBandreadings(unittest.TestCase):
         self.assertEqual('Bandreadings: no reading, band 20', repr(_br))
         self.assertEqual('20', _br.bandid)
 
-
     def test02_radioaccess(self):
         """test02_radioaccess()
 
@@ -93,21 +90,26 @@ class TestBandreadings(unittest.TestCase):
         try:
             _br = Bandreadings(['14000000', '14074000', '14100000', '14200000'], self.flex)
             _br.get_readings(testing='./quiet20band.json')
-            self.assertEqual('[SMeterAvg: -103.45833dBm, S3, var: 0.15720, stddv: 0.39648]',
-                             repr(_br.band_signal_strength))
+            self.assertEqual(
+                '[SMeterAvg: -103.45833adBm, -103.50000mdBm, S3, var: 0.15720, stddv: 0.39648]',
+                repr(_br.band_signal_strength))
 
             _br.get_readings(testing='./noisy20band.json')
-            self.assertEqual('[SMeterAvg: -102.06250dBm, S4, var: 12.79583, stddv: 3.57713]',
-                             repr(_br.band_signal_strength))
+            self.assertEqual(
+                '[SMeterAvg: -102.06250adBm, -103.50000mdBm, S3, var: 12.79583, stddv: 3.57713]',
+                repr(_br.band_signal_strength))
 
             if _br.band_signal_strength.signal_st.get('stddv') > 1.5:
-                band = _br.band_signal_strength.band
-                tup = _br.band_signal_strength.get_out_of_var()
-                sma = _br.changefreqs(tup, band, testing='./focusedbadspotreading.json')
-                print(sma)
+                _br.changefreqs(
+                    testing='./focusedbadspotreading.json')
+            self.assertEqual(
+                '[SMeterAvg: -103.32090adBm, -103.50000mdBm, S3, var: 0.74774, stddv: 0.86472]',
+                repr(_br.band_signal_strength))
 
-        except(Exception, KeyboardInterrupt):
-            raise
+
+        except(Exception, KeyboardInterrupt) as exc:
+            self.fail('unexpected exception' + str(exc))
+
 
     def test03_changefreqs(self):
         _ui = UserInput()
@@ -115,7 +117,7 @@ class TestBandreadings(unittest.TestCase):
 
             sm = SMeter(('ZZSM098;', 14_100_000))  # s6
             _br = Bandreadings(['14000000', '14100000', '14200000'], self.flex,)  # 14000000
-            _br.changefreqs((sm, [],), 20)
+            _br.changefreqs()
             self.fail('test not completed')
 
         except(Exception, KeyboardInterrupt) as exc:
@@ -127,8 +129,9 @@ class TestBandreadings(unittest.TestCase):
         lines = file.readlines()
         savedreadings = [jsonpickle.decode(i) for i in lines][0]
 
-        #file.close()
+        # file.close()
         self.fail('test not completed')
+
 
 if __name__ == '__main__':
     unittest.main()

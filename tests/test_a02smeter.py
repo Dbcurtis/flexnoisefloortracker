@@ -5,6 +5,7 @@ Test file for need
 
 import datetime
 import unittest
+import random
 import context
 import smeter
 from smeter import SMeter
@@ -96,6 +97,45 @@ class Testsmeter(unittest.TestCase):
         self.assertEqual('S7', sms[13].signal_st.get('sl'))
         self.assertEqual('S7', sms[24].signal_st.get('sl'))
         self.assertEqual('S8', sms[25].signal_st.get('sl'))
+
+        # check comparisons only need dbm
+        _sm1 = SMeter(('ZZSM260;', 14_123_456))  # "S9+70"
+        _sm2 = SMeter(('ZZSM260;', 14_123_456))  # "S9+70"
+        _sm3 = SMeter(('ZZSM098;', 12_123_444))
+        self.assertEqual(_sm1, _sm2)
+        self.assertNotEqual(_sm1, _sm3)
+        self.assertFalse(_sm1 is _sm2)
+
+        sms1 = sms[:]
+        random.shuffle(sms)
+        self.assertNotEqual(sms, sms1)
+        sms.sort()
+        self.assertEqual(sms, sms1)
+        for i in range(1, len(sms) - 1):
+            self.assertTrue(sms[i] == sms[i])
+            self.assertTrue(sms[i - 1] != sms[i])
+            self.assertTrue(sms[i - 1] < sms[i])
+            self.assertFalse(sms[i - 1] > sms[i])
+            self.assertFalse(sms[i] < sms[i])
+            self.assertFalse(sms[i] < sms[i - 1])
+            self.assertFalse(sms[i] > sms[i])
+            self.assertTrue(sms[i] > sms[i - 1])
+            self.assertTrue(sms[i - 1] <= sms[i])
+            self.assertTrue(sms[i] <= sms[i])
+            self.assertFalse(sms[i - 1] >= sms[i])
+            self.assertTrue(sms[i] >= sms[i])
+
+            self.assertFalse(sms[i] < sms[i - 1])
+            self.assertTrue(sms[i] <= sms[i])
+
+            self.assertTrue(sms[i - 1] < sms[i])
+            self.assertFalse(sms[i] < sms[i])
+            self.assertFalse(sms[i] < sms[i - 1])
+            self.assertTrue(sms[i - 1] <= sms[i])
+            self.assertTrue(sms[i] <= sms[i])
+            self.assertFalse(sms[i] < sms[i - 1])
+            self.assertTrue( sms[i] <= sms[i])
+
 
         # check for json output
         _sm = SMeter(('ZZSM098;', 12_123_444))  # s6

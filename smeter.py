@@ -52,6 +52,39 @@ class SMeter:
 
     """
 
+    def __lt__(self, other):
+        if isinstance(other, self.__class__):
+            return self.signal_st.get('dBm') < other.signal_st.get('dBm')
+        return False
+
+    def __le__(self, other):
+        if isinstance(other, self.__class__):
+            return self.signal_st.get('dBm') <= other.signal_st.get('dBm')
+        return False
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.__dict__ == other.__dict__
+        return False
+
+    # def __ne__(self, other):
+        # return not self.__eq__(other)
+
+    def __gt__(self, other):
+
+        if isinstance(other, self.__class__):
+            return self.signal_st.get('dBm') > other.signal_st.get('dBm')
+        return False
+
+    def __ge__(self, other):
+
+        if isinstance(other, self.__class__):
+            return self.signal_st.get('dBm') >= other.signal_st.get('dBm')
+        return False
+
+    def __hash__(self):
+        return id(self)
+
     def __init__(self, argin):
 
         arg = argin[0]
@@ -89,7 +122,6 @@ def main():
     """main()
 
     """
-
 
 
 if __name__ == '__main__':

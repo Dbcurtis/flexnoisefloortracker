@@ -142,7 +142,7 @@ class Flex:
 
         """
         results = []
-        if self._ui.serial_port.is_open:
+        if self._ui.serial_port.is_open and cmdlst:
             for cmd in cmdlst:
                 if cmd[0:4] in 'ZZIF':
                     continue
