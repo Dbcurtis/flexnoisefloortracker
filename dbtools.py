@@ -58,8 +58,8 @@ class DBTools:
         """getrecid()
 
         """
-        date_string = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        sql = 'INSERT INTO TIMES(timescol) Values (\"{}\");'.format(date_string)
+        date_string = datetime.datetime.now().strftime('%YYYY-%mm-%dd %HH:%MM:%SS')
+        sql = 'INSERT INTO TIMES(datetime) Values (\"{}\");'.format(date_string)
         self.cursor.execute(sql)
         self.dbase.commit()
         self.cursor.execute('SELECT RECID FROM TIMES ORDER BY RECID DESC LIMIT 1;')

@@ -99,31 +99,46 @@ class TestBandreadings(unittest.TestCase):
                 '[SMeterAvg: -102.06250adBm, -103.50000mdBm, S3, var: 12.79583, stddv: 3.57713]',
                 repr(_br.band_signal_strength))
 
-            if _br.band_signal_strength.signal_st.get('stddv') > 1.5:
-                _br.changefreqs(
-                    testing='./focusedbadspotreading.json')
-            self.assertEqual(
-                '[SMeterAvg: -103.32090adBm, -103.50000mdBm, S3, var: 0.74774, stddv: 0.86472]',
-                repr(_br.band_signal_strength))
+            #if _br.band_signal_strength.signal_st.get('stddv') > 1.5:
+                #_br.changefreqs(
+                    #testing='./focusedbadspotreading.json')
+            #self.assertEqual(
+                #'[SMeterAvg: -103.32090adBm, -103.50000mdBm, S3, var: 0.74774, stddv: 0.86472]',
+                #repr(_br.band_signal_strength))
 
 
         except(Exception, KeyboardInterrupt) as exc:
             self.fail('unexpected exception' + str(exc))
 
 
-    def test03_changefreqs(self):
-        _ui = UserInput()
-        try:
+    def test03_get_readings(self):
+        """test03_get_readings()
 
-            sm = SMeter(('ZZSM098;', 14_100_000))  # s6
-            _br = Bandreadings(['14000000', '14100000', '14200000'], self.flex,)  # 14000000
-            _br.changefreqs()
-            self.fail('test not completed')
+        """
+        _br = Bandreadings(['14000000', '14100000', '14200000'], self.flex,)  # 14000000
+        _br.get_readings(testing='./noisy20band.json')
+        smar = _br.band_signal_strength
+        self.assertEqual(16, len(smar.smlist))
+        self.assertEqual('SMeter: freq:14000000, -105.00000dBm, S3', repr(smar.smlist[0]))
+        self.assertEqual('SMeter: freq:14074000, -96.00000dBm, S5', repr(smar.smlist[6]))
+        self.assertEqual(
+            '[SMeterAvg: -102.06250adBm, -103.50000mdBm, S3, var: 12.79583, stddv: 3.57713]',
+            repr(smar))
 
-        except(Exception, KeyboardInterrupt) as exc:
-            self.fail('unexpected exception' + str(exc))
 
-    def test04_cf_process_readings(self):
+    def test07_changefreqs(self):
+        """test07_changefreqs()
+
+        """
+        _br = Bandreadings(['14000000', '14074000', '14100000', '14200000'], self.flex,)  # 14000000
+        _br.get_readings(testing='./noisy20band.json')
+        sma = _br.band_signal_strength
+        sml = sma.smlist[:]
+
+
+
+        a = 0
+
 
         file = open('./focusedbadspotreading.json', 'r')
         lines = file.readlines()
@@ -131,6 +146,40 @@ class TestBandreadings(unittest.TestCase):
 
         # file.close()
         self.fail('test not completed')
+
+
+        _ui = UserInput()
+        try:
+
+            sm = SMeter(('ZZSM098;', 14_100_000))  # s6
+            _br = Bandreadings(['14000000', '14100000', '14200000'], self.flex,)  # 14000000
+            _br.get_readings(testing='./noisy20band.json')
+            _br.changefreqs(testing='./focusedbadspotreading.json')
+            self.fail('test not completed')
+
+
+        except(Exception, KeyboardInterrupt) as exc:
+            self.fail('unexpected exception' + str(exc))
+
+    def test04_cf_process_readings(self):
+        """test04_cf_process_readings()
+
+        """
+        _br = Bandreadings(['14000000', '14074000', '14100000', '14200000'], self.flex,)  # 14000000
+        _br.get_readings(testing='./quiet20band.json')
+        self.assertFalse(_br.cf_process_readings())
+        # oldsmalst = [_br.band_signal_strength][:]
+        _br = Bandreadings(['14000000', '14074000', '14100000', '14200000'], self.flex,)  # 14000000
+
+      #  need to figure out what was the noisy frequency when you removed the damn things
+        _br.get_readings(testing='./noisy20band.json')
+        temp_smeteravg = _br.cf_process_readings()
+        self.assertTrue(temp_smeteravg)
+        self.assertEqual(
+            '[SMeterAvg: -104.04167adBm, -104.00000mdBm, S3, var: 0.33902, stddv: 0.58225]',
+            repr(temp_smeteravg))
+        self.assertTrue(_br.single_noise_freq)
+        self.dropped_freqs[0]
 
 
 if __name__ == '__main__':
