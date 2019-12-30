@@ -3,12 +3,15 @@
 """tools for accessing the database"""
 import os
 import sys
+from multiprocessing import freeze_support
 import logging
 import logging.handlers
 import requests
 # import json
 # import mysql.connector as mariadb
 import time
+#from medfordor import Medford_or_Info as MI
+import medfordor
 from medfordor import Medford_or_Info as MI
 
 
@@ -30,6 +33,37 @@ _DB = _DT.dbase
 _CU = _DT.cursor
 
 _VALID_UNITS = ['std', 'metric', 'imperial']
+
+
+def converttemp(k):
+    """converttemp(k)
+    k is degrees in Kelven
+
+    returns 3truple (xK, xC, xF)
+    """
+    #c = 0.0
+    k1 = 0.0
+    try:
+        k1 = float(k)
+    except ValueError:
+        raise ValueError(
+            'f(t) is not int, float or text of a float or int number')
+
+    c = k1 - 273.15
+    f = (c * (9 / 5)) + 32.0
+    temptup = (f'{k:.2f}K', f'{c:.2f}C', f'{f:.2f}F',)
+    return temptup
+
+
+def convertspeed(msin):
+    """convertspeed(msin)
+    msin - meters per seconds
+
+    return tuple (meters per sec, miles per hour)
+    """
+    ms = float(msin)
+    mh = ms * 2.236936
+    return (ms, round(mh, 2))
 
 
 class MyTime:
@@ -82,7 +116,19 @@ class MyTime:
 
 
 class LocalWeather:
+    """lw = LocalWeather()
+
+
+    """
+
     def load(self):
+        """lw.load()
+
+
+        gets the local weather for Medford OR.
+        Leaves the result in the lw.maint dict
+
+        """
 
         r = requests.get(OW_First, params=PAYLOAD)
         self.netstatus = r.status_code
@@ -107,20 +153,18 @@ class LocalWeather:
                 gust = 0
 
             degree = round(float(wind['deg']), 0)
-            rspeed = self.convertspeed(speed)
-            rgust = self.convertspeed(gust)
+            rspeed = convertspeed(speed)
+            rgust = convertspeed(gust)
 
-            self.maint = {'temp': (self.converttemp(mains['temp']), self.converttemp(mains['temp_min']), self.converttemp(mains['temp_max'])),
+            self.maint = {'temp': (converttemp(mains['temp']), converttemp(mains['temp_min']), converttemp(mains['temp_max'])),
                           'humidity': f'{hum:.1f}%',
                           'wind': {'speed': ((f'{rspeed[0]:.1f} m/s', f'{rspeed[1]:.1f} mph'), (f'{rgust[0]:.1f} m/s', f'{rgust[1]:.1f} mph')), 'dir': f'{degree:.0f} degrees'},
                           'times': {'acquire': self.times['dt'].get()[2], 'sunup': self.times['sunup'].get()[2], 'sunset': self.times['sunset'].get()[2]}
                           }
-            a = 0
 
         except Exception as e:
             print(r)
             print(e)
-            a = 0
 
     def __init__(self):
         """LocalWeather()
@@ -131,44 +175,6 @@ class LocalWeather:
         self.rjson = {}
         self.units = 'std'
         self.netstatus = ''
-        # self.load()
-        #r = requests.get(OW_First, params=PAYLOAD)
-        #self.netstatus = r.status_code
-        # if not r.status_code == 200:
-        # raise Exception(f'{r.url} returned {r.status_code}')
-
-        # try:
-        #self.rjson = r.json()
-        #self.valid = True
-        #sys = self.rjson['sys']
-        ##aa = MyTime(self.rjson['dt'])
-        # self.times = {'dt': MyTime(self.rjson['dt']),
-        # 'sunup': MyTime(sys['sunrise']),
-        # 'sunset': MyTime(sys['sunset'])}
-        #mains = self.rjson['main']
-        #hum = float(mains['humidity'])
-        #wind = self.rjson['wind']
-        #speed = wind['speed']
-        # try:
-        #gust = wind['gust']
-        # except:
-        #gust = 0
-
-        #degree = round(float(wind['deg']), 0)
-        #rspeed = self.convertspeed(speed)
-        #rgust = self.convertspeed(gust)
-
-        # self.maint = {'temp': (self.converttemp(mains['temp']), self.converttemp(mains['temp_min']), self.converttemp(mains['temp_max'])),
-        # 'humidity': f'{hum:.1f}%',
-        # 'wind': {'speed': ((f'{rspeed[0]:.1f} m/s', f'{rspeed[1]:.1f} mph'), (f'{rgust[0]:.1f} m/s', f'{rgust[1]:.1f} mph')), 'dir': f'{degree:.0f} degrees'},
-        # 'times': {'acquire': self.times['dt'].get()[2], 'sunup': self.times['sunup'].get()[2], 'sunset': self.times['sunset'].get()[2]}
-        # }
-        #a = 0
-
-        # except Exception as e:
-        # print(r)
-        # print(e)
-        #a = 0
 
     def __str__(self):
         if not self.valid:
@@ -207,45 +213,31 @@ class LocalWeather:
     def get_temp(self):
         return self.maint['temp']
 
-    def converttemp(self, k):
-        """converttemp(k)
-        k is degrees in Kelven
 
-        returns 3truple (xK, xC, xF)
-        """
-        #c = 0.0
-        k1 = 0.0
-        try:
-            k1 = float(k)
-        except ValueError as e:
-            raise ValueError(
-                'f(t) is not int, float or text of a float or int number')
+# def threadrun(threadLock):
+    # threadLock.acquire()
+    #lw = LocalWeather()
 
-        c = k1 - 273.15
-        f = (c * (9 / 5)) + 32.0
-        temptup = (f'{k:.2f}K', f'{c:.2f}C', f'{f:.2f}F',)
-        return temptup
-
-    def convertspeed(self, msin):
-        """convertspeed(msin)
-        msin - meters per seconds
-
-        return tuple (meters per sec, miles per hour)
-        """
-        ms = float(msin)
-        mh = ms * 2.236936
-        return (ms, round(mh, 2))
+    # while not trackermain.EXITING:
+        #startSecs = time.monotonic()
+        #elevenmin = startSecs + 11 * 60.0
+        # time.sleep(1)
+        # if elevenmin < time.monotonic():
+        #lw = LocalWeather()
+        # lw.load()
+        # save_me
 
 
 def main():
 
+    print('main is not implemented')
     lt = MyTime()
     lts = str(lt)
     lt1 = MyTime(timestamp=1575520318)
     lt1s = str(lt1)
 
     lw = LocalWeather()
-    lw.converttemp('10.5')
+    converttemp('10.5')
     c = 0
 
     a = 0
@@ -253,6 +245,7 @@ def main():
 
 
 if __name__ == '__main__':
+    freeze_support()
     if not os.path.isdir(LOG_DIR):
         os.mkdir(LOG_DIR)
 
@@ -277,11 +270,9 @@ if __name__ == '__main__':
     THE_LOGGER.info('localweather executed as main')
     # LOGGER.setLevel(logging.DEBUG)
 
-    # UI = UserInput()
-
     try:
         main()
-        pass
+        a = 0
 
     except(Exception, KeyboardInterrupt) as exc:
         sys.exit(str(exc))

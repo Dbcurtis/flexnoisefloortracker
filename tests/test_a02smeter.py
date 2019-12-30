@@ -16,6 +16,7 @@ class Testsmeter(unittest.TestCase):
     """
 
     """
+
     def setUp(self):
         """
 
@@ -50,8 +51,10 @@ class Testsmeter(unittest.TestCase):
         """
 
         _sm = SMeter(('ZZSM000;', 5_000_000))
-        self.assertEqual('[SMeter: freq:5000000, -140.00000dBm, S0]', str(_sm))
-        self.assertEqual('SMeter: freq:5000000, -140.00000dBm, S0', repr(_sm))
+        self.assertEqual(
+            '[SMeter: freq:5000000, -140.00000dBm, S0]', str(_sm))
+        self.assertEqual(
+            'SMeter: freq:5000000, -140.00000dBm, S0', repr(_sm))
         self.assertEqual(5_000_000, _sm.freq)
         self.assertEqual(-140.00000, _sm.signal_st.get('dBm'))
         self.assertEqual('S0', _sm.signal_st.get('sl'))
@@ -89,7 +92,8 @@ class Testsmeter(unittest.TestCase):
         # abc from 96 to 122
         # args = [i for i in range(97, 124)]
         # vals = [((i / 2.0) - 140.0, i) for i in range(97, 124)]
-        sms = [SMeter(('ZZSM{:03};'.format(i), i * 100000)) for i in range(97, 124)]
+        sms = [SMeter(('ZZSM{:03};'.format(i), i * 100000))
+               for i in range(97, 124)]
         self.assertEqual(27, len(sms))
         self.assertEqual('S5', sms[0].signal_st.get('sl'))
         self.assertEqual('S6', sms[1].signal_st.get('sl'))
@@ -134,17 +138,17 @@ class Testsmeter(unittest.TestCase):
             self.assertTrue(sms[i - 1] <= sms[i])
             self.assertTrue(sms[i] <= sms[i])
             self.assertFalse(sms[i] < sms[i - 1])
-            self.assertTrue( sms[i] <= sms[i])
-
+            self.assertTrue(sms[i] <= sms[i])
 
         # check for json output
         _sm = SMeter(('ZZSM098;', 12_123_444))  # s6
-        #jsonpickle.set_preferred_backend('json')
+        # jsonpickle.set_preferred_backend('json')
         jsonver = jsonpickle.encode(_sm)
         smd = jsonpickle.decode(jsonver)
         self.assertEqual(_sm.time, smd.time)
         self.assertEqual(_sm.signal_st, smd.signal_st)
         self.assertEqual(_sm.freq, smd.freq)
+
 
 if __name__ == '__main__':
     unittest.main()

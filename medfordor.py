@@ -4,8 +4,8 @@
 import os
 import logging
 import logging.handlers
-import mysql.connector as mariadb
-import datetime
+#import mysql.connector as mariadb
+#import datetime
 
 LOGGER = logging.getLogger(__name__)
 
@@ -173,5 +173,4 @@ if __name__ == '__main__':
         sys.exit(str(exc))
 
     finally:
-
         sys.exit()
