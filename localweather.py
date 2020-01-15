@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""tools for accessing the database"""
+"""gets local weather info"""
 import os
 import sys
 from multiprocessing import freeze_support
@@ -10,11 +10,7 @@ import requests
 # import json
 # import mysql.connector as mariadb
 import time
-#from medfordor import Medford_or_Info as MI
-import medfordor
 from medfordor import Medford_or_Info as MI
-
-
 import dbtools
 
 
@@ -116,7 +112,7 @@ class MyTime:
 
 
 class LocalWeather:
-    """lw = LocalWeather()
+    """ LocalWeather()
 
 
     """
@@ -214,34 +210,9 @@ class LocalWeather:
         return self.maint['temp']
 
 
-# def threadrun(threadLock):
-    # threadLock.acquire()
-    #lw = LocalWeather()
-
-    # while not trackermain.EXITING:
-        #startSecs = time.monotonic()
-        #elevenmin = startSecs + 11 * 60.0
-        # time.sleep(1)
-        # if elevenmin < time.monotonic():
-        #lw = LocalWeather()
-        # lw.load()
-        # save_me
-
-
 def main():
 
     print('main is not implemented')
-    lt = MyTime()
-    lts = str(lt)
-    lt1 = MyTime(timestamp=1575520318)
-    lt1s = str(lt1)
-
-    lw = LocalWeather()
-    converttemp('10.5')
-    c = 0
-
-    a = 0
-    # time is unix UTC
 
 
 if __name__ == '__main__':
@@ -272,19 +243,11 @@ if __name__ == '__main__':
 
     try:
         main()
-        a = 0
 
     except(Exception, KeyboardInterrupt) as exc:
         sys.exit(str(exc))
 
     finally:
         sys.exit()
-# {
-# "id": 5740099,
-# "name": "Medford",
-# "country": "US",
-# "coord": {
-# "lon": -122.875587,
-# "lat": 42.326519
-# }
+
 

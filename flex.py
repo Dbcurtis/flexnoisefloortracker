@@ -2,20 +2,18 @@
 
 """This script prompts for user input for serial port etc."""
 
-import sys
+
 import os
 import logging
 import logging.handlers
-import datetime
-# import math
 import time
 # from statistics import mean
-import mysql.connector as mariadb
+#import mysql.connector as mariadb
 from userinput import UserInput
 # from smeter import SMeter, _SREAD
 # from bandreadings import Bandreadings
-import dbtools
-import postproc
+#import dbtools
+#import postproc
 
 LOGGER = logging.getLogger(__name__)
 
@@ -33,10 +31,12 @@ FLEX_CAT_ALL = frozenset(
 )
 
 FLEX_CAT_WRITE = frozenset(
-    ['ZZFR', 'ZZFT', 'ZZPE', 'ZZRC', 'ZZRD', 'ZZRU', 'ZZSM', 'ZZSW', 'ZZTX', 'ZZXC',]
+    ['ZZFR', 'ZZFT', 'ZZPE', 'ZZRC', 'ZZRD',
+        'ZZRU', 'ZZSM', 'ZZSW', 'ZZTX', 'ZZXC', ]
 )
 
 FLEX_CAT_READ_ONLY = FLEX_CAT_ALL - FLEX_CAT_WRITE
+
 
 class Flex:
     """
@@ -51,7 +51,6 @@ class Flex:
         self._ui = ui
         self.is_open = False
         self.saved_state = []
-
 
     def __str__(self):
         cp = self._ui.comm_port if self._ui.comm_port else "unspecified"
@@ -83,7 +82,6 @@ class Flex:
             self._ui.open(detect_br)
             self.is_open = self._ui.serial_port.is_open
 
-
         except Exception as sex:
             self._ui.comm_port = ""
             print(sex)
@@ -101,8 +99,6 @@ class Flex:
             cmd = f'{cmd};'
         return self._ui.serial_port.docmd(cmd)
 
-
-
     def do_cmd_list(self, cset):
         """do_cmd_list(clist)
 
@@ -119,7 +115,8 @@ class Flex:
             clist.sort()
 
         # resultlst = [self.do_cmd(cmd) for cmd in clist]
-        resultlst = [_ for _ in [self.do_cmd(cmd) for cmd in clist] if _ != '?;']
+        resultlst = [_ for _ in [self.do_cmd(
+            cmd) for cmd in clist] if _ != '?;']
 
         return resultlst[:]
 
@@ -129,7 +126,6 @@ class Flex:
         """
         self.saved_state = self.do_cmd_list(FLEX_CAT_READ_ONLY)
         return self.saved_state[:]
-
 
     def restore_saved_state(self):
         """restore_saved_state()
@@ -158,7 +154,6 @@ class Flex:
         self._ui.close()
         self.is_open = self._ui.serial_port.is_open
 
-
     def get_cat_data(self, cmd_list, freq):
         """get_cat_data(cmd_list)
 
@@ -186,8 +181,6 @@ class Flex:
             results.append(result)
 
         return results
-
-
 
 
 def main():
