@@ -1,0 +1,15 @@
+#!wing
+#!version=7.0
+##################################################################
+# Wing project file                                              #
+##################################################################
+[project attributes]
+proj.directory-list = [{'dirloc': loc('.'),
+                        'excludes': [u'utils.py'],
+                        'filter': '*',
+                        'include_hidden': False,
+                        'recursive': True,
+                        'watch_for_changes': True}]
+proj.file-type = 'shared'
+testing.auto-test-file-specs = (('glob',
+                                 './tests/test_*.py'),)
