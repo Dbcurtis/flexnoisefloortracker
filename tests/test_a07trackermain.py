@@ -14,22 +14,12 @@ import time
 from collections import deque
 
 import context
+from deck import Deck
 import trackermain
 from trackermain import QUEUES as queues
 from trackermain import RESET_QS as reset_queues
 from trackermain import CTX as ctx
-
-
-#global ctx
-#ctx = mp.get_context('spawn')
-
-global stopevents
-stopevents = {
-    'acquireData': ctx.Event(),
-    'trans': ctx.Event(),
-    'dbwrite': ctx.Event(),
-    'agra': ctx.Event(),
-}
+from trackermain import STOP_EVENTS as stopevents
 
 
 def marktime(dly=2.5, cnt=6):
@@ -40,54 +30,107 @@ def marktime(dly=2.5, cnt=6):
 
 
 def clearstopevents():
-    for e in stopevents.values():
-        e.clear()
+    [e.clear() for e in stopevents.values()]
+    # for e in stopevents.values():
+    # e.clear()
 
 
 def startThreads(tpex, bollst, barrier, stopevents, queues):
+    """startThreads(tpex, bollst, barrier, stopevents, queues)
+
+     starts the weather, noise, transfer, dataagragator, and dbwriter threads responsive to the bollst boolena array
+
+     tpex is the executor
+     bollst is the boolean list specifying which threads to start
+     barrier is the barrier to wait on for all the selected threads to start on
+     stopevents is the dict of stop events specifying which event the thread is to stop resonive to.
+     queues is the dict of queues.
+    """
+
+    threadinfo = {
+        'weather': (bollst[0], barrier, stopevents['acquireData'], queues,),
+        'noise': (bollst[1], barrier, stopevents['acquireData'], queues,),
+        'transfer': (bollst[2], barrier, stopevents['trans'], queues,),
+        'dataagragator': (bollst[3], barrier, stopevents['agra'], queues,),
+        'dbwriter': (bollst[4], barrier, stopevents['dbwrite'], queues,),
+    }
+
     futures = {
         # gets weather data
-        'weather': tpex.submit(trackermain.timed_work, bollst[0], barrier, stopevents['acquireData'], 5, Get_LW, queues),
+        'weather': tpex.submit(trackermain.timed_work, threadinfo['weather'], 5, Get_LW),
         # gets banddata data
-        'noise': tpex.submit(trackermain.timed_work, bollst[1], barrier, stopevents['acquireData'], 5, Get_NF, queues),
+        'noise': tpex.submit(trackermain.timed_work, threadinfo['noise'], 5, Get_NF),
         # reads the dataQ and sends to the data processing queue dpq
-        'transfer': tpex.submit(trackermain.dataQ_reader, bollst[2], barrier, stopevents['trans'], queues),
+        'transfer': tpex.submit(trackermain.dataQ_reader, threadinfo['transfer']),
         # looks at the data and generates the approprate sql to send to dbwriter
-        'dataagragator': tpex.submit(trackermain.dataaggrator, bollst[3], barrier, stopevents['agra'], queues, debugfn=aggrfn),
+        'dataagragator': tpex.submit(trackermain.dataaggrator, threadinfo['dataagragator'], debugfn=aggrfn),
         # reads the database Q and writes it to the database
-        'dbwriter': tpex.submit(trackermain.dbQ_writer, bollst[4], barrier, stopevents['dbwrite'], queues),
+        'dbwriter': tpex.submit(trackermain.dbQ_writer, threadinfo['dbwriter'], debugfn=dbconsum)
 
     }
     return futures
 
 
-def aggrfn(execute, barrier, stop_event, queues):
-    if not execute:
+def dbconsum(thread_info):
+    """dbconsum(thread_info)
+
+    thread_info is (execute, barrier, stop_event, queues,)
+
+    Test function to remove everything from the dbQ
+    """
+    if not thread_info[0]:
+        return
+    print('dbconsum at barrier\n', end="")
+    thread_info[1].wait()
+    print('dbconsum starting\n', end='')
+
+    stop_event = thread_info[2]
+
+
+def aggrfn(thread_info):
+    """aggrfn(thread_info)
+
+    thread_info is (execute, barrier, stop_event, queues,)
+
+    Test function for dataaggrator in trackermain.py
+
+    """
+    if not thread_info[0]:
         return
     print('aggrfn at barrier\n', end="")
-    barrier.wait()
+    thread_info[1].wait()
     print('aggrfn starting\n', end='')
-    dpQ_IN = queues['dpQ']
-    dbQ_OUT = queues['dbQ']
-    indata = deque([])
+    dpQ_IN = thread_info[3]['dpQ']
+    dbQ_OUT = thread_info[3]['dbQ']
+    indata = Deck(100)
+    stop_event = thread_info[2]
 
     def fillindata(delay=5):
+        """fillindata(delay=)
+
+        reads all data from dpQ_IN and places in the indata deque until dpQ_IN is empty
+        """
         while True:
             try:  # empty rawDataW into indata
                 # add data to the right of the queue
                 indata.append(dpQ_IN.get(True, delay))
             except QEmpty:
                 break
-        time.sleep(0.0001)
+        time.sleep(0.001)  # provide oppertunity to switch threads
 
     def write2outQ():
+        """write2outQ()
+
+        raises IndexError if deque is empty
+        raises QFull if the dbQ_OUT is full
+        """
         try:
             pendingwrite = indata.popleft()
             dbQ_OUT.put(pendingwrite * 10)
             dpQ_IN.task_done()
         except IndexError:
             raise
-        except QEmpty:
+        except QFull:
             raise
 
     doit = True
@@ -106,7 +149,7 @@ def aggrfn(execute, barrier, stop_event, queues):
                         break
 
             except QFull:
-                # put pending data on the left of the queue
+                # put pending data on the left of the deque
                 indata.appendleft(pendingwrite)
                 time.sleep(0.0001)
 
@@ -115,9 +158,9 @@ def aggrfn(execute, barrier, stop_event, queues):
 
         doit = not stop_event.wait(6)
 
-    for _ in range(10):  # get any late queued into
+    for _ in range(10):  # get any late queued info
 
-        fillindata(0.5)
+        fillindata(delay=0.5)
         while True:
             try:  # empty indata to dbQ_OUT
                 write2outQ()
@@ -127,24 +170,39 @@ def aggrfn(execute, barrier, stop_event, queues):
                 break
             except QFull:
                 pendingwrite = indata.popleft()
-                time.sleep(0.0001)
+                time.sleep(0.001)
 
     print('aggrfn ended\n', end="")
+    return []
 
 
 def Get_LW(q_out):
+    """Get_LW(q_out)
+
+    debug the local weather handling
+
+    """
     for i in range(5):
         q_out.put(i)
         time.sleep(0.25)
 
 
 def Get_NF(q_out):
+    """Get_NF(q_out)
+
+    debug the noise handling
+
+    """
     for i in range(5):
         q_out.put(i * 10.0)
         time.sleep(0.3)
 
 
 def do1argnull(arg):
+    """do1argnull(arg)
+
+    do nothing
+    """
     pass
 
 
@@ -185,14 +243,15 @@ class TestTrackermain(unittest.TestCase):
 
     def test01a_multiproc_simple(self):
         """test01a_threaded_simple()
+
+        test threads started but quick exit as no function is enabled, and that basic queue
+        operations work as expected
+
         """
         print('\ntest01a_threaded_simple\n', end="")
         clearstopevents()
         reset_queues()
 
-        #aa = stopevents.keys()
-
-       # trackerstarted = None
         bollst = [False, False, False, False, False]
         bc = sum([1 for _ in bollst if _]) + 1
 
@@ -213,20 +272,26 @@ class TestTrackermain(unittest.TestCase):
                 dpQ_OUT = queues['dpQ']
                 dpQ_IN = queues['dpQ']
 
-                for i in range(5):
-                    dpQ_OUT.put(i)
+                # for i in range(5):
+                # dpQ_OUT.put(i)
+                # put 5 items on the out queue
+                [dpQ_OUT.put(_) for _ in range(5)]
+                # wait a second with 4 chances to do a thread switch
+                [time.sleep(0.25) for _ in range(4)]
 
-                for _ in range(4):
-                    time.sleep(0.25)
+                # for _ in range(4):  # wait a second with 4 chances to do a thread switch
+                # time.sleep(0.25)
+
                 dpqouts = dpQ_OUT.qsize()
                 dpqins = dpQ_IN.qsize()
                 self.assertEqual(5, dpqouts)
                 self.assertEqual(dpqins, dpqouts)
 
-                for k, v in futures.items():
-                    self.assertTrue(v.done())
+                # for v in futures.values():
+                # self.assertTrue(v.done())
+                # check all threads are done
+                [self.assertTrue(v.done()) for v in futures.values()]
                 try:
-
                     while True:
                         dpQ_IN.get_nowait()
                         dpQ_IN.task_done()
@@ -302,7 +367,7 @@ class TestTrackermain(unittest.TestCase):
         """test01c_threaded_simple()
 
         Checks to see if the dataQ, timed_work, barrier, and stopevent works plus fundimental timed_work operation
-        using only get_lw as the function. Starting both dataacquisition threads
+        using get_NF and get_LW as the functions. Starting both dataacquisition threads
 
         """
         print('test0001c_threaded_simple\n', end="")
@@ -378,18 +443,12 @@ class TestTrackermain(unittest.TestCase):
         """test01d_threaded_simple()
 
         Checks to see if the dataQ, timed_work, barrier, and stopevent works plus fundimental timed_work operation
-        using only get_lw as the function.
+        using get_NF, get_LW, and transfer as the functions. Starting both dataacquisition threads
 
         """
         print('test01d_threaded_simple\n', end="")
         clearstopevents()
         reset_queues()
-
-        # queues = {
-        # 'dataQ': ctx.JoinableQueue(maxsize=100),
-        # 'dbQ': ctx.JoinableQueue(maxsize=100),
-        # 'dpQ': ctx.JoinableQueue(maxsize=100)
-        # }
 
         #trackerinitialized = time.monotonic()
         trackerstarted = None
@@ -465,7 +524,8 @@ class TestTrackermain(unittest.TestCase):
         """test01e_threaded_simple()
 
         Checks to see if the dataQ, timed_work, barrier, and stopevent works plus fundimental timed_work operation
-        using only get_lw as the function.
+        using get_NF, get_LW, transfer, and dataagragator as the functions. Starting both dataacquisition threads
+
 
         """
         print('test01e_threaded_simple\n', end='')
@@ -483,11 +543,10 @@ class TestTrackermain(unittest.TestCase):
 
                 futures = startThreads(
                     tpex, bollst, barrier, stopevents, queues)
-                barrier.wait(timeout=10)
+                barrier.wait(timeout=100)
                 time.sleep(0.00001)
                 print(f'test01e_instat continuing at {str(time.monotonic())}\n', end='')
                 trackerstarted = time.monotonic()
-
                 marktime(dly=2.5, cnt=6)
 
                 # stops both weather and noise
@@ -515,12 +574,13 @@ class TestTrackermain(unittest.TestCase):
                     time.sleep(0.005)
 
                 elapsedtime = time.monotonic() - trackerstarted
-                okt = 20.0 < elapsedtime < 25.0
+                #okt = 20.0 < elapsedtime < 25.0
                 # self.assertTrue(okt)
                 resw = futures.get('weather').result()
                 resn = futures.get('noise').result()
                 resr = futures.get('transfer').result()
                 resa = futures.get('dataagragator').result()
+                # TODO has a timedependency in this test it sometimes fails
                 self.assertEqual(30, resr)
 
                 # print(elapsedtime)
@@ -554,6 +614,78 @@ class TestTrackermain(unittest.TestCase):
         trackermain.shutdown(futures, queues, stopevents)
         barrier.reset()
         print('test01e_threaded_simple -- end\n', end='')
+
+    def test02_queue_overflow(self):
+        """test02_queue_overflow()
+
+        tests that the output queue overflow technique works
+
+        queues in trackermain have default size of 100
+
+        """
+        from trackermain import CTX
+
+        print('test02_queue_overflow\n', end='')
+        clearstopevents()
+        reset_queues()
+        queues['dataQ'] = CTX.JoinableQueue(
+            maxsize=200)  # dataQ now has max size of 200
+
+        try:
+            for _ in range(200):
+                queues['dataQ'].put(_)  # prefill the dataQ queue
+        except Exception as _:
+            pass
+
+        # select only transfer to run
+        bollst = [False, False, True, False, False]
+        bc = sum([1 for _ in bollst if _]) + 1
+        # set barrier to 2 threads this one and transfer (by count not by name)
+        barrier = ctx.Barrier(bc)
+
+        dpQ = queues['dpQ']
+        self.assertTrue(dpQ.empty())
+        readings = []
+        self.assertEqual(200, queues['dataQ'].qsize())
+        numreadings = 0
+
+        futures = {}
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
+            futures = startThreads(tpex, bollst, barrier, stopevents, queues)
+            barrier.wait(timeout=10)  # wait for transfer to start
+
+            print(f'test02_tqueue_overflow\n {str(time.monotonic())}\n', end='')
+            doonce = True
+            # loop until 'transfer is done executing and the qdQ is empty, transfer can end just after puting stuff on dpQ
+            while not (futures['transfer'].done() and dpQ.empty()):
+                try:
+                    # possible thread switch
+                    readings.append(dpQ.get(True, 1))
+                    dpQ.task_done()
+                    if doonce:
+                        doonce = False
+                        # after we received something from the queue we know
+                        # that transfer is running so I can tell it to stop when  its input queue is empty
+                        stopevents['trans'].set()
+
+                except QEmpty:
+                    pass
+
+            # check if all elemenmts from dataQ have been received.
+            numreadings = futures['transfer'].result()
+            self.assertEqual(200, numreadings)
+            self.assertFalse(futures['transfer'].cancelled())
+            self.assertFalse(futures['transfer'].exception())
+            for _ in range(numreadings):
+                self.assertEqual(_, readings[_])
+
+            trackermain.shutdown(futures, queues, stopevents)
+
+        self.assertEqual(numreadings, len(readings))
+        for i in range(numreadings):
+            self.assertEqual(i, readings[i])
+        print('test02_queue_overflow -- end\n', end='')
 
 
 if __name__ == '__main__':

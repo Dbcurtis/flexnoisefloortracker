@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""gets local weather info"""
+"""gets local weather info from openweathermap.org"""
 import os
 import sys
 from multiprocessing import freeze_support
@@ -18,6 +18,8 @@ LOGGER = logging.getLogger(__name__)
 
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/localweather'
+
+# stuff needed to access the weather info
 OW_DEFAULTKEY = '&appid=a723524c61b7e34a683dfbc79bd683cd'
 OW_RVMKEY = '&appid=1320944048cabbe1aebe1fbe9c1c7d6c'
 OW_First = 'https://api.openweathermap.org/data/2.5/weather'
@@ -35,9 +37,8 @@ def converttemp(k):
     """converttemp(k)
     k is degrees in Kelven
 
-    returns 3truple (xK, xC, xF)
+    returns 3tuple (xK, xC, xF)
     """
-    #c = 0.0
     k1 = 0.0
     try:
         k1 = float(k)
@@ -126,13 +127,13 @@ class LocalWeather:
 
         """
 
-        r = requests.get(OW_First, params=PAYLOAD)
-        self.netstatus = r.status_code
-        if not r.status_code == 200:
+        request_status = requests.get(OW_First, params=PAYLOAD)
+        self.netstatus = request_status.status_code
+        if not request_status.status_code == 200:
             raise Exception(f'{r.url} returned {r.status_code}')
 
         try:
-            self.rjson = r.json()
+            self.rjson = request_status.json()
             self.valid = True
             sys = self.rjson['sys']
             #aa = MyTime(self.rjson['dt'])
@@ -159,7 +160,7 @@ class LocalWeather:
                           }
 
         except Exception as e:
-            print(r)
+            print(request_status)
             print(e)
 
     def __init__(self):
@@ -211,8 +212,11 @@ class LocalWeather:
 
 
 def main():
-
-    print('main is not implemented')
+    _lw = LocalWeather()
+    _lw.load()
+    print(f'valid: {_lw.valid}')
+    print(f'times:\t{_lw.times["dt"]}\n\tsunup:{_lw.times["sunup"]}\n\tsundown:{_lw.times["sunset"]}')
+    print(f'hum: {_lw.maint["humidity"]}, temp: {_lw.maint["temp"][0][2]}, wind: dir {_lw.maint["wind"]["dir"]}, speed: {_lw.maint["wind"]["speed"][1][1]}')
 
 
 if __name__ == '__main__':

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3.8
 """
-Test file for need
+Tests the local weather module
 """
 
 # import datetime
@@ -16,6 +16,11 @@ from localweather import MyTime, LocalWeather
 
 
 def Get_LW(q):
+    """Get_LW(q)
+
+    Instantiates, loads and returns a LocalWeather object on the q
+
+    """
     _lw = LocalWeather()
     _lw.load()
     q.put(_lw)

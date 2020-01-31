@@ -11,10 +11,11 @@ from queue import Empty as QEmpty, Full as QFull
 import logging
 import logging.handlers
 import multiprocessing as mp
-
 import time
 import datetime
 from collections import deque
+
+from deck import Deck
 from localweather import LocalWeather
 import threading
 import userinput
@@ -30,19 +31,35 @@ LOG_FILE = '/trackermain'
 
 EXITING = False
 
-CTX = mp.get_context('spawn')
+CTX = mp.get_context('spawn')  # threading context
+
 QUEUES = {
+    # from data acquisition threads, received by the aggragator thread
     'dataQ': CTX.JoinableQueue(maxsize=100),
+    # database commands generateed (usually) ty the aggrator thread
     'dbQ': CTX.JoinableQueue(maxsize=100),
+    # written to by the aggrator thread, read by the data processor which generates sql commands to dbq
     'dpQ': CTX.JoinableQueue(maxsize=100)
+}
+
+STOP_EVENTS = {
+    'acquireData': CTX.Event(),
+    'trans': CTX.Event(),
+    'dbwrite': CTX.Event(),
+    'agra': CTX.Event(),
 }
 
 
 def RESET_QS():
+    """RESET_QS()
+
+    empties all the queues, marks task_done as each is removed.
+    """
     for _ in QUEUES.values():
         try:
             while True:
                 _.get_nowait()
+                _.task_done()
         except QEmpty:
             continue
 
@@ -61,22 +78,26 @@ class Consolidate:
         pass
 
 
-class Aggratator:
-    def __init__(self, execute, barrier, stop_event, queues):
-        self.dpQ_IN = queues['dpQ']
-        self.dbQ_OUT = queues['dbQ']
-        self.execute = execute
-        self.barrier = barrier
-        self.stop_event = stop_event
-        #self.dpQ_IN = dpQ_IN
-        #self.dbQ_OUT = dbQ_OUT
-        self.consolidate = Consolidate()
+class DBwriter:
+    """DBwriter(thread_info)
+
+    thread_info = (execute, barrier, stop_event, queues)
+    """
+
+    def __init__(self, thread_info):
+        self.dpQ_IN = thread_info[3]['dbQ']
+        self.execute = thread_info[0]
+        self.barrier = thread_info[1]
+        self.stop_event = thread_info[2]
 
     def run(self):
+        """run()
+
+        """
         if not self.execute:
             return
 
-        indata = deque([])
+        indata = Deck(100)  # deque([])
         self.barrier.wait()
 
         print ('Aggratator started')
@@ -109,24 +130,108 @@ class Aggratator:
             if self.stop_event.is_set():
                 break
         print('dataQ_reader ended')
+        return []
 
 
-def dataaggrator(execute, barrier, stop_event, queues, debugfn=None):
+def jjj():
+    pass
+
+
+class Aggratator:
+    """Aggratator(thread_info)
+
+    thread_info = (execute, barrier, stop_event, queues)
+    """
+
+    def __init__(self, thread_info, aggfn=jjj):
+        self.dpQ_IN = thread_info[3]['dpQ']
+        self.dbQ_OUT = thread_info[3]['dbQ']
+        self.execute = thread_info[0]
+        self.barrier = thread_info[1]
+        self.stop_event = thread_info[2]
+        self.consolidate = Consolidate()
+        self.fn = aggfn
+
+    def run(self):
+        """run()
+
+        """
+        if not self.execute:
+            return 0
+        count = [0]
+
+        #indata = Deck(100)
+        self.barrier.wait()
+
+        print ('Aggratator started')
+
+        deck = Deck(50)
+        while True:
+            # while not self.stop_event.wait(10):
+            while True:
+                try:
+                    #load_deque(deqPrams, self.dpQ_IN, True)
+                    deck.load_from_Q(self.dpQ_IN, True)
+
+                except QEmpty:
+                    break
+
+                finally:
+                    sqlcmdlst = self.consolidate.doit(deqPrams)
+                    pendingwrite = None
+
+                    while True:
+                        try:
+                            pendingwrite = sqlcmdlst.popleft()
+                            # self.dbQ_OUT.put(pendingwrite)
+                            self.fn(self.dbQ_OUT, pendingwrite)
+                            count += 1
+
+                        except QFull:
+                            # put pending data on the left of the sqlcmdlst
+                            sqlcmdlst.appendleft(pendingwrite)
+                            time.sleep(10)
+
+                        except IndexError:  # indata is now empty
+                            break
+
+            if self.stop_event.is_set():
+                break
+        print('dataQ_reader ended')
+        return [count]
+
+
+def dataaggrator(thread_info, aggfn=None, debugfn=None):
+    """dataaggrator(thread_info, debugfn=None)
+
+    this is the 'dataagragator' thread in futures
+
+     thread_info is (execute, barrier, stop_event, queues,),
+
+    """
     if debugfn:
-        debugfn(execute, barrier, stop_event, queues)
+        return debugfn(thread_info)
 
     else:
-        ag = Aggratator(execute, barrier, stop_event, queues)
-        ag.run()
+        ag = Aggratator(thread_info, aggfn)
+        return ag.run()
 
 
 def Get_LW(rawDataQ_OUT):
+    """Get_LW(rawDataQ_OUT)
+
+    Gets Local Medfrod weather in a LocalWeather object and adds it to the rawDataQ_OUT queue.
+
+    """
     _lw = LocalWeather()
     _lw.load()
     rawDataQ_OUT.put(_lw)
 
 
 def Get_NF(rawDataQ_OUT):
+    """Get_NF(rawDataQ_OUT)
+
+    """
     UI = userinput.UserInput()
     NOISE = None
     try:
@@ -153,74 +258,122 @@ def Get_NF(rawDataQ_OUT):
     _nf = NoiseFloor()
 
 
-# rawDataQ_IN, dpQ_OUT):
-def dataQ_reader(execute, barrier, stop_event, queues):
-    if execute:
+def load_deque(deqPrams, inQ, markdone):
+    #deqPrams = (Deck(100), 50, [0])
+    deck = deqPrams[0]
+    deck.load_from_Q(inQ, mark_done=markdone)
+    deqPrams[2][0] = len(deck)
+    # while deqPrams[2][0] >= 0 and deqPrams[2][0] < deqPrams[1]:
+    #deqPrams[0].append(inQ.get(True, 10))
+    #deqPrams[2][0] = deqPrams[2][0] + 1
+    # if markdone:
+    # inQ.ask_done()
+
+
+def write_2_q(outQ, data):
+    outQ.put(data, False)
+
+
+def dataQ_reader(thread_info, fn=write_2_q):
+    """dataQ_reader(thread_info)
+
+    this is the 'transfer' thread in futures
+
+     thread_info is (execute, barrier, stop_event, queues,),
+     fn is the function to be applied to the input data
+
+    """
+    if thread_info[0]:  # execute:
         locald = threading.local()
-        rawDataQ_IN = queues['dataQ']
-        dpQ_OUT = queues['dpQ']
+
+        rawDataQ_IN = thread_info[3]['dataQ']
+        dpQ_OUT = thread_info[3]['dpQ']
+        stop_event = thread_info[2]
         locald.count = 0
-        barrier.wait()
+        thread_info[1].wait()
         print('dataQ_reader started\n', end="")
-        locald.indata = deque([])
+        # the deque, max size, single element  size inititally 0
+        locald.deqPrams = (Deck(50), 50, [0])
 
         while True:
-            stop_event.wait(10)
+            try:  # empty rawDataW into indata
+                load_deque(locald.deqPrams, rawDataQ_IN, False)
 
-            while True:
-                try:  # empty rawDataW into indata
-                    # add data to the right of the queue
-                    locald.indata.append(rawDataQ_IN.get(True, 10))
-                except QEmpty:
+            except QEmpty:
+                break
+
+            finally:
+                # now write the locald.indata to the output q
+                data_tobe_processed = None
+                while True:
+                    try:
+                        while True:
+                            #data_tobe_processed = locald.deqPrams[0] \
+                                # .popleft()
+                            data_tobe_processed = locald.deqPrams[0].popleft(
+                            )
+                            # process the data
+                            fn(dpQ_OUT, data_tobe_processed)
+                            locald.deqPrams[2][0] = locald.deqPrams[2][0] - 1
+                            rawDataQ_IN.task_done()
+                            locald.count += 1
+
+                    except QFull:
+                        # put pending data on the left of the queue
+                        # locald.deqPrams[0].appendleft(data_tobe_processed)
+                        locald.deqPrams[0].push(data_tobe_processed)
+                        time.sleep(10)
+
+                    except IndexError:  # indata is now empty
+                        break
+            # things look done
+            if stop_event.wait(5.0):
+                if rawDataQ_IN.empty() and len(locald.deqPrams[0]) == 0:
                     break
 
-                finally:  # now write the locald.indata to the output q
-                    pendingwrite = None
-                    while True:
-                        try:
-                            while True:
-                                pendingwrite = locald.indata.popleft()
-                                dpQ_OUT.put(pendingwrite)
-                                rawDataQ_IN.task_done()
-                                locald.count += 1
-
-                        except IndexError:  # indata is now empty
-                            break
-
-                        except QFull:
-                            # put pending data on the left of the queue
-                            locald.indata.appendleft(pendingwrite)
-                            time.sleep(10)
-
-            if stop_event.is_set() and rawDataQ_IN.empty():
-                if not rawDataQ_IN.empty():
-                    continue
-                break
         print('dataQ_reader ended\n', end="")
         return locald.count
+
+
+def read_inQ_2deque():
+    result = True
+    return result
 
 
 def writesql():
     pass
 
 
-def dbQ_writer(execute, barrier, stop_event, queues, debugwriter=None):
-    """dbQ_writer(barrier, stop_event, dbQIN)
+def dbQ_writer(thread_info, debugfn=None):
+    """dbQ_writer(thread_info, debugfn=None)
 
+    thread_info = (execute, barrier, stop_event, queues,),
+
+    execute is a boolean which if true causes the function to operate if false, just to end
     barrier is a Barrier to make sure everything is ready at the same time
     stop_event is set if we are in the process of shutting down
-    dbQin contains sql statments to be passed to the MariaDb engine
+    queues is a dict of joinablequeues one of which must be 'dbQ'
+    debugfn is a function that will be invoked (used for debugging) to process each entry in the 'dbQ'
 
     """
-    if execute:
-        doit = writesql
-        if debugwriter:
-            doit = debugwriter
 
-        dbQIN = queues['dbQ']
+    if debugfn:
+        return debugfn(thread_info)
+
+    else:
+        ag = Aggratator(thread_info)
+        return ag.run()
+
+    if thread_info[0]:
+        doit = writesql
+        if debugfn:
+            doit = debugfn
+
+        dbQIN = thread_info[3]['dbQ']
         print('dbQ_writer waiting\n', end='')
-        barrier.wait()
+        thread_info[1].wait()
         print('dbQ_writer started\n', end='')
+        stop_event = thread_info[2]
 
         sqldata = deque([])
 
@@ -244,8 +397,11 @@ def dbQ_writer(execute, barrier, stop_event, queues, debugwriter=None):
         print('dbQ_writer ended\n', end='')
 
 
-def timed_work(execute, barrier, stop_event, delayseconds, fu, queues):
-    """timed_work(execute, barrier, stop_event, delayseconds, fu, queues)
+# def timed_work(execute, barrier, stop_event, queues, delayseconds, fu):
+def timed_work(thread_info, delayseconds, fu):
+    """timed_work(thread_info, delayseconds, fu, )
+
+    thread_info is (execute, barrier, stop_event, queues,),
 
     execute is a boolean that if True will actually execute fu
     barrier is used to coordinate starting the tasks/threads
@@ -254,36 +410,46 @@ def timed_work(execute, barrier, stop_event, delayseconds, fu, queues):
     fu is the function that will be called on the time basis
     queues is the queue dict, but timed_work only uses 'dataQ' from the dict
 
+    this is used for the weather and noise threads
+
     """
 
     class Sequencer:
+        """Sequencer(delayseconds)
+
+        """
+
         def __init__(self, delayseconds):
             self.delayseconds = delayseconds
             nowis = time.monotonic()
-            self.timedeque = deque(
+            self.to_do_sched = deque(
                 [nowis + t * delayseconds for t in range(20)])
 
         def do_it_now(self):
-            if self.timedeque[0] > time.monotonic():
+            """ do_it_now()
+
+            Defines if it is time to do something on a todo schedule
+            """
+            if self.to_do_sched[0] > time.monotonic():
                 return False
 
-            while self.timedeque[0] < time.monotonic():
-                self.timedeque.popleft()
-                self.timedeque.append(self.timedeque[-1] + delayseconds)
+            while self.to_do_sched[0] < time.monotonic():
+                self.to_do_sched.popleft()
+                self.to_do_sched.append(self.to_do_sched[-1] + delayseconds)
 
             return True
 
-    if execute:
+    if thread_info[0]:
         locald = threading.local()
-        locald.execute = execute
-        raw_data_Q = queues['dataQ']
-        locald.stop_event = stop_event
+        locald.execute = thread_info[0]
+        raw_data_Q = thread_info[3]['dataQ']
+        locald.stop_event = thread_info[2]
         locald.delayseconds = delayseconds
         locald.fu = fu
 
         locald.last10executtimes = deque([], 10)  # queue of max length 10
         # print('timed_work waiting to pass barrier\n',end="")
-        barrier.wait()
+        thread_info[1].wait()
         # print(f'timed_work started: {time.monotonic()}\n',end="")
 
         locald.seq = Sequencer(delayseconds)
@@ -301,13 +467,16 @@ def timed_work(execute, barrier, stop_event, delayseconds, fu, queues):
 
 
 def shutdown(futures, queues, stopevents):
+    """shutdown(futures, queues, stopevents)
+
+    """
     # stop the data generating processes
     stopevents['acquireData'].set()
     stopevents['trans'].set()
     time.sleep(0.001)
     validkeys = list(futures.keys())
 
-    isdone = True
+    #isdone = True
     # keys are the dict keys for data generation threads
     # selected from weather noise transfer dataagragator dbwriter
     keys = [k for k in validkeys if k in ('weather', 'noise',)]
@@ -346,20 +515,24 @@ def shutdown(futures, queues, stopevents):
 
 
 def main(ctx, hours=0.5):
+    """main(ctx, hours=0.5)
 
-    stopevents = {
-        'acquireData': ctx.Event(),
-        'trans': ctx.Event(),
-        'dbwrite': ctx.Event(),
-        'agra': ctx.Event(),
-    }
+    """
+
+    # stopevents = {
+    # 'acquireData': ctx.Event(),
+    # 'trans': ctx.Event(),
+    # 'dbwrite': ctx.Event(),
+    # 'agra': ctx.Event(),
+    # }
     queues = QUEUES
     # need to log starting
     # setup thread processor
     timetup = (hours, 60 * hours, 3600 * hours,)
-    #runtimehours = hours
-    #runtimemin = 60 * runtimehours
-    #runtimesec = 60 * runtimemin
+    runtimehours = hours
+    runtimemin = 60 * runtimehours
+    runtimesec = 60 * runtimemin
+
     bollst = [True, True, True, True, True]
     bc = sum([1 for _ in bollst if _]) + 1
 
@@ -375,15 +548,15 @@ def main(ctx, hours=0.5):
 
             futures = {
                 # gets weather data
-                'weather': tpex.submit(timed_work, bollst[0], barrier, stopevents['acquireData'], 60 * 10.5, Get_LW, queues),
+                'weather': tpex.submit(timed_work, bollst[0], barrier, STOP_EVENTS['acquireData'], 60 * 10.5, Get_LW, queues),
                 # gets banddata data
-                'noise': tpex.submit(timed_work, bollst[1], barrier, stopevents['acquireData'], 60 * 10.5, Get_NF, queues),
+                'noise': tpex.submit(timed_work, bollst[1], barrier, STOP_EVENTS['acquireData'], 60 * 10.5, Get_NF, queues),
                 # reads the dataQ and sends to the data processing queue dpq
-                'transfer': tpex.submit(dataQ_reader, bollst[2], barrier, stopevents['trans'], ),
+                'transfer': tpex.submit(dataQ_reader, bollst[2], barrier, STOP_EVENTS['trans'], ),
                 # looks at the data and generates the approprate sql to send to dbwriter
-                'dataagragator': tpex.submit(dataaggrator, bollst[3], barrier, stopevents['agra'], queues),
+                'dataagragator': tpex.submit(dataaggrator, bollst[3], barrier, STOP_EVENTS['agra'], queues),
                 # reads the database Q and writes it to the database
-                'dbwriter': tpex.submit(dbQ_writer, bollst[4], barrier, stopevents['dbwrite'], queues),
+                'dbwriter': tpex.submit(dbQ_writer, bollst[4], barrier, STOP_EVENTS['dbwrite'], queues),
 
             }
 
@@ -403,7 +576,7 @@ def main(ctx, hours=0.5):
             #time.monotonic() < trackerschedend
             # while time.monotonic() < trackerTimeout:
             # time.sleep(5)
-            shutdown(futures, queues, stopevents)
+            shutdown(futures, queues, STOP_EVENTS)
             # break  # breack out of ppex
             barrier.wait()  # start them all working
             trackerstarted = time.monotonic()
@@ -411,7 +584,7 @@ def main(ctx, hours=0.5):
             time.monotonic() < trackerschedend
             while time.monotonic() < trackerTimeout:
                 time.sleep(5)
-            shutdown(futures, queues, stopevents)
+            shutdown(futures, queues, STOP_EVENTS)
             break  # break out of tpex
         a = 0
         break  # break out of while loop
