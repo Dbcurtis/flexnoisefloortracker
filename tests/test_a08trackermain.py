@@ -13,6 +13,7 @@ import concurrent
 import time
 from collections import deque
 
+
 import context
 from deck import Deck
 import trackermain
@@ -102,74 +103,35 @@ def aggrfn(thread_info):
     print('aggrfn starting\n', end='')
     dpQ_IN = thread_info[3]['dpQ']
     dbQ_OUT = thread_info[3]['dbQ']
-    indata = Deck(100)
+    deck = Deck(100)
     stop_event = thread_info[2]
-
-    def fillindata(delay=5):
-        """fillindata(delay=)
-
-        reads all data from dpQ_IN and places in the indata deque until dpQ_IN is empty
-        """
-        while True:
-            try:  # empty rawDataW into indata
-                # add data to the right of the queue
-                indata.append(dpQ_IN.get(True, delay))
-            except QEmpty:
-                break
-        time.sleep(0.001)  # provide oppertunity to switch threads
-
-    def write2outQ():
-        """write2outQ()
-
-        raises IndexError if deque is empty
-        raises QFull if the dbQ_OUT is full
-        """
-        try:
-            pendingwrite = indata.popleft()
-            dbQ_OUT.put(pendingwrite * 10)
-            dpQ_IN.task_done()
-        except IndexError:
-            raise
-        except QFull:
-            raise
-
     doit = True
     while doit:
-        fillindata()
-        pendingwrite = None
+
+        deck.load_from_Q(dpQ_IN, False, 5)
+        time.sleep(0.001)  # provide oppertunity to switch threads
+
         notstop = not stop_event.is_set()
-        while notstop or len(indata) > 0:
-            if len(indata) == 0:
+        while notstop or len(deck) > 0:
+            if len(deck) == 0:
                 break
-            try:
-                while True:
-                    try:
-                        write2outQ()
-                    except IndexError:  # indata is now empty
-                        break
-
-            except QFull:
-                # put pending data on the left of the deque
-                indata.appendleft(pendingwrite)
-                time.sleep(0.0001)
-
+            deck.loadQ(dbQ_OUT, dpQ_IN, lambda a: a * 10)
             if stop_event.is_set() and dpQ_IN.empty():
                 break
 
         doit = not stop_event.wait(6)
 
     for _ in range(10):  # get any late queued info
-
-        fillindata(delay=0.5)
+        deck.load_from_Q(dpQ_IN, False, 0.5)
         while True:
-            try:  # empty indata to dbQ_OUT
-                write2outQ()
+            try:  # empty deck to dbQ_OUT
+                deck.loadQ(dbQ_OUT, dpQ_IN, lambda a: a * 10)
             except QEmpty:
                 break
             except IndexError:
                 break
             except QFull:
-                pendingwrite = indata.popleft()
+                pendingwrite = deck.popleft()
                 time.sleep(0.001)
 
     print('aggrfn ended\n', end="")
@@ -267,30 +229,23 @@ class TestTrackermain(unittest.TestCase):
                 barrier.wait(timeout=10)
                 time.sleep(0.00001)
                 print(f'test01a_instat continuing at {str(time.monotonic())}\n', end="")
-                #trackerstarted = time.monotonic()
+                # trackerstarted = time.monotonic()
 
                 dpQ_OUT = queues['dpQ']
                 dpQ_IN = queues['dpQ']
 
-                # for i in range(5):
-                # dpQ_OUT.put(i)
                 # put 5 items on the out queue
                 [dpQ_OUT.put(_) for _ in range(5)]
                 # wait a second with 4 chances to do a thread switch
                 [time.sleep(0.25) for _ in range(4)]
-
-                # for _ in range(4):  # wait a second with 4 chances to do a thread switch
-                # time.sleep(0.25)
 
                 dpqouts = dpQ_OUT.qsize()
                 dpqins = dpQ_IN.qsize()
                 self.assertEqual(5, dpqouts)
                 self.assertEqual(dpqins, dpqouts)
 
-                # for v in futures.values():
-                # self.assertTrue(v.done())
                 # check all threads are done
-                [self.assertTrue(v.done()) for v in futures.values()]
+                [self.assertTrue(_.done()) for _ in futures.values()]
                 try:
                     while True:
                         dpQ_IN.get_nowait()
@@ -319,7 +274,7 @@ class TestTrackermain(unittest.TestCase):
         clearstopevents()
         reset_queues()
 
-        #trackerinitialized = time.monotonic()
+        # trackerinitialized = time.monotonic()
         trackerstarted = None
         bollst = [True, False, False, False, False]
         bc = sum([1 for _ in bollst if _]) + 1
@@ -374,7 +329,7 @@ class TestTrackermain(unittest.TestCase):
         clearstopevents()
         reset_queues()
 
-        #trackerinitialized = time.monotonic()
+        # trackerinitialized = time.monotonic()
         trackerstarted = None
         bollst = [True, True, False, False, False]
         bc = sum([1 for _ in bollst if _]) + 1
@@ -411,7 +366,6 @@ class TestTrackermain(unittest.TestCase):
                 q.put(-1)
                 theq = []
                 for _ in range(5):
-
                     while True:
                         try:
                             theq.append(q.get(True, 0.10))
@@ -450,7 +404,7 @@ class TestTrackermain(unittest.TestCase):
         clearstopevents()
         reset_queues()
 
-        #trackerinitialized = time.monotonic()
+        # trackerinitialized = time.monotonic()
         trackerstarted = None
         bollst = [True, True, True, False, False]
         bc = sum([1 for _ in bollst if _]) + 1
@@ -574,7 +528,7 @@ class TestTrackermain(unittest.TestCase):
                     time.sleep(0.005)
 
                 elapsedtime = time.monotonic() - trackerstarted
-                #okt = 20.0 < elapsedtime < 25.0
+                # okt = 20.0 < elapsedtime < 25.0
                 # self.assertTrue(okt)
                 resw = futures.get('weather').result()
                 resn = futures.get('noise').result()
@@ -585,7 +539,7 @@ class TestTrackermain(unittest.TestCase):
 
                 # print(elapsedtime)
                 self.assertEqual(3, len(resw))
-                #self.assertEqual(4, len(resn))
+                # self.assertEqual(4, len(resn))
 
                 q = queues['dbQ']
 
@@ -677,8 +631,8 @@ class TestTrackermain(unittest.TestCase):
             self.assertEqual(200, numreadings)
             self.assertFalse(futures['transfer'].cancelled())
             self.assertFalse(futures['transfer'].exception())
-            for _ in range(numreadings):
-                self.assertEqual(_, readings[_])
+            for i in range(numreadings):
+                self.assertEqual(i, readings[i])
 
             trackermain.shutdown(futures, queues, stopevents)
 
@@ -686,6 +640,73 @@ class TestTrackermain(unittest.TestCase):
         for i in range(numreadings):
             self.assertEqual(i, readings[i])
         print('test02_queue_overflow -- end\n', end='')
+
+    def test003_trimdups(self):
+        from localweather import LocalWeather, MyTime
+        import jsonpickle
+
+        print('test03_trimdups\n', end='')
+        deck = deque([])
+        results = trackermain.trim_dups(deck, lambda a, b: True)
+        self.assertFalse(results)
+        deck.extend([1, 2, 3])
+        results = trackermain.trim_dups(deck, lambda a, b: True)
+        self.assertEqual([(True, 1, 2), (True, 2, 3)], results)
+        results = trackermain.trim_dups(deck, lambda a, b: a == b)
+        self.assertEqual([(False, 1, 2), (False, 2, 3)], results)
+        deck.extend([3, 3, 4, 4, 5, 6, 6, 6])
+        results = trackermain.trim_dups(deck, lambda a, b: a == b)
+        expected = [(False, 1, 2), (False, 2, 3), (True, 3, 3), (True, 3, 3),
+                    (False, 3, 4), (True, 4, 4), (False, 4, 5), (False, 5, 6),
+                    (True, 6, 6), (True, 6, 6)]
+        self.assertEqual(expected, results)
+
+        def testfun(a, b):
+            return a == b
+        results = trackermain.trim_dups(deck, testfun)
+        expected = [(False, 1, 2), (False, 2, 3), (True, 3, 3), (True, 3, 3),
+                    (False, 3, 4), (True, 4, 4), (False, 4, 5), (False, 5, 6),
+                    (True, 6, 6), (True, 6, 6)]
+
+        class Jjj:
+            def __init__(self, val):
+                self.v = val
+
+            def __str__(self):
+                return str(self.v)
+
+        deck = deque([Jjj(1), Jjj(2), Jjj(3), Jjj(4), Jjj(4),
+                      Jjj(5), Jjj(6), Jjj(6), Jjj(7), Jjj(8)])
+
+        def testfun(a, b):
+            return a.v == b.v
+        results = trackermain.trim_dups(deck, testfun)
+        self.assertEqual([False, False, False, True, False,
+                          False, True, False, False], [j[0] for j in results])
+        self.assertEqual([1, 2, 3, 4, 4, 5, 6, 6, 7],
+                         [j[1].v for j in results])
+        self.assertEqual([2, 3, 4, 4, 5, 6, 6, 7, 8],
+                         [j[2].v for j in results])
+        a = 0
+        local_weather_lst = []
+        with open('testlocalWeather60.json', 'r') as fl1:
+            try:
+                kk = fl1.read()
+                local_weather_lst = jsonpickle.decode(
+                    kk, classes=(LocalWeather, MyTime,))
+                a = 0
+            except Exception as ex:
+                a = 0
+        deck = deque(local_weather_lst)
+        _lw1 = local_weather_lst[0]
+
+        def equaltemps(a: LocalWeather, b: LocalWeather):
+            return a.maint['temp'][0] == b.maint['temp'][0]
+
+        trimlst = trackermain.trim_dups(deck, equaltemps)
+        trimlstf = [(a[1], a[2],) for a in trimlst if not a[0]]
+        trimlstt = [(a[1], a[2],) for a in trimlst if a[0]]
+        a = 0
 
 
 if __name__ == '__main__':

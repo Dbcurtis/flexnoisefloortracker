@@ -2,6 +2,7 @@
 """
 stuff to manipulate a Deck (fancy deque)
 """
+from __future__ import annotations
 import os
 import logging
 import logging.handlers
@@ -10,9 +11,14 @@ from collections import deque
 from multiprocessing import freeze_support
 from queue import Empty as QEmpty, Full as QFull
 
+
 LOGGER = logging.getLogger(__name__)
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/deck'
+
+
+def _ident(a):
+    return a
 
 
 class Deck:
@@ -133,6 +139,8 @@ class Deck:
 
         loads the deck from the inQ and if mark_done is True, does so as each Q entry is added to the deck
         wait_sec is max amount to wait after the queue is empty.
+
+        rases QFull if deck reaches maxsize
         """
         count = 0
         with self.tlock:
@@ -149,30 +157,44 @@ class Deck:
                     break
         return count
 
-    def loadQ(self, outQ):
+    def loadQ(self, outQ, done_Q=None, fn=_ident):
+        count = None
+        try:
+            with self.tlock:
+                if self.qlen == 0:
+                    raise IndexError
+                count = self._loadQ(outQ, done_Q, fn)
+        except IndexError:
+            raise
+        return count
+
+    def _loadQ(self, outQ, done_Q, fn):
         """loadQ(outQ)
 
-        emptys the deck into the specified queue
+        emptys the deck into the specified outQ,
+        if done_Q is specified, will do a task_done operation on the done_Q
+
         rasies QFull if the queue becomes full
 
         """
         count = None
-        with self.tlock:
-            v = None
-            while True:
-                try:
-                    v = self._popleft()
-                    outQ.put(v, False)
+        v = None
+        while True:
+            try:
+                v = self._popleft()
+                outQ.put(fn(v), False)
+                if not done_Q is None:
+                    done_Q.task_done()
 
-                    if count is None:
-                        count = 0
-                    count += 1
-                except QFull:
-                    self._push(v)
-                    raise QFull
+                if count is None:
+                    count = 0
+                count += 1
+            except QFull:
+                self._push(v)
+                raise QFull
 
-                except IndexError:
-                    break
+            except IndexError:
+                break
         return count
 
     def look_left(self):
@@ -216,10 +238,10 @@ def main():
     print(str(deck))
     print(repr(deck))
 
-    deck.append_data(1)
-    deck.push_data(2)
-    d = deck.pop_data()
-    deck.append_data(d)
+    deck.append(1)
+    deck.push(2)
+    d = deck.pop()
+    deck.append(d)
 
     print(deck)
     print(str(deck))

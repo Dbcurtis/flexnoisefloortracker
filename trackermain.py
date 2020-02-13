@@ -159,8 +159,6 @@ class Aggratator:
         if not self.execute:
             return 0
         count = [0]
-
-        #indata = Deck(100)
         self.barrier.wait()
 
         print ('Aggratator started')
@@ -170,10 +168,9 @@ class Aggratator:
             # while not self.stop_event.wait(10):
             while True:
                 try:
-                    #load_deque(deqPrams, self.dpQ_IN, True)
                     deck.load_from_Q(self.dpQ_IN, True)
 
-                except QEmpty:
+                except QFull:  # if deck has reached its max
                     break
 
                 finally:
@@ -258,29 +255,32 @@ def Get_NF(rawDataQ_OUT):
     _nf = NoiseFloor()
 
 
-def load_deque(deqPrams, inQ, markdone):
-    #deqPrams = (Deck(100), 50, [0])
-    deck = deqPrams[0]
-    deck.load_from_Q(inQ, mark_done=markdone)
-    deqPrams[2][0] = len(deck)
-    # while deqPrams[2][0] >= 0 and deqPrams[2][0] < deqPrams[1]:
-    #deqPrams[0].append(inQ.get(True, 10))
-    #deqPrams[2][0] = deqPrams[2][0] + 1
-    # if markdone:
-    # inQ.ask_done()
+# def load_deque(deqPrams, inQ, markdone):
+    # deck = deqPrams[0]
+    # deck.load_from_Q(inQ, mark_done=markdone)
+    # deqPrams[2][0] = len(deck)
 
 
-def write_2_q(outQ, data):
-    outQ.put(data, False)
+# def write_2_q(outQ, data):
+    # outQ.put(data, False)
+def trim_dups(mydeck, boolfn):
+    if not mydeck:
+        return []
+    lst = list(mydeck)
+    tuplst = [(boolfn(lst[i], lst[i + 1]), lst[i], lst[i + 1],)
+              for i in range(len(lst) - 1)]
+    return tuplst
 
 
-def dataQ_reader(thread_info, fn=write_2_q):
+# write_2_q):
+def dataQ_reader(thread_info, fn=lambda outQ, data: outQ.put(data, False)):
     """dataQ_reader(thread_info)
 
     this is the 'transfer' thread in futures
 
      thread_info is (execute, barrier, stop_event, queues,),
-     fn is the function to be applied to the input data
+     fn is the function to be applied to the input data and defaults to writing data
+     to the outQ
 
     """
     if thread_info[0]:  # execute:
@@ -293,24 +293,56 @@ def dataQ_reader(thread_info, fn=write_2_q):
         thread_info[1].wait()
         print('dataQ_reader started\n', end="")
         # the deque, max size, single element  size inititally 0
-        locald.deqPrams = (Deck(50), 50, [0])
+        # locald.deqPrams = (Deck(50), 50, [0])
+        indeck = Deck(100)
+        wetherdec = Deck(100)
+        noisedeck = Deck(100)
+        lastweather = None
+        lastnoise = None
 
         while True:
-            try:  # empty rawDataW into indata
-                load_deque(locald.deqPrams, rawDataQ_IN, False)
 
-            except QEmpty:
-                break
+            try:  # empty rawDataW into indata
+                indeck.load_from_Q(inQ, mark_done=False)
+
+            except QFull:
+                pass
 
             finally:
-                # now write the locald.indata to the output q
-                data_tobe_processed = None
+                if len(indeck) > 0:
+
+                    wetherdec.clear()
+                    wetherdec.appendleft(lastweather)
+                    noisedeck.clear()
+                    noisedeck.appendleft(lastnoise)
+                    # separate the indeck contents
+                    try:
+                        while(len(indeck) > 0):
+                            cnt = indeck.popleft()
+                            if isinstance(cnt, LocalWeather):
+                                wetherdec.append(cnt)
+                            elif isinstance(cnt, NoiseFloorResult):
+                                noisedeck.append(cnt)
+                            else:
+                                raise AssertionError("need to handle")
+                    except IndexError:
+                        pass
+                    finally:
+                        pass
+                    data_tobe_processed = None
+                    tuplst = trim_dups(wetherdec, localweather.different)
+
+                    noiselist = list(noisedeck)
+                    noisemarkers = [i for i in range(1, len(weatherlist)) if
+                                    (weatherlist[i - 1].has_changedweatherlist[i])]
+
+                    # first item of wetherdec and noisedeck may be None!
                 while True:
                     try:
                         while True:
-                            #data_tobe_processed = locald.deqPrams[0] \
+                            # data_tobe_processed = locald.deqPrams[0] \
                                 # .popleft()
-                            data_tobe_processed = locald.deqPrams[0].popleft(
+                            data_tobe_processed = indeck.popleft(
                             )
                             # process the data
                             fn(dpQ_OUT, data_tobe_processed)
@@ -476,7 +508,7 @@ def shutdown(futures, queues, stopevents):
     time.sleep(0.001)
     validkeys = list(futures.keys())
 
-    #isdone = True
+    # isdone = True
     # keys are the dict keys for data generation threads
     # selected from weather noise transfer dataagragator dbwriter
     keys = [k for k in validkeys if k in ('weather', 'noise',)]
@@ -571,9 +603,9 @@ def main(ctx, hours=0.5):
             # dbQ_writer, bollst[4], barrier, stopevents['dbwrite'], queues)
 
             # barrier.wait()  # start them all working
-            #trackerstarted = time.monotonic()
-            #trackerschedend = trackerstarted + runtimesec
-            #time.monotonic() < trackerschedend
+            # trackerstarted = time.monotonic()
+            # trackerschedend = trackerstarted + runtimesec
+            # time.monotonic() < trackerschedend
             # while time.monotonic() < trackerTimeout:
             # time.sleep(5)
             shutdown(futures, queues, STOP_EVENTS)

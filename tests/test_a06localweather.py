@@ -7,9 +7,11 @@ Tests the local weather module
 import unittest
 import multiprocessing as mp
 from multiprocessing import queues
-
+import time
+from collections import deque
 
 import jsonpickle
+#import pickle
 import context
 import localweather
 from localweather import MyTime, LocalWeather
@@ -88,6 +90,13 @@ class TestLocalweather(unittest.TestCase):
             print(str(ex))
             self.fail('exception')
 
+        _lw2 = LocalWeather()
+        _lw2.load_from_other(_lw)
+        self.assertEqual(_lw, _lw2)
+        self.assertFalse(_lw is _lw2)
+        self.assertTrue(_lw2.netstatus is None)
+        self.assertEqual(200, _lw.netstatus)
+
     def test01b_instat(self):
         """test01b_instat()
 
@@ -111,9 +120,9 @@ class TestLocalweather(unittest.TestCase):
             self.assertFalse(_mt < _mtz)
             self.assertFalse(_mt > _mtz)
 
-            self.assertEqual('Wed Dec  4 16:30:44 2019', _mt.local)
+            self.assertEqual('Wed Dec  4 16:30:44 2019', _mt.localats)
 
-            self.assertEqual('Thu Dec  5 00:30:44 2019', _mt.utc)
+            self.assertEqual('Thu Dec  5 00:30:44 2019', _mt.utcats)
             _dst = MyTime(timestamp=1555000000)
 
             self.assertTrue(_mt.localtz == 'Pacific Standard Time')
@@ -151,7 +160,9 @@ class TestLocalweather(unittest.TestCase):
             self.assertFalse(_mt > _mtz)
 
             self.assertEqual(
-                "(1575506844, 'Thu Dec  5 00:47:24 2019', 'Wed Dec  4 16:47:24 2019', 'Pacific Standard Time', -8.0)", str(_mtlater.get()))
+                "[1575506844, 'Thu Dec  5 00:47:24 2019', 'Pacific Standard Time', -8.0]", str(_mtlater.get()))
+
+            a = 0
 
         except Exception as ex:
             print(str(ex))
@@ -163,18 +174,18 @@ class TestLocalweather(unittest.TestCase):
         """
 
         temps = localweather.converttemp(233.15)
-        self.assertEqual(('233.15K', '-40.00C', '-40.00F'), temps)
+        self.assertEqual(['233.15K', '-40.00C', '-40.00F'], temps)
         temps = localweather.converttemp(273.15)
-        self.assertEqual(('273.15K', '0.00C', '32.00F'), temps)
+        self.assertEqual(['273.15K', '0.00C', '32.00F'], temps)
 
         speed = localweather.convertspeed(0)
-        self.assertEqual((0.0, 0.0), speed)
+        self.assertEqual([0.0, 0.0], speed)
         speed = localweather.convertspeed(0.44704)
-        self.assertAlmostEqual((0.44704, 1.0), speed)
+        self.assertAlmostEqual([0.44704, 1.0], speed)
         speed = localweather.convertspeed(1.0)
-        self.assertAlmostEqual((1.0, 2.24), speed)
+        self.assertAlmostEqual([1.0, 2.24], speed)
         speed = localweather.convertspeed(-1)
-        self.assertAlmostEqual((-1.0, -2.24), speed)
+        self.assertAlmostEqual([-1.0, -2.24], speed)
         print('need to test gusts')
 
     def test03_run_from_Q(self):
@@ -185,9 +196,15 @@ class TestLocalweather(unittest.TestCase):
         import queue
         ctx = mp.get_context('spawn')
         q = ctx.JoinableQueue(maxsize=5)
-        ps = [ctx.Process(target=Get_LW, args=(q,))
-              for i in range(3)]  # process can only be started once
-        [p.start() for p in ps]
+       # ps = ctx.Process(target=Get_LW, args=(q,))
+        for _ in range(3):  # process can only be started once
+            ps = ctx.Process(target=Get_LW, args=(q,))
+            ps.start()
+            time.sleep(0.0001)
+
+        #[p.start() for p in ps]
+        # for i in range(3):  # process can only be started once
+            # time.sleep(0.0001)
 
         results = []
         try:
@@ -211,6 +228,45 @@ class TestLocalweather(unittest.TestCase):
             self.assertTrue('Time:' in strr)
         q.join()
         q.close()
+
+    def test04_lookatObjects(self):
+        """test04_lookatObjects(
+
+        if object works
+        """
+        local_weather_lst = []
+        _lw = LocalWeather()
+        with open('testlocalWeather60.json', 'r') as fl1:
+            try:
+                kk = fl1.read()
+                local_weather_lst = jsonpickle.decode(
+                    kk, classes=(LocalWeather, MyTime,))
+                a = 0
+            except Exception as ex:
+                a = 0
+        #deck = deque(local_weather_lst)
+        lw1: LocalWeather = local_weather_lst[0]
+        #temptupal1 = lw1.get_temp()
+        self.assertEqual(['278.03K', '4.88C', '40.78F'], lw1.get_temp()[0])
+        self.assertEqual(['275.37K', '2.22C', '36.00F'], lw1.get_temp()[1])
+        self.assertEqual(['280.15K', '7.00C', '44.60F'], lw1.get_temp()[2])
+
+        ws = lw1.get_wind()
+        self.assertEqual({'dir': '140 degrees', 'speed':
+                          [['1.5 m/s', '3.4 mph'], ['0.0 m/s', '0.0 mph']]}, lw1.get_wind())
+        a = 0
+        self.assertEqual(200, lw1.netstatus)
+        self.assertEqual(
+            "dict_keys(['base', 'clouds', 'cod', 'coord', 'dt', 'id', 'main', 'name', 'sys', 'timezone', 'visibility', 'weather', 'wind'])", str(lw1.rjson.keys()))
+
+        self.assertEqual(
+            'local: Wed Feb 12 19:52:07 2020 Pacific Standard Time', lw1.get_DateTime())
+
+        self.assertEqual('utc: Thu Feb 13 03:52:07 2020',
+                         lw1.get_DateTime(local=False))
+
+        a = 0
+        # deck = deque(local_weather_lst)
 
 
 if __name__ == '__main__':

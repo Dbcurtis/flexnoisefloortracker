@@ -48,7 +48,7 @@ class TestDeck(unittest.TestCase):
 
         """
         #print('Deck: test01_instant -- start')
-        deck = Deck(10)  # define z deck of 10
+        deck: Deck = Deck(10)  # define z deck of 10
         #stra = str(deck)
         #repra = repr(deck)
 
@@ -92,7 +92,7 @@ class TestDeck(unittest.TestCase):
 
         """
         #print('Deck: test02_appendPushPop-- start')
-        deck = Deck(10)
+        deck: Deck = Deck(10)
         deck.append(1)
         deck.append(2)
         deck.push(3)
@@ -102,17 +102,17 @@ class TestDeck(unittest.TestCase):
         self.assertEqual(3, deck.popleft())
         deck.push(3)
 
-        a = repr(deck)
         self.assertEqual(
             'Deck= max: 10, len: 3, deque([3, 1, 2])', repr(deck))
 
         deck.append(deck.popleft())
-        a = repr(deck)
         self.assertEqual(
             'Deck= max: 10, len: 3, deque([1, 2, 3])', repr(deck))
+
         deck.clear()
         self.assertEqual(
             'Deck= max: 10, len: 0, deque([])', repr(deck))
+        i: int
         try:
             for i in range(11):
                 deck.append(i)
@@ -144,7 +144,7 @@ class TestDeck(unittest.TestCase):
         dataq = CTX.JoinableQueue(maxsize=100)
 
         [dataq.put(x) for x in range(100)]
-        deck = Deck(100)
+        deck: Deck = Deck(100)
         self.assertFalse(deck.look_left())
         self.assertFalse(deck.look_right())
         deck.load_from_Q(dataq, mark_done=True)
@@ -175,7 +175,7 @@ class TestDeck(unittest.TestCase):
         CTX = mp.get_context('spawn')
         dataq = CTX.JoinableQueue(maxsize=20)
 
-        deck = Deck(10)
+        deck: Deck = Deck(10)
         try:
             self.assertEqual(10, deck.extend([x for x in range(10)]))
         except Exception:
@@ -201,7 +201,8 @@ class TestDeck(unittest.TestCase):
         self.assertEqual(15, deck.loadQ(dataq))
         self.assertEqual(0, len(deck))
         self.assertEqual(15, dataq.qsize())
-        jj = 0
+        jj: int = 0
+
         try:
             while True:
                 dataq.get(True, 0.001)
