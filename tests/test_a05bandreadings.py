@@ -68,6 +68,7 @@ class TestBandreadings(unittest.TestCase):
 
         """
         _br = Bandreadings([], self.flex, None)
+        # band 10 is the default if no freq and no bandid provided
         self.assertEqual('no reading, band 10', str(_br))
         self.assertEqual('Bandreadings: no reading, band 10', repr(_br))
         self.assertEqual('10', _br.bandid)
@@ -78,7 +79,7 @@ class TestBandreadings(unittest.TestCase):
         self.assertEqual('20', _br.bandid)
 
         _br = Bandreadings(
-            ['14000000', '14200000', '14300000'], self.flex, None)
+            ['14000000', '14200000', '14300000'], self.flex, None)  # these freqs in 20m band
         self.assertEqual('no reading, band 20', str(_br))
         self.assertEqual('Bandreadings: no reading, band 20', repr(_br))
         self.assertEqual('20', _br.bandid)
@@ -91,7 +92,7 @@ class TestBandreadings(unittest.TestCase):
         try:
             _br = Bandreadings(
                 ['14000000', '14074000', '14100000', '14200000'], self.flex)
-            _br.get_readings(testing='./quiet20band.json')
+            _br.get_readings()  # testing='./quiet20band.json')
             self.assertEqual(
                 '[SMeterAvg: -103.45833adBm, -103.50000mdBm, S3, var: 0.15720, stddv: 0.39648]',
                 repr(_br.band_signal_strength))
@@ -165,7 +166,7 @@ class TestBandreadings(unittest.TestCase):
         """
         _br = Bandreadings(
             ['14000000', '14074000', '14100000', '14200000'], self.flex,)  # 14000000
-        _br.get_readings(testing='./quiet20band.json')
+        _br.get_readings()  # (testing='./quiet20band.json')
         self.assertFalse(_br.cf_process_readings())
         # oldsmalst = [_br.band_signal_strength][:]
         _br = Bandreadings(
@@ -173,7 +174,7 @@ class TestBandreadings(unittest.TestCase):
 
       #  need to figure out what was the noisy frequency when you removed the damn things
         _br.get_readings(testing='./noisy20band.json')
-        temp_smeteravg = _br.cf_process_readings()
+        temp_smeteravg = _br.cf_process_readings(aa)
         self.assertTrue(temp_smeteravg)
         self.assertEqual(
             '[SMeterAvg: -104.04167adBm, -104.00000mdBm, S3, var: 0.33902, stddv: 0.58225]',

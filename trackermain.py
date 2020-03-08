@@ -236,7 +236,7 @@ def Get_NF(rawDataQ_OUT):
         UI.open()
         print("Requested Port can be opened")
         FLEX = Flex(UI)
-        NOISE = Noisefloor(FLEX)
+        NOISE = Noisefloor(FLEX, rawDataQ_OUT)
         NOISE.open()
         NOISE.doit(loops=10, interval=30)
         NOISE.close()
@@ -303,7 +303,7 @@ def dataQ_reader(thread_info, fn=lambda outQ, data: outQ.put(data, False)):
         while True:
 
             try:  # empty rawDataW into indata
-                indeck.load_from_Q(inQ, mark_done=False)
+                indeck.load_from_Q(rawDataQ_IN, mark_done=False)
 
             except QFull:
                 pass
@@ -312,9 +312,9 @@ def dataQ_reader(thread_info, fn=lambda outQ, data: outQ.put(data, False)):
                 if len(indeck) > 0:
 
                     wetherdec.clear()
-                    wetherdec.appendleft(lastweather)
+                    wetherdec.push(lastweather)
                     noisedeck.clear()
-                    noisedeck.appendleft(lastnoise)
+                    noisedeck.push(lastnoise)
                     # separate the indeck contents
                     try:
                         while(len(indeck) > 0):
@@ -551,12 +551,6 @@ def main(ctx, hours=0.5):
 
     """
 
-    # stopevents = {
-    # 'acquireData': ctx.Event(),
-    # 'trans': ctx.Event(),
-    # 'dbwrite': ctx.Event(),
-    # 'agra': ctx.Event(),
-    # }
     queues = QUEUES
     # need to log starting
     # setup thread processor

@@ -20,6 +20,48 @@ LOGGER = logging.getLogger(__name__)
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/flex'
 
+"""FLEX Commands:
+
+ZZAG Reads / Sets VFO A Audio Gain (0-100)
+ZZAI Auto Information State (on/off)
+ZZAR Reads / Sets VFO A AGC Threshold (0-100)
+ZZAS Reads / Sets VFO B AGC Threshold (0-100)
+ZZBI Reads / Sets Binaural RX State (On / Off)
+ZZDE Reads / Sets VFO A Diversity (DIV) state (On / Off) [FLEX-6700 only]
+ZZFA Reads / Sets VFO A Frequency (11 digit Hz)
+ZZFB Reads / Sets VFO B Frequency (11 digit Hz)
+ZZFI Reads / Sets VFO A DSP Filter Index
+ZZFJ Reads / Sets VFO B DSP Filter Index
+ZZFR Toggle VFO A/B Active  -- NOT USED
+ZZFT Toggle VFO A/B Transmit -- NOT USED
+ZZGT Reads / Sets VFO A AGC Mode
+ZZIF Reads Transceiver Status
+ZZLB Reads / Sets VFO A Audio Pan (0-100, Left to Right)
+ZZLE Reads / Sets VFO B Audio Gain (0-100)
+ZZLF Reads / Sets VFO B Audio Pan (0-100, Left to Right)
+ZZMA Reads / Sets VFO A Mute (On / Off)
+ZZMD Reads / Sets VFO A DSP Mode
+ZZME Reads / Sets VFO B DSP Mode
+ZZMG Reads / Sets Transmitter Mic Gain (0-100)
+ZZNL Reads / Sets VFO A Wide Noise Blanker (WNB) Threshold (0-100)
+ZZNR Reads / Sets VFO A Noise Reduction (NR) State (On / Off)
+ZZPC Reads / Sets the RF Power Drive Level (0-100)
+ZZRC Clears RIT
+ZZRD Decrements RIT frequency
+ZZRG Reads / Sets VFO A RIT Frequency (+/- 5 digit Hz)
+ZZRT Reads / Sets VFO A RIT State (On / Off)
+ZZRU Increments the RIT frequency
+ZZRW Reads / Sets VFO B RIT Frequency (+/- 5 digit Hz)
+ZZRX Reads Receive State (On / Off) [inverse of MOX]
+ZZRY Reads / Sets VFO B RIT Frequency (+/- 5 digit Hz)
+ZZSM Read the S-Meter
+ZZSW Set Transmit VFO (0=A, 1=B)
+ZZTX Set MOX State (On / Off)
+ZZXC Clear XIT Frequency
+ZZXG Read / Set VFO A XIT Frequency (+/- 5 digit Hz)
+ZZXS Reads / Sets XIT State (On / Off)
+"""
+
 FLEX_CAT_ALL = frozenset(
     [
         'ZZAG', 'ZZAI', 'ZZAR', 'ZZAS', 'ZZBI', 'ZZDE', 'ZZFA', 'ZZFB', 'ZZFI',
@@ -30,12 +72,17 @@ FLEX_CAT_ALL = frozenset(
     ]
 )
 
-FLEX_CAT_WRITE = frozenset(
+FLEX_CAT_WRITE = frozenset(  # this variable is badly named
     ['ZZFR', 'ZZFT', 'ZZPE', 'ZZRC', 'ZZRD',
         'ZZRU', 'ZZSM', 'ZZSW', 'ZZTX', 'ZZXC', ]
 )
 
 FLEX_CAT_READ_ONLY = FLEX_CAT_ALL - FLEX_CAT_WRITE
+# which is \
+#'ZZRY', 'ZZNR', 'ZZMA', 'ZZAG', 'ZZRX', 'ZZLB', 'ZZXS', 'ZZDE', \
+#'ZZBI', 'ZZMG', 'ZZFA', 'ZZME', 'ZZPC', 'ZZFI', 'ZZRG', 'ZZRW', \
+#'ZZFJ', 'ZZLE', 'ZZAR', 'ZZRT', 'ZZGT', 'ZZAI', 'ZZFB', 'ZZIF', \
+#'ZZLF', 'ZZXG', 'ZZNL', 'ZZMD', 'ZZAS'
 
 
 class Flex:
@@ -114,7 +161,28 @@ class Flex:
         if isinstance(cset, set):
             clist.sort()
 
-        # resultlst = [self.do_cmd(cmd) for cmd in clist]
+        #resultlst = []
+        #cnt = 0
+        # for cmd in clist:
+            #aa = self.do_cmd(cmd)
+            # if not '?;' in aa:
+            # resultlst.append(aa)
+            # print(f'{cnt}: cmd {cmd}: {aa}')
+            #cnt += 1
+
+        #[self.do_cmd(cmd) for cmd in clist]
+        """expected ?
+        ZZFJ VFO B DSP Filter Index
+        ZZAS VFO B AGC Threshold (0-100)
+        ZZDE VFO A Diversity (DIV) state (On / Off) [FLEX-6700 only]
+        ZZLF VFO B Audio Pan (0-100, Left to Right)
+        ZZME VFO B DSP Mode
+        ZZLE VFO B Audio Gain (0-100)
+        ZZRY VFO B RIT Frequency
+        ZZFB VFO B Frequency (11 digit Hz)
+        ZZRW VFO B RIT Frequency
+        """
+        #aa = len(resultlst)
         resultlst = [_ for _ in [self.do_cmd(
             cmd) for cmd in clist] if _ != '?;']
 

@@ -30,6 +30,7 @@ _MODE = {
     '40': 'DSTR',
 }
 
+
 def zzmdpost(code):
     """zzmdpost(code):
 
@@ -37,6 +38,7 @@ def zzmdpost(code):
     if not code in _MODE.keys():
         return '??'
     return _MODE.get(code)
+
 
 def zzifpost(resulttup):
     """zzifpost(resulttup)
@@ -85,49 +87,48 @@ def zzifpost(resulttup):
     temp = temp[2:]
     return ret
 
-#def savemode(arg):
-    #"""savemode()
+# def savemode(arg):
+    # """savemode()
 
-    #"""
+    # """
     #junk = arg
-    #pass
+    # pass
 
 
+# def save_freq(arg):
+    # """saveFreq()
 
-#def save_freq(arg):
-    #"""saveFreq()
-
-    #"""
+    # """
     #_ = arg
-    #pass
+    # pass
 
-#def save_dsp_filter(arg):
-    #"""saveDSPFilter()
+# def save_dsp_filter(arg):
+    # """saveDSPFilter()
 
-    #"""
+    # """
     #_ = arg
-    #pass
+    # pass
 
-#def save_agc_mode(arg):
-    #"""saveAGCMode()
+# def save_agc_mode(arg):
+    # """saveAGCMode()
 
-    #"""
+    # """
     #_ = arg
-    #pass
+    # pass
 
-#def savewnb(arg):
-    #"""savewnb()
+# def savewnb(arg):
+    # """savewnb()
 
-    #"""
+    # """
     #_ = arg
-    #pass
+    # pass
 
-#def savenb(arg):
-    #"""savenb()
+# def savenb(arg):
+    # """savenb()
 
-    #"""
+    # """
     #_ = arg
-    #pass
+    # pass
 
 
 def smeter(arg):  # (arg, freq):
@@ -136,28 +137,31 @@ def smeter(arg):  # (arg, freq):
     sm = SMeter(arg)
     return sm
 
+
 INITIALZE_FLEX = [
-    #""" commands to set the radio to an initial condition. To be used after
-    #the current radio state is saved by savstate = flex.save_current_state()
-    #and the flex restored via flex.restore_state(savestate)
-    #"""
-    # initalize the radio to the needed conditions.
-    'ZZTX0;',
-    'ZZAR000;',
-    'ZZAS000;',
-    'ZZBI0;',
-    'ZZMD07;',
-    'ZZFA00014150000;',
-    'ZZFB00007150000;',
-    'ZZFI04;',
-    'ZZGT0;',
-    'ZZLB050;',
-    'ZZNL000;',
-    'ZZNR0;',
-    'ZZPC000;',
-    'ZZRC;',
-    'ZZRT0;',
-  ]
+    # """ commands to set the radio to an initial condition. To be used after
+    # the current radio state is saved by savstate = flex.save_current_state()
+    # and the flex restored via flex.restore_state(savestate)
+    # """
+    # initalize the radio to a defined set of initial conditions.
+    'ZZTX0;',  # set MOX off
+    'ZZAR000;',  # set vfo A agc threshhold to 0
+    'ZZAS000;',  # set vfo B agc threshhold to 0
+    'ZZBI0;',  # Sets Binaural RX State off
+    'ZZMD07;',  # Sets VFO A DSP Mode to 7 (DIGU)
+    'ZZME07;',  # Sets VFO B DSP Mode to 7 (DIGU)
+    'ZZFA00014150000;',  # sets VFO A to  14,150,000
+    'ZZFB00007150000;',  # sets VFO B to  07,150,000
+    'ZZFI04;',  # sets VFO A DSP filter to 04 (1K on DIGU I think)
+    'ZZFJ04;',  # sets VFO B DSP filter to 04 (1K on DIGU I think)
+    'ZZGT0;',  # sets VFO A AGC Mode to 0 (off)
+    'ZZLB050;',  # Sets VFO A Audio Pan to mid (50)
+    'ZZNL000;',  # Sets VFO A Wide Noise Blanker (WNB) Level to 0
+    'ZZNR0;',  # Sets Slice Noise Reduction (NR) State to off
+    'ZZPC000;',  # Sets RF Power Drive Level to 0
+    'ZZRC;',  # Clear Slice A RIT Frequency
+    'ZZRT0;',  # Sets or reads VFO A RIT State off
+]
 
 FREQUENCIES = ['{:011}'.format(_) for _ in [
     # frequences in each band that will get sampled
@@ -173,7 +177,6 @@ FREQUENCIES = ['{:011}'.format(_) for _ in [
 RESTORE_FLEX = {
     # restore freq, mode, dsp agc wnb
 }
-
 
 
 GET_DATA = [
@@ -205,6 +208,7 @@ GET_FAST_DATA = [
     ('ZZSM;', smeter, ),
 
 ]
+
 
 class PostProc():
     """PostProc()
@@ -239,7 +243,7 @@ if __name__ == '__main__':
     )
     LF_HANDLER.setLevel(logging.DEBUG)
     LC_HANDLER = logging.StreamHandler()
-    LC_HANDLER.setLevel(logging.DEBUG)  #(logging.ERROR)
+    LC_HANDLER.setLevel(logging.DEBUG)  # (logging.ERROR)
     LF_FORMATTER = logging.Formatter(
         '%(asctime)s - %(name)s - %(funcName)s - %(levelname)s - %(message)s')
     LC_FORMATTER = logging.Formatter('%(name)s: %(levelname)s - %(message)s')

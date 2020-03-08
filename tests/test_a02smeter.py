@@ -68,7 +68,7 @@ class Testsmeter(unittest.TestCase):
         self.assertEqual(-91.0, _sm.signal_st.get('dBm'))
         self.assertEqual('S6', _sm.signal_st.get('sl'))
 
-        _sm = SMeter(('ZZSM122;', 12_123_456))  # s8
+        _sm = SMeter(['ZZSM122;', 12_123_456])  # s8
         self.assertEqual(12_123_456, _sm.freq)
         self.assertEqual(-79.0, _sm.signal_st.get('dBm'))
         self.assertEqual('S8', _sm.signal_st.get('sl'))

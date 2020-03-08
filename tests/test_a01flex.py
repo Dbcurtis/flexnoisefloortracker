@@ -18,19 +18,19 @@ class Testflex(unittest.TestCase):
 
     """
 
-    #def initialize_flex(self):
-        #"""initialize_flex()
+    # def initialize_flex(self):
+    # """initialize_flex()
 
-        #"""
+    # """
 
-        #_ui = UserInput()
-        #_ui.request('com4')
-        #self.flex = Flex(_ui)
-        #self.flex.open()
-        ## self.initialize_flex()
-        #self.flex.do_cmd_list(postproc.INITIALZE_FLEX)
-        #results = self.flex.do_cmd_list(postproc.INITIALZE_FLEX)
-        #return results
+    #_ui = UserInput()
+    # _ui.request('com4')
+    #self.flex = Flex(_ui)
+    # self.flex.open()
+    # self.initialize_flex()
+    # self.flex.do_cmd_list(postproc.INITIALZE_FLEX)
+    #results = self.flex.do_cmd_list(postproc.INITIALZE_FLEX)
+    # return results
 
     def setUp(self):
         _ui = UserInput()
@@ -43,7 +43,6 @@ class Testflex(unittest.TestCase):
     def tearDown(self):
         self.flex.close()
 
-
     @classmethod
     def setUpClass(cls):
         _ui = UserInput()
@@ -53,7 +52,6 @@ class Testflex(unittest.TestCase):
         cls.initial_state = flex.save_current_state()
         flex.close()
 
-
     @classmethod
     def tearDownClass(cls):
         _ui = UserInput()
@@ -62,7 +60,6 @@ class Testflex(unittest.TestCase):
         flex.open()
         flex.restore_state(cls.initial_state)
         flex.close()
-
 
     def test01_instantiate(self):
         """test_instantiate()
@@ -87,24 +84,13 @@ class Testflex(unittest.TestCase):
         """
 
         self.assertEqual('Flex cat: com4, opened: True', str(self.flex))
-        self.assertEqual('[Flex] Flex cat: com4, opened: True', repr(self.flex))
+        self.assertEqual(
+            '[Flex] Flex cat: com4, opened: True', repr(self.flex))
 
         self.flex.close()
         self.assertEqual('Flex cat: com4, opened: False', str(self.flex))
-        self.assertEqual('[Flex] Flex cat: com4, opened: False', repr(self.flex))
-
-        #gdata1 = [
-            ## GET_DATA
-            ##('wait0.5', None, ),
-            #('ZZIF;', None, ),
-            ## ('wait0.25', None, ),
-            ##('ZZSM;', smeter, ),
-            ##('wait0.25', None, ),
-            ##('ZZSM;', none, ),
-            ##('wait0.25', None, ),
-            ##('ZZSM;', smeter, ),
-
-        #]
+        self.assertEqual(
+            '[Flex] Flex cat: com4, opened: False', repr(self.flex))
 
         self.flex.open()
         result = self.flex.do_cmd('ZZIF;')
@@ -141,8 +127,7 @@ class Testflex(unittest.TestCase):
 
         _aa = int([i for i in newsavedstate if 'ZZFA' in i][0][-12:-1])
         _aa = 14000000 if _aa != 14000000 else 15000000
-        # aat = f'ZZFA{_aa:011};'
-
+        aat = f'ZZFA{_aa:011};'
 
         self.flex.do_cmd(f'ZZFA{_aa:011};')
         modstate = self.flex.save_current_state()
@@ -158,8 +143,7 @@ class Testflex(unittest.TestCase):
         gdata1 = [
             ('wait0.5', None, ),
             ('ZZIF;', postproc.zzifpost, ),
-            ]
-
+        ]
 
         stime = time.perf_counter()
         results = self.flex.get_cat_data([], 14_000_000)

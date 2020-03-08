@@ -10,7 +10,7 @@ import datetime
 # import math
 import time
 # from statistics import mean
-import mysql.connector as mariadb
+# import mysql.connector as mariadb
 from userinput import UserInput
 # from smeter import SMeter, _SREAD
 from bandreadings import Bandreadings
@@ -28,30 +28,30 @@ _DB = _DT.dbase
 _CU = _DT.cursor
 
 
-def threadrun(threadLock):
-    threadLock.acquire()
+# def threadrun(threadLock):
+# threadLock.acquire()
 
-    try:
-        UI.request()
-        UI.open()
-        print("Requested Port can be opened")
-        FLEX = Flex(UI)
-        NOISE = Noisefloor(UI)
-        NOISE.open()
-        NOISE.doit(loops=10, interval=30)
-        NOISE.close()
+# try:
+# UI.request()
+# UI.open()
+#print("Requested Port can be opened")
+#FLEX = Flex(UI)
+#NOISE = Noisefloor(UI)
+# NOISE.open()
+#NOISE.doit(loops=10, interval=30)
+# NOISE.close()
 
-    except(Exception, KeyboardInterrupt) as exc:
-        if NOISE:
-            NOISE.close()
-        UI.close()
-        sys.exit(str(exc))
+# except(Exception, KeyboardInterrupt) as exc:
+# if NOISE:
+# NOISE.close()
+# UI.close()
+# sys.exit(str(exc))
 
-    finally:
-        if NOISE:
-            NOISE.close()
-        UI.close()
-        sys.exit(str(exc))
+# finally:
+# if NOISE:
+# NOISE.close()
+# UI.close()
+# sys.exit(str(exc))
 
 
 # def find_band(wave_length):
@@ -125,15 +125,16 @@ def _recordprocdata(bandreadings_lst):
 
 
 class Noisefloor:
-    """Noisefloor()
+    """Noisefloor(flex, out_queue, testdata=None, testing=False)
     """
 
-    def __init__(self, flex, queues=None, testdata=None, testing=False):
+    def __init__(self, flex, out_queue, testdata=None, testing=False):
      #   def __init__(self, userI, testdata=None, testing=False):
 
         self.flex = flex
         self._ui = flex._ui
         self._td = None
+        self.out_queue = out_queue
         self._last_band_readings = None
         if testdata:
             if isinstance(testdata, list):
@@ -142,7 +143,7 @@ class Noisefloor:
             else:
                 assert "illegal testdata type"
 
-        self.dbase = dbtools.DBTools()
+       # self.dbase = dbtools.DBTools()
         self.end_time = None
 
     def __str__(self):
@@ -172,11 +173,11 @@ class Noisefloor:
         try:
             self.flex.open(detect_br)
             self._ui.open(detect_br)
-            self.dbase.open()
+            # self.dbase.open()
 
         except Exception as sex:
             self._ui.comm_port = ""
-            self.dbase.close()
+            # self.dbase.close()
             print(sex)
             return False
 
@@ -202,7 +203,7 @@ class Noisefloor:
         for _ in range(0, len(freq_list), 3):
             freq_in_band.append(freq_list[_:_ + 3])
 
-        for _freq in freq_in_band:  # go through all the bands
+        for _freq in freq_in_band:  # go through all the scanned bands
             run = True
             count = 5  # only 5 attempts to get a reasonable signal
             band_reading = None
@@ -217,7 +218,7 @@ class Noisefloor:
 
             results.append(band_reading)
 
-        if not self._last_band_readings or results != self._last_band_readings:
+        if (not self._last_band_readings) or results != self._last_band_readings:
             self._last_band_readings = [results]
             _recordprocdata(results)
 
@@ -243,7 +244,12 @@ class Noisefloor:
         return results
 
     def doit(self, runtime="10hr", interval="30", loops=0):
-        """doit()
+        """doit(runtime="10hr", interval="30", loops=0)
+
+        gets the noise from all measured bands.
+        runtime is the time extent the measurements will be taken if loops is 0
+        interval is the number of seconds between each run
+        loops is the number of times the measurment will be taken and if >0 overrides the runtime
 
         """
         # initdata = self.initialize_flex() #if you need to look at the results
@@ -270,29 +276,7 @@ class Noisefloor:
             _DT.close()
 
 
-if __name__ == '__main__':
-    if not os.path.isdir(LOG_DIR):
-        os.mkdir(LOG_DIR)
-
-    LF_HANDLER = logging.handlers.RotatingFileHandler(
-        ''.join([LOG_DIR, LOG_FILE, ]),
-        maxBytes=10000,
-        backupCount=5,
-    )
-    LF_HANDLER.setLevel(logging.DEBUG)
-    LC_HANDLER = logging.StreamHandler()
-    LC_HANDLER.setLevel(logging.DEBUG)  # (logging.ERROR)
-    LF_FORMATTER = logging.Formatter(
-        '%(asctime)s - %(name)s - %(funcName)s - %(levelname)s - %(message)s')
-    LC_FORMATTER = logging.Formatter('%(name)s: %(levelname)s - %(message)s')
-    LC_HANDLER.setFormatter(LC_FORMATTER)
-    LF_HANDLER.setFormatter(LF_FORMATTER)
-    THE_LOGGER = logging.getLogger()
-    THE_LOGGER.setLevel(logging.DEBUG)
-    THE_LOGGER.addHandler(LF_HANDLER)
-    THE_LOGGER.addHandler(LC_HANDLER)
-    THE_LOGGER.info('userinput executed as main')
-    # LOGGER.setLevel(logging.DEBUG)
+def main():
     UI = UserInput()
     NOISE = None
     try:
@@ -316,3 +300,29 @@ if __name__ == '__main__':
             NOISE.close()
         UI.close()
         sys.exit(str(exc))
+
+
+if __name__ == '__main__':
+    if not os.path.isdir(LOG_DIR):
+        os.mkdir(LOG_DIR)
+
+    LF_HANDLER = logging.handlers.RotatingFileHandler(
+        ''.join([LOG_DIR, LOG_FILE, ]),
+        maxBytes=10000,
+        backupCount=5,
+    )
+    LF_HANDLER.setLevel(logging.DEBUG)
+    LC_HANDLER = logging.StreamHandler()
+    LC_HANDLER.setLevel(logging.DEBUG)  # (logging.ERROR)
+    LF_FORMATTER = logging.Formatter(
+        '%(asctime)s - %(name)s - %(funcName)s - %(levelname)s - %(message)s')
+    LC_FORMATTER = logging.Formatter('%(name)s: %(levelname)s - %(message)s')
+    LC_HANDLER.setFormatter(LC_FORMATTER)
+    LF_HANDLER.setFormatter(LF_FORMATTER)
+    THE_LOGGER = logging.getLogger()
+    THE_LOGGER.setLevel(logging.DEBUG)
+    THE_LOGGER.addHandler(LF_HANDLER)
+    THE_LOGGER.addHandler(LC_HANDLER)
+    THE_LOGGER.info('userinput executed as main')
+    # LOGGER.setLevel(logging.DEBUG)
+    main()

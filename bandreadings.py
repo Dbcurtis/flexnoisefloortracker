@@ -40,6 +40,7 @@ class Bandreadings:
     """Bandreadings(freqs, flex, bandid=None)
 
     freqs is a list of frequencies in the band that will be looked at
+      if freqs is none, the freq will be '30100000' which will put it in the 10m band
     flex is a Flex object
 
     if bandid = None, the band will be determined from the freqs
@@ -52,7 +53,7 @@ class Bandreadings:
         self.flexradio = flexradio
         self.freqt = freqs
         self.freqi = [int(_) for _ in freqs]
-        self.v = 1
+        self.v = 1  # object version number if it exists
 
         self.bandid = bandid if bandid else str(
             (GET_BAND(299792458.0 / mean(self.freqi))))
@@ -84,6 +85,41 @@ class Bandreadings:
                    .format(self.bandid, adBm, sl, var, stddv)
 
         return f'Bandreadings: no reading, band {self.bandid}'
+
+    def doit(self, testing=None):
+        """doit()
+
+        gets the signal strength for a particular band
+        generates the smeteravg to check if the band is ok
+
+        testing is a string for an open file that has the jsonpickle of the test data
+        or None if to get the real data.  testing should be one of:
+        1)'./quiet20band.json'
+        2)'./noisy20band.json',
+        assuming running in the testing direcotry
+        """
+        self.get_readings(
+            testing=testing)  # saved in self.band_signal_strength
+
+        current_bss = self.band_signal_strength
+        cbssstr = str(current_bss)
+        updated_bss = None
+        if current_bss.signal_st.get('stddv') > 1.5:
+            updated_bss = current_bss.get_quiet()
+            # self.changefreqs(testing=testing)
+        # new_bss = self.band_signal_strength
+        _a = 0
+        if updated_bss:
+            _a = updated_bss.badness()
+        if updated_bss and updated_bss.badness() < 0.21:
+            self.band_signal_strength = updated_bss
+        else:
+            _a = self.changefreqs()
+            a = 0
+
+        nbssstr = str(self.band_signal_strength)
+
+        a = 0
 
     def cf_get_readings(self, testing=None):
         """cf_get_readings(tup,band)
@@ -132,13 +168,14 @@ class Bandreadings:
             file.close()
         return readings
 
-    def cf_process_readings(self, readings):
+    def cf_process_readings(self):
         """cf_process_readings()
 
 
         readings is:?
 
         """
+        self.band_signal_strength
         if self.band_signal_strength.signal_st.get('stddv') < 1.0:
             return None
 
@@ -211,51 +248,23 @@ class Bandreadings:
             self.band_signal_strength = factory(vals, self.bandid)
             return
 
-        file = open(testing, 'r')
         resu = []
-        resu = [jsonpickle.decode(_) for _ in file.readlines()]
-        file.close()
+        with open(testing, 'r') as fl:
+            #file = open(testing, 'r')
+            resu = []
+            aalst = fl.readlines()
+            for _ in aalst:
+                bb = jsonpickle.decode(_)
+                resu.append(bb)
+            resu = [jsonpickle.decode(_) for _ in aalst]
+            #resu = [jsonpickle.decode(_) for _ in fl.readlines()]
+        # file.close()
         res = resu[0]
         # newsmaobj = SMeterAvg(res.smlist, res.band)
         # convert possible old versio of SMeterAvg to new version
         newsmaobj = factory(res)
         newsmaobj.time = res.time
         self.band_signal_strength = newsmaobj
-
-    def doit(self, testing=None):
-        """doit()
-
-        gets the signal strength for a particular band
-        generates the smeteravg to check if the band is ok
-
-        testing is a string for an open file that has the jsonpickle of the test data
-        or None if to get the real data.  testing should be one of:
-        1)'./quiet20band.json'
-        2)'./noisy20band.json',
-        assuming running in the testing direcotry
-        """
-        self.get_readings(
-            testing=testing)  # saved in self.band_signal_strength
-
-        current_bss = self.band_signal_strength
-        cbssstr = str(current_bss)
-        updated_bss = None
-        if current_bss.signal_st.get('stddv') > 1.5:
-            updated_bss = current_bss.get_quiet()
-            # self.changefreqs(testing=testing)
-        # new_bss = self.band_signal_strength
-        _a = 0
-        if updated_bss:
-            _a = updated_bss.badness()
-        if updated_bss and updated_bss.badness() < 0.21:
-            self.band_signal_strength = updated_bss
-        else:
-            _a = self.changefreqs()
-            a = 0
-
-        nbssstr = str(self.band_signal_strength)
-
-        a = 0
 
     def savebr(self, recid):
         """savebr(recid)

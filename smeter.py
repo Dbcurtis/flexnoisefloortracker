@@ -39,7 +39,7 @@ _SREAD = (
 class SMeter:
     """SMeter(argin)
 
-    argin is a tuple (arg,freq)
+    argin is a tuple or list (arg,freq)
     freq is an integer
     arg is the result from a ZZSM; cat command and looks like "ZZSM ABC;" where
     ABC are three digits from 000 to 260
