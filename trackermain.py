@@ -232,7 +232,7 @@ def Get_NF(rawDataQ_OUT):
     UI = userinput.UserInput()
     NOISE = None
     try:
-        UI.request()
+        UI.request(port='com4')
         UI.open()
         print("Requested Port can be opened")
         FLEX = Flex(UI)
@@ -576,7 +576,7 @@ def main(ctx, hours=0.5):
                 # gets weather data
                 'weather': tpex.submit(timed_work, bollst[0], barrier, STOP_EVENTS['acquireData'], 60 * 10.5, Get_LW, queues),
                 # gets banddata data
-                'noise': tpex.submit(timed_work, bollst[1], barrier, STOP_EVENTS['acquireData'], 60 * 10.5, Get_NF, queues),
+                'noise': tpex.submit(timed_work, bollst[1], barrier, STOP_EVENTS['acquireData'], 60, Get_NF, queues),
                 # reads the dataQ and sends to the data processing queue dpq
                 'transfer': tpex.submit(dataQ_reader, bollst[2], barrier, STOP_EVENTS['trans'], ),
                 # looks at the data and generates the approprate sql to send to dbwriter

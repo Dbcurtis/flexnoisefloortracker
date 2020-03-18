@@ -9,23 +9,28 @@ import logging.handlers
 import datetime
 # import math
 import time
+import multiprocessing as mp
 # from statistics import mean
 # import mysql.connector as mariadb
 from userinput import UserInput
 # from smeter import SMeter, _SREAD
 from bandreadings import Bandreadings
 from flex import Flex
-import dbtools
+#import dbtools
 import postproc
+#from trackermain import QUEUES, STOP_EVENTS, CTX
 
 LOGGER = logging.getLogger(__name__)
 
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/noiseFloor'
 
-_DT = dbtools.DBTools()
-_DB = _DT.dbase
-_CU = _DT.cursor
+CTX = mp.get_context('spawn')  # threading context
+print('CTX should not be defined here ******************************')
+
+#_DT = dbtools.DBTools()
+#_DB = _DT.dbase
+#_CU = _DT.cursor
 
 
 # def threadrun(threadLock):
@@ -125,16 +130,17 @@ def _recordprocdata(bandreadings_lst):
 
 
 class Noisefloor:
-    """Noisefloor(flex, out_queue, testdata=None, testing=False)
+    """Noisefloor(flex, out_queue, stop_event, testdata=None, testing=False)
     """
 
-    def __init__(self, flex, out_queue, testdata=None, testing=False):
+    def __init__(self, flex: Flex, out_queue: CTX.JoinableQueue, stop_event: CTX.Event, testdata=None, testing=False):
      #   def __init__(self, userI, testdata=None, testing=False):
 
         self.flex = flex
         self._ui = flex._ui
         self._td = None
         self.out_queue = out_queue
+        self.stop_event = stop_event
         self._last_band_readings = None
         if testdata:
             if isinstance(testdata, list):
@@ -143,8 +149,9 @@ class Noisefloor:
             else:
                 assert "illegal testdata type"
 
-       # self.dbase = dbtools.DBTools()
         self.end_time = None
+        self.initial_state = None
+        self.is_open = False
 
     def __str__(self):
         return '[UserInput: {}, {}]'.format('junk0', 'junk1')
@@ -152,7 +159,7 @@ class Noisefloor:
     def __repr__(self):
         return '[UserInput: {}, {}]'.format('junk0', 'junk1')
 
-    def open(self, detect_br=False):
+    def open(self, detect_br=False) -> bool:
         """open( detect_br)
 
         Configures and opens the serial port if able, otherwise
@@ -169,27 +176,38 @@ class Noisefloor:
 
         thows exception if no baud rate is found
         """
-
+        if (self.is_open):
+            return False
         try:
-            self.flex.open(detect_br)
+
             self._ui.open(detect_br)
+            self.flex.open(detect_br)
+            self.initial_state = self.flex.save_current_state()
+            self.is_open = True
+
             # self.dbase.open()
 
         except Exception as sex:
+            self.flex.restore_state(self.initial_state)
             self._ui.comm_port = ""
             # self.dbase.close()
             print(sex)
-            return False
+            self.is_open = False
 
-        return True
+        return self.is_open
 
-    def close(self):
+    def close(self) -> bool:
         """close()
 
         """
+        if not self.is_open:
+            return False
 
+        self.flex.restore_state(self.initial_state)
         self.flex.close()
-        self.dbase.close()
+        self.is_open = False
+        # self.dbase.close()
+        return True
 
     def oneloop_all_bands(self):
         """oneloop_all_bands()
@@ -208,12 +226,13 @@ class Noisefloor:
             count = 5  # only 5 attempts to get a reasonable signal
             band_reading = None
             while run:
-                band_reading = Bandreadings(_freq, self._ui)
+                band_reading = Bandreadings(_freq, self.flex)
                 band_reading.doit()
                 sigs = band_reading.band_signal_strength
                 run = sigs.signal_st.get('stddv') > 1.5 and count > 0
                 if run and count < 2:
-                    self.changefreqs(sigs)
+                    # self.changefreqs(sigs)
+                    pass
                 count -= 1
 
             results.append(band_reading)
@@ -222,26 +241,26 @@ class Noisefloor:
             self._last_band_readings = [results]
             _recordprocdata(results)
 
-    def save_flex_state(self):
-        self.saved_flex_state = {}
+    # def save_flex_state(self):
+        #self.saved_flex_state = {}
 
-    def restore_flex_state(self):
-        print(self.saved_flex_state)
+    # def restore_flex_state(self):
+        # print(self.saved_flex_state)
 
-    def initialize_flex(self):
-        """initialize_flex()
+    # def initialize_flex(self):
+        # """initialize_flex()
 
-        """
-        _ui = self._ui
-        results = []
+        # """
+        #_ui = self._ui
+        #results = []
         # for cmd, proc in postproc.INITIALZE_FLEX.items():
-        for cmd, proc in postproc.INITIALZE_FLEX.items():
-            result = _ui.serial_port.docmd(cmd)
-            if proc:
-                result = proc(result)
+        # for cmd, proc in postproc.INITIALZE_FLEX.items():
+        #result = _ui.serial_port.docmd(cmd)
+        # if proc:
+        #result = proc(result)
 
-            results.append(result)
-        return results
+        # results.append(result)
+        # return results
 
     def doit(self, runtime="10hr", interval="30", loops=0):
         """doit(runtime="10hr", interval="30", loops=0)
@@ -255,10 +274,9 @@ class Noisefloor:
         # initdata = self.initialize_flex() #if you need to look at the results
 
         try:
-            self.save_flex_state()
 
-            self.initialize_flex()
-            _DT.open()
+            self.flex.do_cmd_list(postproc.INITIALZE_FLEX)
+            # _DT.open()
             if loops == 0:
                 start_time = datetime.datetime.now()
                 self.end_time = start_time + \
@@ -272,34 +290,46 @@ class Noisefloor:
                 time.sleep(interval)
 
         finally:
-            self.restore_flex_state()
-            _DT.close()
+            pass
+            # flexr.restore_state(self.initial_state)
+            # _DT.close()
 
 
-def main():
+def main(stop_events, queues):
     UI = UserInput()
     NOISE = None
+
+    UI.request(port='com4')
+    flexr = Flex(UI)
+    initial_state = None
     try:
-        UI.request()
-        UI.open()
-        print("Requested Port can be opened")
-        FLEX = Flex(UI)
-        NOISE = Noisefloor(FLEX)
+        flexr.open()
+        print('saving current flex state')
+        initial_state = flexr.save_current_state()
+        print('initializing dbg flex state')
+        flexr.do_cmd_list(postproc.INITIALZE_FLEX)
+        flexr.close()
+        resultQ = queues.get('dataQ')
+        stop_event = stop_events.get('acquireData')
+
+        NOISE = Noisefloor(flexr, resultQ, stop_event)
         NOISE.open()
-        NOISE.doit(loops=10, interval=30)
+        NOISE.doit(loops=10, interval=60)
         NOISE.close()
 
     except(Exception, KeyboardInterrupt) as exc:
         if NOISE:
             NOISE.close()
         UI.close()
-        sys.exit(str(exc))
+        raise exc
 
     finally:
+        print('restore flex prior state')
+        flexr.restore_state(initial_state)
+        flexr.close()
         if NOISE:
             NOISE.close()
         UI.close()
-        sys.exit(str(exc))
 
 
 if __name__ == '__main__':
@@ -325,4 +355,30 @@ if __name__ == '__main__':
     THE_LOGGER.addHandler(LC_HANDLER)
     THE_LOGGER.info('userinput executed as main')
     # LOGGER.setLevel(logging.DEBUG)
-    main()
+
+   # CTX = mp.get_context('spawn')  # threading context
+
+    QUEUES = {
+        # from data acquisition threads, received by the aggragator thread
+        'dataQ': CTX.JoinableQueue(maxsize=100),
+        # database commands generateed (usually) ty the aggrator thread
+        'dbQ': CTX.JoinableQueue(maxsize=100),
+        # written to by the aggrator thread, read by the data processor which generates sql commands to dbq
+        'dpQ': CTX.JoinableQueue(maxsize=100)
+    }
+
+    STOP_EVENTS = {
+        'acquireData': CTX.Event(),
+        'trans': CTX.Event(),
+        'dbwrite': CTX.Event(),
+        'agra': CTX.Event(),
+    }
+    try:
+        main(STOP_EVENTS, QUEUES)
+
+    except(Exception, KeyboardInterrupt) as exc:
+        sys.exit(str(exc))
+
+    finally:
+        sys.exit('normal exit')
+

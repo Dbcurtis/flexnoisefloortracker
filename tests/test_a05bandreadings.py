@@ -92,7 +92,7 @@ class TestBandreadings(unittest.TestCase):
         try:
             _br = Bandreadings(
                 ['14000000', '14074000', '14100000', '14200000'], self.flex)
-            _br.get_readings()  # testing='./quiet20band.json')
+            _br.get_readings(testing='./quiet20band.json')
             self.assertEqual(
                 '[SMeterAvg: -103.45833adBm, -103.50000mdBm, S3, var: 0.15720, stddv: 0.39648]',
                 repr(_br.band_signal_strength))
@@ -136,26 +136,28 @@ class TestBandreadings(unittest.TestCase):
         _br = Bandreadings(
             ['14000000', '14074000', '14100000', '14200000'], self.flex,)  # 14000000
         _br.get_readings(testing='./noisy20band.json')
-        sma = _br.band_signal_strength
-        sml = sma.smlist[:]
+        #sma = _br.band_signal_strength
+        #sml = sma.smlist[:]
 
-        a = 0
+        #a = 0
+        #savedreadings = []
+        # with open('./focusedbadspotreading.json', 'r') as fl:
+        #savedreadings = [jsonpickle.decode(i) for i in fl.readlines()][0]
 
-        file = open('./focusedbadspotreading.json', 'r')
-        lines = file.readlines()
-        savedreadings = [jsonpickle.decode(i) for i in lines][0]
-
-        file.close()
-        #self.fail('test not completed')
-
-        _ui = UserInput()
+        #_ui = UserInput()
         try:
             sm = SMeter(('ZZSM098;', 14_100_000))  # s6
+            # check the s6 evaluation
+            self.assertEqual({'sl': 'S6', 'dBm': -91.0}, sm.signal_st)
             _br = Bandreadings(
                 ['14000000', '14100000', '14200000'], self.flex,)  # 14000000
             _br.get_readings(testing='./noisy20band.json')
             _br.changefreqs(testing='./focusedbadspotreading.json')
-            self.fail('test not completed')
+            self.assertEqual(
+                '[-104.04167adBm, -104.00000mdBm, S3, var: 0.33902, stddv: 0.58225]', str(_br.band_signal_strength))
+            self.assertEqual(1, len(_br.dropped_freqs))
+            self.assertTrue(_br.dropped_high_noise)
+            self.assertEqual(14074000, _br.dropped_freqs[0])
 
         except(Exception, KeyboardInterrupt) as exc:
             self.fail('unexpected exception' + str(exc))
@@ -166,15 +168,14 @@ class TestBandreadings(unittest.TestCase):
         """
         _br = Bandreadings(
             ['14000000', '14074000', '14100000', '14200000'], self.flex,)  # 14000000
-        _br.get_readings()  # (testing='./quiet20band.json')
+        _br.get_readings(testing='./quiet20band.json')
         self.assertFalse(_br.cf_process_readings())
         # oldsmalst = [_br.band_signal_strength][:]
         _br = Bandreadings(
             ['14000000', '14074000', '14100000', '14200000'], self.flex,)  # 14000000
 
-      #  need to figure out what was the noisy frequency when you removed the damn things
         _br.get_readings(testing='./noisy20band.json')
-        temp_smeteravg = _br.cf_process_readings(aa)
+        temp_smeteravg = _br.cf_process_readings()
         self.assertTrue(temp_smeteravg)
         self.assertEqual(
             '[SMeterAvg: -104.04167adBm, -104.00000mdBm, S3, var: 0.33902, stddv: 0.58225]',

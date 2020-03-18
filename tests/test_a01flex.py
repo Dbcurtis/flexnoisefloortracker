@@ -162,6 +162,21 @@ class Testflex(unittest.TestCase):
         self.assertAlmostEqual(0.50, dtime, delta=0.1)
         self.assertEqual(1, len(results))
 
+    def test05_jsonpickel(self):
+        import jsonpickle
+        try:
+            self.flex.close()
+            jsonpickelst = jsonpickle.encode(
+                self.flex)  # _ui cannot be pickeled
+            testob = jsonpickle.decode(jsonpickelst)
+            rp1 = repr(self.flex)
+            rp2 = repr(testob)
+            self.assertEqual(rp1, rp2)
+        except Exception as ex:
+            self.fail("unexpected exception")
+            a = 0
+            b = 0
+
 
 if __name__ == '__main__':
     unittest.main()

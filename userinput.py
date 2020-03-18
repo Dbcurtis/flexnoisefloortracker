@@ -98,7 +98,8 @@ class UserInput:
             if available and len(available) > 1:
                 print('Available comport(s) are: {}'.format(available))
                 tups = [(_.strip(), _.strip().lower()) for _ in available]
-                useri = self._inputa("Comm Port for SmartCat slice?>").strip()
+                useri = self._inputa(
+                    "Comm Port for SmartCat slice?>").strip()
             elif available:
                 tups = [(_.strip(), _.strip().lower()) for _ in available]
                 useri = tups[0][1]
@@ -137,6 +138,8 @@ class UserInput:
         If the serial port is opened, returns True, False otherwise
 
         thows exception if no baud rate is found
+
+        the object must be closed before jsonpickle
         """
 
         if not self.comm_port:
@@ -164,11 +167,22 @@ def main():
 
     """
     _ui = UserInput()
+    import jsonpickle
+    # try:
+
+    #jsonpickelst = jsonpickle.encode(_ui)
+    #_uui = jsonpickle.decode(jsonpickelst)
+    # except Exception as ex:
+    #aa = 0
+
     try:
         _ui.request()
         _ui.open()
         print("Requested Port can be opened")
         _ui.close()
+        jsonpickelst = jsonpickle.encode(_ui)
+        _uui = jsonpickle.decode(jsonpickelst)
+        a = 0
 
     except(Exception, KeyboardInterrupt) as exc:
         _ui.close()

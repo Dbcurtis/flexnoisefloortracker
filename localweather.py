@@ -187,6 +187,45 @@ class LocalWeather(ComparableMixin):
     netstatus = []
     maint = {}
 
+    def __init__(self):
+        """LocalWeather()
+
+
+        """
+        self.valid = False
+        self.rjson = {}
+        self.units = 'std'
+        self.netstatus = None
+
+    # def __eq__(self, other):
+        # pass
+
+    # def __ne__(self, other):
+        # pass
+
+    def _cmpkey(self):
+        return self.times['dt'].get()[0]
+
+    def __hash__(self):
+        return self.times['dt'].get()[0]
+
+    def __str__(self):
+        if not self.valid:
+            return 'invalid'
+
+        mm = self.maint
+        clk = self.times['dt']
+        t = mm['temp'][0]
+        wnd = self.maint['wind']
+        wsp = wnd['speed']
+        # --------------------------------
+        result = f'ws:{wsp[0]}, g:{wsp[1]}; temp:{t[1]}, {t[2]};  {str(clk)}'
+        return result
+
+    def __repr__(self):
+        result = str(self)
+        return f'Localweather: valid:{self.valid}, {result}'
+
     def has_changed(self, other):
         result = False
         if isinstance(other, LocalWeather):
@@ -260,45 +299,6 @@ class LocalWeather(ComparableMixin):
         except Exception as e:
             print(request_status)
             print(e)
-
-    def __init__(self):
-        """LocalWeather()
-
-
-        """
-        self.valid = False
-        self.rjson = {}
-        self.units = 'std'
-        self.netstatus = None
-
-    # def __eq__(self, other):
-        # pass
-
-    # def __ne__(self, other):
-        # pass
-
-    def _cmpkey(self):
-        return self.times['dt'].get()[0]
-
-    def __hash__(self):
-        return self.times['dt'].get()[0]
-
-    def __str__(self):
-        if not self.valid:
-            return 'invalid'
-
-        mm = self.maint
-        clk = self.times['dt']
-        t = mm['temp'][0]
-        wnd = self.maint['wind']
-        wsp = wnd['speed']
-        # --------------------------------
-        result = f'ws:{wsp[0]}, g:{wsp[1]}; temp:{t[1]}, {t[2]};  {str(clk)}'
-        return result
-
-    def __repr__(self):
-        result = str(self)
-        return f'Localweather: valid:{self.valid}, {result}'
 
     # def set_Units(self, u):  # std, metric, imperial
         # uu = u.lower()
