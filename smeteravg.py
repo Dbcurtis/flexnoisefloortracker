@@ -10,6 +10,7 @@ import datetime
 import math
 
 from smeter import _SREAD, SMeter
+from typing import List, Tuple
 
 
 LOGGER = logging.getLogger(__name__)
@@ -155,6 +156,7 @@ class SMeterAvg:
         self.smlist = []
         self.noise = {}
         self.signal_st = {'var': None, 'stddv': None, 'sl': None, }
+        self.usable = True
 
         _init_phase1(arg)
 
@@ -200,6 +202,18 @@ class SMeterAvg:
 
         return result
 
+    def get_start_time_of_readings(self) -> List[Tuple]:
+        """get_start_time_of_readings()
+
+        returns a list of tupales with (str datetime, int freq)
+        for all readings that make up the average
+        """
+        result = []
+        for sm in self.smlist:
+            result.append((sm.time, sm.freq,))
+
+        return result
+
     def get_quiet(self):  # -> SMeterAvg:
         """get_quiet()
 
@@ -227,11 +241,9 @@ class SMeterAvg:
         result = ''
         try:
             s = self
-            result = f"[{s.dBm.get('adBm'):.5f}adBm, {s.dBm.get('mdBm'):.5f}mdBm, {s.signal_st.get('sl')}, \
+            result = f"[b:{s.band}, {s.dBm.get('adBm'):.5f}adBm, {s.dBm.get('mdBm'):.5f}mdBm, {s.signal_st.get('sl')}, \
 var: {s.signal_st.get('var'):.5f}, stddv: {s.signal_st.get('stddv'):.5f}]"  # \
-            # .format(self.dBm.get('adBm'), self.dBm.get('mdBm'), self.signal_st.get('sl'),
-            # self.signal_st.get('var'),
-            # self.signal_st.get('stddv'))
+
         except Exception:
             result = 'old version of SMeterAvg'
 
@@ -240,10 +252,10 @@ var: {s.signal_st.get('var'):.5f}, stddv: {s.signal_st.get('stddv'):.5f}]"  # \
     def __repr__(self):
         result = ''
         try:
-            result = '[SMeterAvg: {:.5f}adBm, {:.5f}mdBm, {}, var: {:.5f}, stddv: {:.5f}]' \
-                .format(self.dBm.get('adBm'), self.dBm.get('mdBm'), self.signal_st.get('sl'),
-                        self.signal_st.get('var'),
-                        self.signal_st.get('stddv'))
+            s = self
+            result = f"[SMeterAvg: b:{s.band}, {s.dBm.get('adBm'):.5f}adBm, {s.dBm.get('mdBm'):.5f}mdBm, {s.signal_st.get('sl')}, \
+var: {s.signal_st.get('var'):.5f}, stddv: {s.signal_st.get('stddv'):.5f}]"
+
         except Exception:
             result = 'old version of SMeterAvg'
 

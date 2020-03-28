@@ -2,7 +2,7 @@
 
 """This script prompts for user input for serial port etc."""
 
-
+import sys
 import os
 import logging
 import logging.handlers
@@ -107,7 +107,7 @@ class Flex:
         cp = self._ui.comm_port if self._ui.comm_port else "unspecified"
         return f'[Flex] Flex cat: {cp}, opened: {self.is_open}'
 
-    def open(self, detect_br=False):
+    def open(self, detect_br=False) -> bool:
         """open(detect_br)
 
         Configures and opens the serial port if able, otherwise
@@ -120,21 +120,32 @@ class Flex:
         If detect_br is True, the baud rate will be detected by establishing
         communication with the controller
 
-        If the serial port is opened, returns True, False otherwise
+        If the serial port is opened, and communicating with the flex returns True, False otherwise
 
         thows exception if no baud rate is found
         """
-
+        result: bool = None
         try:
             self._ui.open(detect_br)
             self.is_open = self._ui.serial_port.is_open
+            # check if port is connected to Flex
+            repl = self.do_cmd('ZZAI;')
+            result = repl.startswith('ZZAI')
+            repl = self.do_cmd('ZZFA;')
+            initfreq = int(repl[4:-1])
+            cmd = f'ZZFA{int(initfreq + 30000) :011d};'
+            #testres = self.do_cmd(cmd)
+            if self.do_cmd(cmd) != cmd:
+                raise Exception('Slice A is Locked, aborting')
+
+            self.do_cmd(repl)  # restore orig freq
 
         except Exception as sex:
             self._ui.comm_port = ""
             print(sex)
-            return False
+            result = False
 
-        return True
+        return result
 
     def do_cmd(self, cmd):
         """do_cmd(cmd)
@@ -295,6 +306,13 @@ if __name__ == '__main__':
     #NOISE = None
     try:
         main()
-
+        normalexit = True
     except(Exception, KeyboardInterrupt) as exc:
-        pass
+        print(exc)
+        normalexit = False
+
+    finally:
+        if normalexit:
+            sys.exit('normal exit')
+        else:
+            sys.exit('error exit')

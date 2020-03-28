@@ -4,11 +4,14 @@
 
 import sys
 import os
+from typing import List, Sequence, Dict, Mapping
 import logging
 import logging.handlers
 import datetime
+import jsonpickle
 # import math
 import time
+from queue import Empty as QEmpty
 import multiprocessing as mp
 # from statistics import mean
 # import mysql.connector as mariadb
@@ -20,6 +23,7 @@ from flex import Flex
 import postproc
 #from trackermain import QUEUES, STOP_EVENTS, CTX
 
+
 LOGGER = logging.getLogger(__name__)
 
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
@@ -28,105 +32,109 @@ LOG_FILE = '/noiseFloor'
 CTX = mp.get_context('spawn')  # threading context
 print('CTX should not be defined here ******************************')
 
-#_DT = dbtools.DBTools()
-#_DB = _DT.dbase
-#_CU = _DT.cursor
 
+class NFResult:
+    """NFResult()
 
-# def threadrun(threadLock):
-# threadLock.acquire()
-
-# try:
-# UI.request()
-# UI.open()
-#print("Requested Port can be opened")
-#FLEX = Flex(UI)
-#NOISE = Noisefloor(UI)
-# NOISE.open()
-#NOISE.doit(loops=10, interval=30)
-# NOISE.close()
-
-# except(Exception, KeyboardInterrupt) as exc:
-# if NOISE:
-# NOISE.close()
-# UI.close()
-# sys.exit(str(exc))
-
-# finally:
-# if NOISE:
-# NOISE.close()
-# UI.close()
-# sys.exit(str(exc))
-
-
-# def find_band(wave_length):
-# """find_band(wave_length)
-
-# """
-# return math.trunc(round(wave_length) / 10) * 10
-
-
-# def _process_raw_data(rawdata, band):
-# """_process_raw_data(rawdata,band)
-
-# """
-#tfrq = rawdata[0:1][0]
-#sm_avr = SMeterAvg(rawdata[1:], band)
-# return (tfrq, sm_avr)
-
-def _recordprocdata(bandreadings_lst):
-    """_recordprocdata(bandreadings)
-
-    bandreadings_lst is a list of Bandreadings
+    holds the result from running _oneloopallbands()
     """
 
-    #recid = _DT.getrecid()
+    def __init__(self):
+        self.starttime: str = 'Not Started'
+        self.endtime: str = 'Not Ended'
+        self.readings: List[Bandreadings] = []
+        self._started: bool = False
+        self._ended: bool = False
 
-    # for bandreading in bandreadings_lst:
-    # bandreading.savebr(recid)
+    def __str__(self):
+        if self._started and self._ended:
+            stdevlst = [
+                (
+                    r.bandid,
+                    r.band_signal_strength.signal_st.get('sl'),
+                    r.band_signal_strength.signal_st.get('stddv'),)
+                for r in self.readings
+            ]
+            readings: str = f'Band Noise Readings\n{self.starttime}\n'
+            for _ in stdevlst:
+                readings += f'    b:{_[0]}, {_[1]}, {_[2] :.2f}\n'
 
+            readings += f'{self.endtime}\n'
+            return readings
 
-# should send this to the dataqueue
-    # _DB.commit()
+        if self._started:
+            return f'band readings started at {self.starttime}'
+        return 'Not Started'
 
+    def __repr__(self):
+        return f'Noisefloor: {self.__str__()}'
 
-# def getrecid():
-    # """getrecid()
+    def __eq__(self, other):
+        """__eq__(self,other)
 
-    # """
-    #date_string = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    #sql = 'INSERT INTO TIMES(timescol) Values (\"{}\");'.format(date_string)
-    # _CU.execute(sql)
-    # _DB.commit()
-    #_CU.execute('SELECT RECID FROM TIMES ORDER BY RECID DESC LIMIT 1;')
-    #records = _CU.fetchall()
-    # return records[0][0]
+        Equality does not compare the date/time values, only the
+        condition of started and ended and the bandid, sl, and stddv
+        """
+        if self._ended ^ other._ended or len(self.readings) != len(other.readings):
+            return False
 
-# def _get_cat_data(cmd_list, freq):
-    # """_get_cat_data(cmd_list)
+        one2one = zip(
+            [(
+                r.bandid,
+                r.band_signal_strength.signal_st.get('sl'),
+                r.band_signal_strength.signal_st.get('stddv'),
+            )
+                for r in self.readings],
+            [(
+                r.bandid,
+                r.band_signal_strength.signal_st.get('sl'),
+                r.band_signal_strength.signal_st.get('stddv'),
+            )
+                for r in other.readings]
+        )
 
-    # returns a list of the raw or processed result from Cat results
+        result = True
 
-    # """
-    #results = []
-    # for cmd in cmd_list:
-    # if cmd[0][0:4] == 'wait':
-    #delay = float(cmd[0][4:])
-    # time.sleep(delay)
-    # continue
-    #result = UI.serial_port.docmd(cmd[0])
-    # if cmd[1]:  # process the result if provided
-    #_ = result.split(';')
-    #vals = None
-    # if len(_) > 2:
-    #vals = [int(ss[4:]) for ss in _]
-    #avg = int(round(sum(vals) / len(vals)))
-    #result = 'ZZSM{:03d};'.format(avg)
+        for s, o in one2one:
+            result = result and s[0] == o[0] and s[1] == o[1]
+            dif = s[2] - o[2]
+            if dif < 0.0:
+                dif = o[2] - s[2]
+            result = result and dif < 0.3
+            # if not result:
+            # return result
+        return result
 
-    #result = cmd[1]((result, freq))
-    # results.append(result)
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
-    # return results
+    # def __lt__(self, other):
+        # pass
+
+    # def __gt__(self, other):
+        # pass
+
+    # def __le__(self, other):
+        # pass
+
+    # def __ge__(self, other):
+        # pass
+
+    def start(self):
+        if not self._started:
+            self.starttime = time.strftime(
+                "%b %d %Y %H:%M:%S", time.localtime())
+            self._started = True
+
+    def end(self, result: Sequence[Bandreadings]):
+        if self._started and not self._ended:
+            self.endtime = time.strftime(
+                "%b %d %Y %H:%M:%S", time.localtime())
+            self.readings = result[:]
+            self._ended = True
+
+    def completed(self) -> bool:
+        return self._started and self._ended
 
 
 class Noisefloor:
@@ -141,7 +149,7 @@ class Noisefloor:
         self._td = None
         self.out_queue = out_queue
         self.stop_event = stop_event
-        self._last_band_readings = None
+        self._last_band_readings: NFResult = None
         if testdata:
             if isinstance(testdata, list):
                 self._td = testdata
@@ -162,9 +170,11 @@ class Noisefloor:
     def open(self, detect_br=False) -> bool:
         """open( detect_br)
 
-        Configures and opens the serial port if able, otherwise
-         displays error with reason.
-         (if the serial port is already open, closes it and re opens it)
+        Configures and opens the serial port and flex if able,
+
+        saves the current state of the flex in initial_state
+
+         if noisefloor is already open, returns False
 
         If the serial port is opened and if detect_br: the baud rate of the controller is
         found and the serial port so set.
@@ -172,9 +182,6 @@ class Noisefloor:
         If detect_br is True, the baud rate will be detected by establishing
         communication with the controller
 
-        If the serial port is opened, returns True, False otherwise
-
-        thows exception if no baud rate is found
         """
         if (self.is_open):
             return False
@@ -188,9 +195,9 @@ class Noisefloor:
             # self.dbase.open()
 
         except Exception as sex:
-            self.flex.restore_state(self.initial_state)
+            if self.initial_state:
+                self.flex.restore_state(self.initial_state)
             self._ui.comm_port = ""
-            # self.dbase.close()
             print(sex)
             self.is_open = False
 
@@ -198,16 +205,72 @@ class Noisefloor:
 
     def close(self) -> bool:
         """close()
-
+        closes Noisefloor
+        return False if Noisefloor is not open
+        resets flex to state it was in when opened.
         """
         if not self.is_open:
             return False
 
-        self.flex.restore_state(self.initial_state)
+        if self.initial_state:
+            self.flex.restore_state(self.initial_state)
         self.flex.close()
         self.is_open = False
         # self.dbase.close()
         return True
+
+    def _recordprocdata(self, noisefloordata: Sequence[Bandreadings]):
+        """_recordprocdata()
+
+        Sends the changed band data to the data queue
+        """
+        # for br in noisefloordata:
+        #br.flexradio = None
+
+        self.out_queue.put(noisefloordata)
+        # print (f'queued {noisefloordata}')
+
+    def _oneloopallbands(self) -> NFResult:
+        """_oneloopallbands()
+
+        """
+
+        results: List[Bandreadings] = []
+        freq_list = postproc.BANDS[:]
+        freq_in_band = []
+        for _ in range(0, len(freq_list), 3):
+            freq_in_band.append(freq_list[_:_ + 3])
+
+        nfresult: NFResult = NFResult()
+        nfresult.start()
+
+        for _freq in freq_in_band:  # go through all the scanned bands
+            run = True
+            count = 3  # only 3 attempts to get a reasonable signal
+            band_reading: Bandreadings = None
+            while run:
+                band_reading = Bandreadings(_freq, self.flex)
+                band_reading.doit()
+                print('need to correct logic here')
+                if band_reading.useable:
+                    sigs = band_reading.band_signal_strength
+                    run = sigs.signal_st.get('stddv') > 1.5 and count > 0
+                    if run and count < 2:
+                        # self.changefreqs(sigs)
+                        pass
+                    count -= 1
+                else:
+                    a = 0
+                    count -= 1
+                    if count < 0:
+                        break
+
+                    pass
+            band_reading.flexradio = None  # make safe for pickleing
+            results.append(band_reading)
+
+        nfresult.end(results)
+        return nfresult
 
     def oneloop_all_bands(self):
         """oneloop_all_bands()
@@ -215,31 +278,20 @@ class Noisefloor:
         does one iteration of checking all bands
 
         """
-        results = []
-        freq_list = postproc.FREQUENCIES[:]
-        freq_in_band = []
-        for _ in range(0, len(freq_list), 3):
-            freq_in_band.append(freq_list[_:_ + 3])
+        nfresult: NFResult = None
 
-        for _freq in freq_in_band:  # go through all the scanned bands
-            run = True
-            count = 5  # only 5 attempts to get a reasonable signal
-            band_reading = None
-            while run:
-                band_reading = Bandreadings(_freq, self.flex)
-                band_reading.doit()
-                sigs = band_reading.band_signal_strength
-                run = sigs.signal_st.get('stddv') > 1.5 and count > 0
-                if run and count < 2:
-                    # self.changefreqs(sigs)
-                    pass
-                count -= 1
+        while True:
 
-            results.append(band_reading)
+            try:
+                nfresult = self._oneloopallbands()
+                break
+            except ValueError as ve:
+                print(f'value error in _oneloopallbands: {ve}')
+                continue
 
-        if (not self._last_band_readings) or results != self._last_band_readings:
-            self._last_band_readings = [results]
-            _recordprocdata(results)
+        if (not self._last_band_readings) or nfresult != self._last_band_readings:
+            self._last_band_readings = nfresult
+            self._recordprocdata(nfresult)
 
     # def save_flex_state(self):
         #self.saved_flex_state = {}
@@ -262,7 +314,7 @@ class Noisefloor:
         # results.append(result)
         # return results
 
-    def doit(self, runtime="10hr", interval="30", loops=0):
+    def doit(self, runtime=10, interval="30", loops=0):
         """doit(runtime="10hr", interval="30", loops=0)
 
         gets the noise from all measured bands.
@@ -272,7 +324,8 @@ class Noisefloor:
 
         """
         # initdata = self.initialize_flex() #if you need to look at the results
-
+        if self.stop_event.is_set():
+            return
         try:
 
             self.flex.do_cmd_list(postproc.INITIALZE_FLEX)
@@ -283,19 +336,31 @@ class Noisefloor:
                     datetime.timedelta(hours=runtime)
                 while datetime.datetime.now() < self.end_time:
                     self.oneloop_all_bands()
-                time.sleep(interval)
+                    if self.stop_event.is_set():
+                        return
+                    self.stop_event.wait(interval)
+                    if self.stop_event.is_set():
+                        return
             else:
+
                 for _ in range(loops):
+                    print(f'{_}: ', end='')
                     self.oneloop_all_bands()
-                time.sleep(interval)
+                    if self.stop_event.is_set():
+                        return
+                    self.stop_event.wait(interval)
+                    if self.stop_event.is_set():
+                        return
+
+        except Exception as ex:
+            print(f'exception in doit {ex}')
+            raise ex
 
         finally:
             pass
-            # flexr.restore_state(self.initial_state)
-            # _DT.close()
 
 
-def main(stop_events, queues):
+def main(stop_events: Mapping[str, CTX.Event], queues: Mapping[str, CTX.JoinableQueue]):
     UI = UserInput()
     NOISE = None
 
@@ -303,7 +368,8 @@ def main(stop_events, queues):
     flexr = Flex(UI)
     initial_state = None
     try:
-        flexr.open()
+        if not flexr.open():
+            raise (RuntimeError('Flex not connected to serial serial port'))
         print('saving current flex state')
         initial_state = flexr.save_current_state()
         print('initializing dbg flex state')
@@ -315,7 +381,33 @@ def main(stop_events, queues):
         NOISE = Noisefloor(flexr, resultQ, stop_event)
         NOISE.open()
         NOISE.doit(loops=10, interval=60)
-        NOISE.close()
+        #NOISE.doit(runtime=1, interval=60)
+        stop_event.set()
+
+        indata = []
+        try:
+
+            while True:
+                indata.append(resultQ.get(True, 1))
+                resultQ.task_done()
+        except QEmpty:
+            pass  # q is empty
+        except Exception as ex:
+            print(ex)
+            raise ex
+
+        print(indata)
+        #id = indata[0]
+
+        with open('banddata.json', 'w') as jso:  # jsonpickle.encode
+            _ = jsonpickle.encode(indata)
+            jso.write(_)
+
+        with open('banddata.json', 'r') as jsi:
+            aa = jsi.readline()
+        cpybss = jsonpickle.decode(aa)
+
+        b = 0
 
     except(Exception, KeyboardInterrupt) as exc:
         if NOISE:
@@ -326,7 +418,7 @@ def main(stop_events, queues):
     finally:
         print('restore flex prior state')
         flexr.restore_state(initial_state)
-        flexr.close()
+
         if NOISE:
             NOISE.close()
         UI.close()
@@ -353,7 +445,7 @@ if __name__ == '__main__':
     THE_LOGGER.setLevel(logging.DEBUG)
     THE_LOGGER.addHandler(LF_HANDLER)
     THE_LOGGER.addHandler(LC_HANDLER)
-    THE_LOGGER.info('userinput executed as main')
+    THE_LOGGER.info('noisefloor executed as main')
     # LOGGER.setLevel(logging.DEBUG)
 
    # CTX = mp.get_context('spawn')  # threading context
@@ -375,10 +467,14 @@ if __name__ == '__main__':
     }
     try:
         main(STOP_EVENTS, QUEUES)
-
+        normalexit = True
     except(Exception, KeyboardInterrupt) as exc:
-        sys.exit(str(exc))
+        print(exc)
+        normalexit = False
 
     finally:
-        sys.exit('normal exit')
+        if normalexit:
+            sys.exit('normal exit')
+        else:
+            sys.exit('error exit')
 

@@ -5,6 +5,8 @@
 import os
 import logging
 import logging.handlers
+#import typing
+from typing import List, Sequence, Mapping, Tuple, Dict
 from smeter import SMeter
 
 
@@ -44,7 +46,7 @@ def zzifpost(resulttup):
     """zzifpost(resulttup)
 
     resulttup[0] is the result from the zzif command
-    resulttup[1] is
+    resulttup[1] is:
 
     P1 (11 characters) VFO A frequency in Hz. Same as ZZFA;
     P2 (4 characters) Frequency step size (0001 = 10 Hz/1000 = 50 Hz)
@@ -134,15 +136,18 @@ def zzifpost(resulttup):
 def smeter(arg):  # (arg, freq):
     """smeter()
     """
-    sm = SMeter(arg)
-    return sm
+    return SMeter(arg)
 
 
+""" INITIALZE_FLEX
+commands to set the radio to an initial condition. To be used after
+    the current radio state is saved by savstate = flex.save_current_state()
+    and the flex restored via flex.restore_state(savestate)
+
+    # initalize the radio to a defined set of initial conditions.
+"""
 INITIALZE_FLEX = [
-    # """ commands to set the radio to an initial condition. To be used after
-    # the current radio state is saved by savstate = flex.save_current_state()
-    # and the flex restored via flex.restore_state(savestate)
-    # """
+
     # initalize the radio to a defined set of initial conditions.
     'ZZTX0;',  # set MOX off
     'ZZAR000;',  # set vfo A agc threshhold to 0
@@ -162,21 +167,34 @@ INITIALZE_FLEX = [
     'ZZRC;',  # Clear Slice A RIT Frequency
     'ZZRT0;',  # Sets or reads VFO A RIT State off
 ]
+"""_BAND_DATA
+   a dictionary with the key being a string representing the band.
+   if the value only contains 2 values, those values represent the start frequencey and end
+   frequency of the band.  Intermediat frequencies for noise measurement are automatically generated
 
-FREQUENCIES = ['{:011}'.format(_) for _ in [
-    # frequences in each band that will get sampled
-    # one or more may be changed if the standard deveation between the
-    # frequencies is to large.
-    3_500_000, 3_700_000, 4_000_000,
-    7_000_000, 7_150_000, 7_300_000,
-    10_100_000, 10_075_000, 10_150_055,
-    14_000_000, 14_175_000, 14_373_000,
-    # 14_000_000, 14_173_643, 14_350_000,
-]]
+   if more than 2 frequencies, then only those frequences are measured (60m band is channalized)
+"""
+_BAND_DATA = {'80': (3_500_000, 4_000_000,),
+              '60': (5_330_500, 5_346_500, 5_357_000, 5_371_500, 5_403_500,),
+              '40': (7_000_000, 7_300_000,),
+              '30': (10_100_000, 10_150_000,),
+              '20': (14_000_000, 14_350_000,),
+              '17': (18_068_000, 18_168_000,),
+              '15': (21_025_000, 21_450_000,),
+              '12': (24_890_000, 24_990_000,),
+              '10': (28_000_000, 29_700_000,),
+              '6': (50_000_000, 54_000_000,),
+              }
 
-RESTORE_FLEX = {
-    # restore freq, mode, dsp agc wnb
-}
+# """RESTORE_FLEX
+# storage for the saved state of the flex, executing these commands will restor the flex
+# to its saved state
+
+# I do not think this is being used
+# """
+# RESTORE_FLEX = {
+# restore freq, mode, dsp agc wnb
+# }
 
 
 GET_DATA = [
@@ -209,28 +227,121 @@ GET_FAST_DATA = [
 
 ]
 
+_NUM_BAND_SAMPLE = 10  # number of samples in band *3
+_SAMPLE_SPREAD = 1500  # +- samples from above
 
-class PostProc():
-    """PostProc()
+
+class BandPrams:
+    """BandPrams(item[str, Tuple[int,...]])
+
+    the item is an item from _BAND_DATA
+    The bands are disabled by default and should be enabled using
+    postproc.enable_bands
+
+    initilization generates the frequences for measurement responsive to if the band is channeled or not.
+    it also generates the flex command to change to the specified frequencies.
+
 
     """
 
-    def __init__(self, userI, testdata=None, testing=False):
-        _s = self
-        self._ui = userI
-        self._td = None
-        if testdata:
-            if isinstance(testdata, list):
-                self._td = testdata
-                self._td.reverse()
-            else:
-                assert "illegal testdata type"
+    def __init__(self, item: Mapping[str, Tuple[int, ...]]):
 
-    def __str__(self):
-        return '[{}, {}]'.format(self._ui, self._td)
+        #_itml = list(item)
+        self.bandid = item[0]
+        bfreql = list(item[1])
+        if len(bfreql) < 2:
+            raise ValueError
+        lowend = bfreql[0]
+        highend = bfreql[-1]
+        self._channeled: bool = None
+        self._enable: bool = False
+        if len(bfreql) == 2:
+            widbandinc = (highend - lowend) / _NUM_BAND_SAMPLE
+            self._freqs = [lowend + i *
+                           widbandinc for i in range(_NUM_BAND_SAMPLE + 1)]
+            freqs1 = []
+            for f in self._freqs:
+                freqs1.extend([int(f - _SAMPLE_SPREAD),
+                               int(f), int(f + _SAMPLE_SPREAD)])
 
-    def __repr__(self):
-        return '[PostProc: {}, {}]'.format(self._ui, self._td)
+            # f'ZZFA{int(a) :011d};'
+            self._sample_freqcmdl = [f'ZZFA{int(fval) :011d};' for fval in freqs1]
+            self._channeled = False
+        else:
+            self._freqs = bfreql[:]
+            self._sample_freqcmdl = [f'ZZFA{int(fval) :011d};' for fval in self._freqs]
+            self._channeled = True
+
+    def __str__(self) -> str:
+        return f'band:{self.bandid}, enabled: {self._enable}, chan: {self._channeled}, {self._freqs}'
+
+    def __repr__(self) -> str:
+        return f'BandPrams: {str(self)}'
+
+    def get_freq_cmds(self) -> Tuple[str, ...]:
+        """get_freq_cmds()
+
+           returns a tuple of strings that are the flex commands to switch to a particualr frequency
+        """
+        result: Tuple[str, ...] = tuple(self._sample_freqcmdl[:])
+        return result
+
+    def is_enabled(self):
+        return self._enable
+
+
+BANDS: Dict[str, BandPrams] = {}
+"""BANDS
+   a dictionary of string bandids ('20') with a BandPrams value
+"""
+for i in _BAND_DATA.items():  # setup BANDS
+    BANDS[i[0]] = BandPrams(i)
+
+
+def enable_bands(bndids: Sequence[str], val: bool = True) -> int:
+    """enable_bands(['40','20'], val= True):
+
+    enables or disables which bands are to be checked.
+    returns the number of bands changed by the command
+
+    non-existant band ids are ignored
+    """
+    keyset = BANDS.keys()
+    result = 0
+    for k in bndids:
+        if k in keyset:
+            b = BANDS[k]
+            if b._enable ^ val:
+                b._enable = val
+                result += 1
+
+    return result
+
+
+# class PostProc():
+    # """PostProc()
+
+    # """
+
+    # def __init__(self, userI, testdata=None, testing=False):
+
+    #self._ui = userI
+    #self._td = None
+    # if testdata:
+    # if isinstance(testdata, list):
+    #self._td = testdata
+    # self._td.reverse()
+    # else:
+    #assert "illegal testdata type"
+
+    # def __str__(self):
+    # return '[{}, {}]'.format(self._ui, self._td)
+    # return f'[{self._ui}, {self._td}'
+
+    # def __repr__(self):
+    # return f'[PostProc: {str(self)}]'
+def main():
+    pass
 
 
 if __name__ == '__main__':
@@ -254,3 +365,17 @@ if __name__ == '__main__':
     THE_LOGGER.addHandler(LF_HANDLER)
     THE_LOGGER.addHandler(LC_HANDLER)
     THE_LOGGER.info('postproc executed as main')
+
+    try:
+        main()
+        normalexit = True
+    except(Exception, KeyboardInterrupt) as exc:
+        print(exc)
+        normalexit = False
+
+    finally:
+        if normalexit:
+            sys.exit('normal exit')
+        else:
+            sys.exit('error exit')
+

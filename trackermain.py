@@ -272,7 +272,17 @@ def trim_dups(mydeck, boolfn):
     return tuplst
 
 
+def get_noise():
+    if thread_info[0]:  # execute:
+
+        print('get_noise started\n', end="")
+        pass
+    print('get_noise ended\n', end="")
+    return locald.count
+
 # write_2_q):
+
+
 def dataQ_reader(thread_info, fn=lambda outQ, data: outQ.put(data, False)):
     """dataQ_reader(thread_info)
 
@@ -576,9 +586,10 @@ def main(ctx, hours=0.5):
                 # gets weather data
                 'weather': tpex.submit(timed_work, bollst[0], barrier, STOP_EVENTS['acquireData'], 60 * 10.5, Get_LW, queues),
                 # gets banddata data
-                'noise': tpex.submit(timed_work, bollst[1], barrier, STOP_EVENTS['acquireData'], 60, Get_NF, queues),
+                # 'noise': tpex.submit(timed_work, bollst[1], barrier, STOP_EVENTS['acquireData'], 60, Get_NF, queues),
+                'noise': tpex.submit(get_noise, bollst[1], barrier, STOP_EVENTS['acquireData'], queues),
                 # reads the dataQ and sends to the data processing queue dpq
-                'transfer': tpex.submit(dataQ_reader, bollst[2], barrier, STOP_EVENTS['trans'], ),
+                'transfer': tpex.submit(dataQ_reader, bollst[2], barrier, STOP_EVENTS['trans'], queues),
                 # looks at the data and generates the approprate sql to send to dbwriter
                 'dataagragator': tpex.submit(dataaggrator, bollst[3], barrier, STOP_EVENTS['agra'], queues),
                 # reads the database Q and writes it to the database

@@ -6,6 +6,7 @@ Test file for need
 # import datetime
 import unittest
 import jsonpickle
+import datetime
 import context
 from smeter import SMeter
 from flex import Flex
@@ -90,22 +91,30 @@ class Testsmeteravg(unittest.TestCase):
         """
 
         sml = [SMeter(('ZZSM098;', 14_100_000 + i * 10000)) for i in range(3)]
+        datemarker = datetime.datetime.now().strftime('%Y-%m-%d')
         sma = SMeterAvg(sml, 20)
+
         self.assertEqual(
-            '[-91.00000adBm, -91.00000mdBm, S6, var: 0.00000, stddv: 0.00000]', str(sma))
+            '[b:20, -91.00000adBm, -91.00000mdBm, S6, var: 0.00000, stddv: 0.00000]', str(sma))
         self.assertEqual(
-            '[SMeterAvg: -91.00000adBm, -91.00000mdBm, S6, var: 0.00000, stddv: 0.00000]',
+            '[SMeterAvg: b:20, -91.00000adBm, -91.00000mdBm, S6, var: 0.00000, stddv: 0.00000]',
             repr(sma))
         self.assertEqual(20, sma.band)
         self.assertEqual(
             "{'var': 0.0, 'stddv': 0.0, 'sl': 'S6'}", str(sma.signal_st))
+        lst = sma.get_start_time_of_readings()
+        tt = lst[0][0]
+        xx = tt[:10]
+        for t in lst:
+            self.assertEqual(datemarker, t[0][:10])
+
         self.assertEqual(-91.0, sma.dBm.get('adBm'))
         self.assertEqual({14100000, 14110000, 14120000}, sma.freqs)
         self.assertEqual(
-            '[SMeterAvg: -91.00000adBm, -91.00000mdBm, S6, var: 0.00000, stddv: 0.00000]',
+            '[SMeterAvg: b:20, -91.00000adBm, -91.00000mdBm, S6, var: 0.00000, stddv: 0.00000]',
             repr(sma))
         self.assertEqual(
-            '[-91.00000adBm, -91.00000mdBm, S6, var: 0.00000, stddv: 0.00000]', str(sma))
+            '[b:20, -91.00000adBm, -91.00000mdBm, S6, var: 0.00000, stddv: 0.00000]', str(sma))
         self.assertFalse(sma.noise.get('highnoise'))
         self.assertFalse(sma.noise.get('lownoise'))
         self.assertEqual(3, len(sma.noise.get('midnoise')))
@@ -113,7 +122,7 @@ class Testsmeteravg(unittest.TestCase):
 
         smlf = smeteravg.factory(sml, 20)
         self.assertEqual(
-            '[-91.00000adBm, -91.00000mdBm, S6, var: 0.00000, stddv: 0.00000]', str(smlf))
+            '[b:20, -91.00000adBm, -91.00000mdBm, S6, var: 0.00000, stddv: 0.00000]', str(smlf))
 
         def get_readings(testing):
             file = open(testing, 'r')

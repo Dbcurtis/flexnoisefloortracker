@@ -6,14 +6,17 @@ import sys
 import os
 import logging
 import logging.handlers
+from typing import List, Sequence, Dict, Mapping
 # import datetime
+import time
 import math
 # import time
 from statistics import mean
 import jsonpickle
+from postproc import BANDS, BandPrams
 # import flex
 from flex import Flex
-import smeteravg
+#import smeteravg
 from smeteravg import factory, SMeterAvg, get_quiet
 # import mysql.connector as mariadb
 from userinput import UserInput
@@ -21,6 +24,7 @@ from smeter import SMeter
 #import dbtools
 import postproc
 from typing import List
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -41,7 +45,7 @@ def GET_BAND(wl): return math.trunc(round(wl) / 10) * 10
 class Bandreadings:
     """Bandreadings(freqsin, flexradio, bandid=None)
 
-    freqsin is a list of frequencies in the band that will be looked at
+    freqsin is a list of str frequencies in the band that will be looked at
     if freqs is none, the freq will be '30100000' which will put it in the 10m band
     flex is a Flex object
 
@@ -49,13 +53,13 @@ class Bandreadings:
 
     """
 
-    def __init__(self, freqsin: List[str], flexradio: Flex, bandid=None):
+    def __init__(self, freqsin: Sequence[str], flexradio: Flex, bandid=None):
 
         freqs = freqsin if freqsin else ['30100000']
-        self.flexradio = flexradio
+        self.flexradio: Flex = flexradio
         self.freqt = freqs
         self.freqi = [int(_) for _ in freqs]
-        self.v = 1  # object version number if it exists
+        self.v: int = 2  # object version number if it exists
 
         self.bandid = bandid if bandid else str(
             (GET_BAND(299792458.0 / mean(self.freqi))))
@@ -64,9 +68,10 @@ class Bandreadings:
         self.dropped_high_noise = False
         self.single_noise_freq = None
         self.dropped_freqs = []
-        self.useable = False
-        # lambda to generate command to go to freq a
-        self.makefreqcmd = lambda a: f'ZZFA{int(a) :011d};'
+        self.useable: bool = False
+
+    def makefreqcmd(self, a):
+        return f'ZZFA{int(a) :011d};'
 
 # signal_st = {'var': None, 'stddv': None, 'sl': None, }
     def __str__(self):
@@ -76,7 +81,6 @@ class Bandreadings:
             stddv = self.band_signal_strength.signal_st.get('stddv')
             var = self.band_signal_strength.signal_st.get('var')
             return f'[band:{self.bandid}, avgsignal: {adBm :.5f}dBm, {sl}, var: {var :.5f}, stddv: {stddv :.5f}]'
-            # .format(self.bandid, adBm, sl, var, stddv)
 
         return f'no reading, band {self.bandid}'
 
@@ -102,19 +106,20 @@ class Bandreadings:
         2)'./noisy20band.json',
         assuming running in the testing direcotry
         """
+
         self.get_readings(
             testing=testing)  # saved in self.band_signal_strength
 
         current_bss = self.band_signal_strength
         #cbssstr = str(current_bss)
         updated_bss = None
-        _a = current_bss.badness()
+        #_a = current_bss.badness()
         if current_bss.signal_st.get('stddv') > 1.5:
             #updated_bss = current_bss.get_quiet()
             updated_bss = get_quiet(current_bss)
 
         if updated_bss:
-            _a = updated_bss.badness()
+           # _a = updated_bss.badness()
 
             if updated_bss.badness() < 0.21:
                 self.band_signal_strength = updated_bss
@@ -122,6 +127,8 @@ class Bandreadings:
             else:
                 self.useable = self.changefreqs()
                 #a = 0
+        else:
+            self.useable = True
 
         return self.band_signal_strength
 
@@ -142,15 +149,23 @@ class Bandreadings:
 
             def findctrfreq(_f):
                 print('needs to be completed')
-                return freqs[0]
+                me = round(mean(freqs))
+                return me
             centerfreq = findctrfreq(freqs)
 
             freqs = [f for f in range(
                 centerfreq - 6000, centerfreq + 6000, 600)]
             results = []
             for freqn in freqs:
-                freq = int(self.flexradio.do_cmd(
-                    self.makefreqcmd(freqn))[4:-1])
+                freq: int = None
+                cmd: str = self.makefreqcmd(freqn)
+                retval: str = self.flexradio.do_cmd(cmd)
+                if retval == '?;':
+                    print(f'cmd: {cmd}, ret: {retval}')
+                    raise Exception(f'illegal return {retval} for cmd: {cmd}')
+                freq = int(retval[4:-1])
+                # freq = int(self.flexradio.do_cmd(
+                # self.makefreqcmd(freqn))[4:-1])
 
                 # -------------
                 band_sig_str_lst = self.flexradio.get_cat_data(
@@ -192,7 +207,8 @@ class Bandreadings:
 
             return avgresb
 
-        raise NotImplementedError
+        bs.usable = False
+        return bs
 
         # remove smeters with adBm being more than 1/2 std dev from asctime
         ## halfstd = avgresa.signal_st.get('stddv') / 2
@@ -210,7 +226,7 @@ class Bandreadings:
         #a = 0
         # return avgresa
 
-    def changefreqs(self, testing=None):
+    def changefreqs(self, testing=None) -> bool:
         """changefreqs(testing=None)
 
 
@@ -219,7 +235,7 @@ class Bandreadings:
         readings = self.cf_get_readings(testing=testing)
         bsmod = self.cf_process_readings(readings)
         print('change freq scan')
-        if ((bs.dBm.get('mdBm') - bsmod.dBm.get('mdBm')) ** 2) < .3:
+        if bs.usable and ((bs.dBm.get('mdBm') - bsmod.dBm.get('mdBm')) ** 2) < .3:
             self.band_signal_strength = bsmod
             return True
         else:
@@ -238,11 +254,30 @@ class Bandreadings:
 
         if testing is None:
             for _freq in self.freqt:
-                freq = int(self.flexradio.do_cmd(
-                    self.makefreqcmd(_freq))[4:-1])
-                band_sig_str_lst = self.flexradio.get_cat_data(
-                    postproc.GET_DATA, freq)
-                self.readings.get(freq).extend(band_sig_str_lst)
+                acmd = None
+                ares = None
+                trimedr: str = None
+                try:
+                    cmd: str = self.makefreqcmd(_freq)
+                    acmd = cmd
+                    result: str = ''
+                    for _ in range(5):
+                        result = self.flexradio.do_cmd(cmd)
+                        ares = result
+                        if 'ZZFA' in result:
+                            break
+                        time.sleep(0.5)
+
+                    print(result)
+                    trimedr = result[4:-1]
+                    freq = int(trimedr)
+                    #freq = int(self.flexradio.do_cmd(cmd)[4:-1])
+                    band_sig_str_lst = self.flexradio.get_cat_data(
+                        postproc.GET_DATA, freq)
+                    self.readings.get(freq).extend(band_sig_str_lst)
+                except ValueError as ve:
+                    print(f'cmd: {acmd}, res: {ares},  trimedr: {trimedr}{ve}')
+                    raise ve
 
             _rl = list(self.readings.values())
             vals = []
@@ -321,40 +356,46 @@ def main():
     """main()
 
     """
-    bandrd = Bandreadings(
-        ['14000000', '14073400', '14100000', '14200000'], None)
-    bd = bandrd.bandid
+    # bandrd = Bandreadings(
+    # ['14000000', '14073400', '14100000', '14200000'], None)
+    #bd = bandrd.bandid
     ui = UserInput()
     ui.request(port='com4')
     flexr = Flex(ui)
     initial_state = None
     try:
-        flexr.open()
+        if not flexr.open():
+            raise (RuntimeError('Flex not connected to serial serial port'))
+
         print('saving current flex state')
         initial_state = flexr.save_current_state()
         print('initializing dbg flex state')
         flexr.do_cmd_list(postproc.INITIALZE_FLEX)
         bandr = Bandreadings(
             #['14010000', '14073400', '14110000', '14220000'], \
-            ['07073000', '07122000', '07219000', '07295000'], \
+            #['07073000', '07122000', '07219000', '07295000'], \
+            ['3_500_000', '3_700_000', '3_983_000', '4_000_000'], \
             flexr)
         print('start scanning for noise')
         bss: SMeterAvg = bandr.doit()
 
-        with open('banddata.json', 'w') as jso:  # jsonpickle.encode
-            _ = jsonpickle.encode(bss)
-            jso.write(_)
+        # with open('banddata.json', 'w') as jso:  # jsonpickle.encode
+        #_ = jsonpickle.encode(bss)
+        # jso.write(_)
 
-        with open('banddata.json', 'r') as jsi:
-            aa = jsi.readline()
-        cpybss = jsonpickle.decode(aa)
-        if str(bss) != str(cpybss):
-            print('bss <> cpybss')
+        # with open('banddata.json', 'r') as jsi:
+        #aa = jsi.readline()
+        #cpybss = jsonpickle.decode(aa)
+        # if str(bss) != str(cpybss):
+        #print('bss <> cpybss')
 
         print('end scanning for noise')
         print(f'band noise is {bandr.band_signal_strength}')
+
+    except RuntimeError:
+        raise
     except Exception as e:
-        a = 0
+        #a = 0
         print(e)
         raise e
 
@@ -365,9 +406,9 @@ def main():
 
 
 if __name__ == '__main__':
+    import trackermain
     if not os.path.isdir(LOG_DIR):
         os.mkdir(LOG_DIR)
-
     LF_HANDLER = logging.handlers.RotatingFileHandler(
         ''.join([LOG_DIR, LOG_FILE, ]),
         maxBytes=10000,
@@ -390,9 +431,13 @@ if __name__ == '__main__':
 
     try:
         main()
-
+        normalexit = True
     except(Exception, KeyboardInterrupt) as exc:
-        sys.exit(str(exc))
+        print(exc)
+        normalexit = False
 
     finally:
-        sys.exit('normal exit')
+        if normalexit:
+            sys.exit('normal exit')
+        else:
+            sys.exit('error exit')
