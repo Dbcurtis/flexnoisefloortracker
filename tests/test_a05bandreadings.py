@@ -51,6 +51,7 @@ class TestBandreadings(unittest.TestCase):
         flex.open()
         cls.initial_state = flex.save_current_state()
         flex.close()
+        postproc.enable_bands(['10', '20'])
 
     @classmethod
     def tearDownClass(cls):
@@ -68,19 +69,33 @@ class TestBandreadings(unittest.TestCase):
         """test01_instat()
 
         """
-        _br = Bandreadings([], self.flex, None)
-        # band 10 is the default if no freq and no bandid provided
+        postproc.enable_bands('80', False)
+        postproc.enable_bands('10')
+        _br: Bandreadings = None
+        try:
+            _br = Bandreadings(None, self.flex)
+            self.fail('should have had a KeyError')
+        except KeyError as ke:
+            pass
+
+        try:
+            _br = Bandreadings('80', self.flex)
+            self.fail('should have had a ValueError')
+        except ValueError as ve:
+            pass
+
+        _br = Bandreadings('10', self.flex)
         self.assertEqual('no reading, band 10', str(_br))
         self.assertEqual('Bandreadings: no reading, band 10', repr(_br))
         self.assertEqual('10', _br.bandid)
 
-        _br = Bandreadings([], self.flex, bandid='20')
+        _br = Bandreadings('20', self.flex)
         self.assertEqual('no reading, band 20', str(_br))
         self.assertEqual('Bandreadings: no reading, band 20', repr(_br))
         self.assertEqual('20', _br.bandid)
 
         _br = Bandreadings(
-            ['14000000', '14200000', '14300000'], self.flex, None)  # these freqs in 20m band
+            '20', self.flex)  # these freqs in 20m band
         self.assertEqual('no reading, band 20', str(_br))
         self.assertEqual('Bandreadings: no reading, band 20', repr(_br))
         self.assertEqual('20', _br.bandid)
@@ -95,14 +110,14 @@ class TestBandreadings(unittest.TestCase):
         dataq = CTX.JoinableQueue(maxsize=100)
 
         try:
-            _br = Bandreadings(
-                ['14000000', '14074000', '14100000', '14200000'], self.flex)
+            _br: Bandreadings = Bandreadings(
+                '20', self.flex)
             _br.get_readings(testing='./quiet20band.json')
             self.assertEqual(
                 '[SMeterAvg: b:20, -103.45833adBm, -103.50000mdBm, S3, var: 0.15720, stddv: 0.39648]',
                 repr(_br.band_signal_strength))
 
-            bss0 = _br.band_signal_strength
+            bss0: SMeterAvg = _br.band_signal_strength
             _br.flexradio = None  # must be done to allow pikceling in the que
             dataq.put(_br)
 
@@ -111,7 +126,7 @@ class TestBandreadings(unittest.TestCase):
                 '[SMeterAvg: b:20, -102.06250adBm, -103.50000mdBm, S3, var: 12.79583, stddv: 3.57713]',
                 repr(_br.band_signal_strength))
 
-            bss1 = _br.band_signal_strength
+            bss1: SMeterAvg = _br.band_signal_strength
             dataq.put(_br)
             # if _br.band_signal_strength.signal_st.get('stddv') > 1.5:
             # _br.changefreqs(
@@ -119,7 +134,7 @@ class TestBandreadings(unittest.TestCase):
             # self.assertEqual(
             #'[SMeterAvg: -103.32090adBm, -103.50000mdBm, S3, var: 0.74774, stddv: 0.86472]',
             # repr(_br.band_signal_strength))
-            datain = []
+            datain: List[SMeterAvg] = []
             try:
                 while True:
                     datain.append(dataq.get(True, 0.005))
@@ -135,17 +150,14 @@ class TestBandreadings(unittest.TestCase):
 
             self.assertEqual(2, len(datain))
             self.assertEqual(
-                '[Bandreadings: SMeterAvg: band:20, -103.45833dBm, S3, var: 0.15720, stddv: 0.39648]', repr(datain[0]))
+                '[Bandreadings: SMeterAvg: [band:20, avgsignal: -103.45833dBm, S3, var: 0.15720, stddv: 0.39648]]', repr(datain[0]))
             tbr = datain[0]
 
             self.assertEqual(
-                [14000000, 14074000, 14100000, 14200000], tbr.freqi)
-            self.assertEqual({14000000: [], 14074000: [],
-                              14100000: [], 14200000: []}, tbr.readings)
-            self.assertFalse(tbr.dropped_high_noise)
-            self.assertFalse(tbr.single_noise_freq)
-            self.assertEqual([], tbr.dropped_freqs)
-            self.assertFalse(tbr.useable)
+                'band:20, enabled: True, chan: False, [14000000, 14035000, 14070000, 14105000, 14140000, 14175000, 14210000, 14245000, 14280000, 14315000, 14350000]',
+                str(tbr.myband))
+
+            # self.assertFalse(tbr.useable)
 
             bss0a = datain[0].band_signal_strength
             bss1a = datain[1].band_signal_strength
@@ -153,14 +165,15 @@ class TestBandreadings(unittest.TestCase):
             self.assertEqual(repr(bss1), repr(bss1a))
 
         except(Exception, KeyboardInterrupt) as exc:
-            self.fail('unexpected exception' + str(exc))
+            excs = str(exc)
+            self.fail(f'unexpected exception {excs}')
 
     def test03_get_readings(self):
         """test03_get_readings()
 
         """
         _br = Bandreadings(
-            ['14000000', '14100000', '14200000'], self.flex,)  # 14000000
+            '20', self.flex)  # 14000000
         _br.get_readings(testing='./noisy20band.json')
         smar = _br.band_signal_strength
         self.assertEqual(16, len(smar.smlist))
@@ -172,59 +185,61 @@ class TestBandreadings(unittest.TestCase):
             '[SMeterAvg: b:20, -102.06250adBm, -103.50000mdBm, S3, var: 12.79583, stddv: 3.57713]',
             repr(smar))
 
-    def test07_changefreqs(self):
-        """test07_changefreqs()
+    # def test07_changefreqs(self):
+        # """test07_changefreqs()
 
-        """
-        _br = Bandreadings(
-            ['14000000', '14074000', '14100000', '14200000'], self.flex,)  # 14000000
-        _br.get_readings(testing='./noisy20band.json')
-        #sma = _br.band_signal_strength
-        #sml = sma.smlist[:]
+        # """
+        # pass
+        # _br = Bandreadings(
+        # '20', self.flex,)  # 14000000
+        # _br.get_readings(testing='./noisy20band.json')
+        ##sma = _br.band_signal_strength
+        ##sml = sma.smlist[:]
 
-        #a = 0
-        #savedreadings = []
+        ##a = 0
+        ##savedreadings = []
         # with open('./focusedbadspotreading.json', 'r') as fl:
-        #savedreadings = [jsonpickle.decode(i) for i in fl.readlines()][0]
+        ##savedreadings = [jsonpickle.decode(i) for i in fl.readlines()][0]
 
-        #_ui = UserInput()
-        try:
-            sm = SMeter(('ZZSM098;', 14_100_000))  # s6
-            # check the s6 evaluation
-            self.assertEqual({'sl': 'S6', 'dBm': -91.0}, sm.signal_st)
-            _br = Bandreadings(
-                ['14000000', '14100000', '14200000'], self.flex,)  # 14000000
-            _br.get_readings(testing='./noisy20band.json')
-            _br.changefreqs(testing='./focusedbadspotreading.json')
-            self.assertEqual(
-                '[b:20, -104.04167adBm, -104.00000mdBm, S3, var: 0.33902, stddv: 0.58225]', str(_br.band_signal_strength))
-            self.assertEqual(1, len(_br.dropped_freqs))
-            self.assertTrue(_br.dropped_high_noise)
-            self.assertEqual(14074000, _br.dropped_freqs[0])
+        ##_ui = UserInput()
+        # try:
+        # sm = SMeter(('ZZSM098;', 14_100_000))  # s6
+        # check the s6 evaluation
+        #self.assertEqual({'sl': 'S6', 'dBm': -91.0}, sm.signal_st)
+        # _br = Bandreadings(
+        # '20', self.flex,)  # 14000000
+        # _br.get_readings(testing='./noisy20band.json')
+        # _br.changefreqs(testing='./focusedbadspotreading.json')
+        # self.assertEqual(
+        # '[b:20, -104.04167adBm, -104.00000mdBm, S3, var: 0.33902, stddv: 0.58225]', str(_br.band_signal_strength))
+        #self.assertEqual(1, len(_br.dropped_freqs))
+        # self.assertTrue(_br.dropped_high_noise)
+        #self.assertEqual(14074000, _br.dropped_freqs[0])
 
-        except(Exception, KeyboardInterrupt) as exc:
-            self.fail('unexpected exception' + str(exc))
+        # except(Exception, KeyboardInterrupt) as exc:
+        #self.fail('unexpected exception' + str(exc))
 
-    def test04_cf_process_readings(self):
-        """test04_cf_process_readings()
+    # def test04_cf_process_readings(self):
+        # """test04_cf_process_readings()
 
-        """
-        _br = Bandreadings(
-            ['14000000', '14074000', '14100000', '14200000'], self.flex,)  # 14000000
-        _br.get_readings(testing='./quiet20band.json')
-        self.assertFalse(_br.cf_process_readings())
-        # oldsmalst = [_br.band_signal_strength][:]
-        _br = Bandreadings(
-            ['14000000', '14074000', '14100000', '14200000'], self.flex,)  # 14000000
+        # """
+        # pass
+        # _br = Bandreadings(
+        # '20', self.flex,)  # 14000000
+        # _br.get_readings(testing='./quiet20band.json')
+        # self.assertFalse(_br.cf_process_readings())
+        ## oldsmalst = [_br.band_signal_strength][:]
+        # _br = Bandreadings(
+        # '20', self.flex,)  # 14000000
 
-        _br.get_readings(testing='./noisy20band.json')
-        temp_smeteravg = _br.cf_process_readings()
-        self.assertTrue(temp_smeteravg)
-        self.assertEqual(
-            '[SMeterAvg: b:20, -104.04167adBm, -104.00000mdBm, S3, var: 0.33902, stddv: 0.58225]',
-            repr(temp_smeteravg))
-        self.assertTrue(_br.single_noise_freq)
-        self.assertEqual(14074000, _br.dropped_freqs[0])
+        # _br.get_readings(testing='./noisy20band.json')
+        #temp_smeteravg = _br.cf_process_readings()
+        # self.assertTrue(temp_smeteravg)
+        # self.assertEqual(
+        #'[SMeterAvg: b:20, -104.04167adBm, -104.00000mdBm, S3, var: 0.33902, stddv: 0.58225]',
+        # repr(temp_smeteravg))
+        # self.assertTrue(_br.single_noise_freq)
+        #self.assertEqual(14074000, _br.dropped_freqs[0])
 
 
 if __name__ == '__main__':

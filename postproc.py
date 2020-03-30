@@ -6,7 +6,7 @@ import os
 import logging
 import logging.handlers
 #import typing
-from typing import List, Sequence, Mapping, Tuple, Dict
+from typing import List, Sequence, Mapping, Tuple, Dict, Any
 from smeter import SMeter
 
 
@@ -195,7 +195,10 @@ _BAND_DATA = {'80': (3_500_000, 4_000_000,),
 # RESTORE_FLEX = {
 # restore freq, mode, dsp agc wnb
 # }
-
+GET_SMETER_PROTO: List[Tuple[Any, Any]] = [
+    ('wait0.25', None, ),
+    ('ZZSM;', smeter, ),
+]
 
 GET_DATA = [
     # GET_DATA
@@ -241,7 +244,7 @@ class BandPrams:
     initilization generates the frequences for measurement responsive to if the band is channeled or not.
     it also generates the flex command to change to the specified frequencies.
 
-
+    need to make test
     """
 
     def __init__(self, item: Mapping[str, Tuple[int, ...]]):
@@ -255,10 +258,11 @@ class BandPrams:
         highend = bfreql[-1]
         self._channeled: bool = None
         self._enable: bool = False
+        self._freqs: List[int] = []
         if len(bfreql) == 2:
             widbandinc = (highend - lowend) / _NUM_BAND_SAMPLE
-            self._freqs = [lowend + i *
-                           widbandinc for i in range(_NUM_BAND_SAMPLE + 1)]
+            self._freqs = [int(lowend + i *
+                               widbandinc) for i in range(_NUM_BAND_SAMPLE + 1)]
             freqs1 = []
             for f in self._freqs:
                 freqs1.extend([int(f - _SAMPLE_SPREAD),
@@ -318,28 +322,32 @@ def enable_bands(bndids: Sequence[str], val: bool = True) -> int:
     return result
 
 
+enable_bands(['30', '40', '20'])
+
 # class PostProc():
-    # """PostProc()
+# """PostProc()
 
-    # """
+# """
 
-    # def __init__(self, userI, testdata=None, testing=False):
+# def __init__(self, userI, testdata=None, testing=False):
 
-    #self._ui = userI
-    #self._td = None
-    # if testdata:
-    # if isinstance(testdata, list):
-    #self._td = testdata
-    # self._td.reverse()
-    # else:
-    #assert "illegal testdata type"
+#self._ui = userI
+#self._td = None
+# if testdata:
+# if isinstance(testdata, list):
+#self._td = testdata
+# self._td.reverse()
+# else:
+#assert "illegal testdata type"
 
-    # def __str__(self):
-    # return '[{}, {}]'.format(self._ui, self._td)
-    # return f'[{self._ui}, {self._td}'
+# def __str__(self):
+# return '[{}, {}]'.format(self._ui, self._td)
+# return f'[{self._ui}, {self._td}'
 
-    # def __repr__(self):
-    # return f'[PostProc: {str(self)}]'
+# def __repr__(self):
+# return f'[PostProc: {str(self)}]'
+
+
 def main():
     pass
 

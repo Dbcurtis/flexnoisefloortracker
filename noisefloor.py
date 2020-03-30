@@ -21,6 +21,8 @@ from bandreadings import Bandreadings
 from flex import Flex
 #import dbtools
 import postproc
+import noisefloor
+from postproc import BANDS, BandPrams
 #from trackermain import QUEUES, STOP_EVENTS, CTX
 
 
@@ -149,7 +151,7 @@ class Noisefloor:
         self._td = None
         self.out_queue = out_queue
         self.stop_event = stop_event
-        self._last_band_readings: NFResult = None
+        self._last_band_readings: noisefloor.NFResult = None
         if testdata:
             if isinstance(testdata, list):
                 self._td = testdata
@@ -160,6 +162,7 @@ class Noisefloor:
         self.end_time = None
         self.initial_state = None
         self.is_open = False
+        self.testdata = testdata
 
     def __str__(self):
         return '[UserInput: {}, {}]'.format('junk0', 'junk1')
@@ -230,64 +233,44 @@ class Noisefloor:
         self.out_queue.put(noisefloordata)
         # print (f'queued {noisefloordata}')
 
-    def _oneloopallbands(self) -> NFResult:
+    def _oneloopallbands(self) -> noisefloor.NFResult:
         """_oneloopallbands()
 
         """
 
         results: List[Bandreadings] = []
-        freq_list = postproc.BANDS[:]
-        freq_in_band = []
-        for _ in range(0, len(freq_list), 3):
-            freq_in_band.append(freq_list[_:_ + 3])
-
-        nfresult: NFResult = NFResult()
+        postproc.BANDS.values()
+        activeBands: List[str] = [bp.bandid for bp in BANDS.values() if bp.is_enabled()]
+        nfresult: noisefloor.NFResult = noisefloor.NFResult()
         nfresult.start()
-
-        for _freq in freq_in_band:  # go through all the scanned bands
-            run = True
-            count = 3  # only 3 attempts to get a reasonable signal
-            band_reading: Bandreadings = None
-            while run:
-                band_reading = Bandreadings(_freq, self.flex)
-                band_reading.doit()
-                print('need to correct logic here')
-                if band_reading.useable:
-                    sigs = band_reading.band_signal_strength
-                    run = sigs.signal_st.get('stddv') > 1.5 and count > 0
-                    if run and count < 2:
-                        # self.changefreqs(sigs)
-                        pass
-                    count -= 1
-                else:
-                    a = 0
-                    count -= 1
-                    if count < 0:
-                        break
-
-                    pass
+        for bid in activeBands:
+            band_reading = Bandreadings(bid, self.flex)
+            band_reading.doit()
             band_reading.flexradio = None  # make safe for pickleing
             results.append(band_reading)
-
         nfresult.end(results)
         return nfresult
 
-    def oneloop_all_bands(self):
+    def oneloop_all_bands(self, testdata: noisefloor.NFResult = None):
         """oneloop_all_bands()
 
         does one iteration of checking all bands
 
         """
-        nfresult: NFResult = None
+        nfresult: noisefloor.NFResult = None
 
-        while True:
+        if not self.testdata:
+            while True:
 
-            try:
-                nfresult = self._oneloopallbands()
-                break
-            except ValueError as ve:
-                print(f'value error in _oneloopallbands: {ve}')
-                continue
+                try:
+                    nfresult = self._oneloopallbands()
+                    break
+                except ValueError as ve:
+                    print(f'value error in _oneloopallbands: {ve}')
+                    continue
+
+        else:
+            nfresult = testdata
 
         if (not self._last_band_readings) or nfresult != self._last_band_readings:
             self._last_band_readings = nfresult
@@ -324,6 +307,12 @@ class Noisefloor:
 
         """
         # initdata = self.initialize_flex() #if you need to look at the results
+        testdl: List[noisefloor.NFResult] = None
+
+        if self.testdata:
+            with open('noisefloordata.json', 'r') as jsi:
+                testdl = jsonpickle.decode(jsi.readline())
+
         if self.stop_event.is_set():
             return
         try:
@@ -335,22 +324,31 @@ class Noisefloor:
                 self.end_time = start_time + \
                     datetime.timedelta(hours=runtime)
                 while datetime.datetime.now() < self.end_time:
-                    self.oneloop_all_bands()
-                    if self.stop_event.is_set():
-                        return
-                    self.stop_event.wait(interval)
-                    if self.stop_event.is_set():
-                        return
+                    if testdl:
+                        for dta in testdl:
+                            self.oneloop_all_bands(testdata=dta)
+                            time.sleep(1)
+                    else:
+                        self.oneloop_all_bands()
+                        if self.stop_event.is_set():
+                            return
+                        self.stop_event.wait(interval)
+                        if self.stop_event.is_set():
+                            return
             else:
-
-                for _ in range(loops):
-                    print(f'{_}: ', end='')
-                    self.oneloop_all_bands()
-                    if self.stop_event.is_set():
-                        return
-                    self.stop_event.wait(interval)
-                    if self.stop_event.is_set():
-                        return
+                if testdl:
+                    for dta in testdl:
+                        self.oneloop_all_bands(testdata=dta)
+                        time.sleep(1)
+                else:
+                    for _ in range(loops):
+                        print(f'{_}: ', end='')
+                        self.oneloop_all_bands()
+                        if self.stop_event.is_set():
+                            return
+                        self.stop_event.wait(interval)
+                        if self.stop_event.is_set():
+                            return
 
         except Exception as ex:
             print(f'exception in doit {ex}')
@@ -399,11 +397,11 @@ def main(stop_events: Mapping[str, CTX.Event], queues: Mapping[str, CTX.Joinable
         print(indata)
         #id = indata[0]
 
-        with open('banddata.json', 'w') as jso:  # jsonpickle.encode
+        with open('noisefloordata.json', 'w') as jso:  # jsonpickle.encode
             _ = jsonpickle.encode(indata)
             jso.write(_)
 
-        with open('banddata.json', 'r') as jsi:
+        with open('noisefloordata.json', 'r') as jsi:
             aa = jsi.readline()
         cpybss = jsonpickle.decode(aa)
 

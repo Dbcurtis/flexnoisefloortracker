@@ -13,11 +13,11 @@ import math
 # import time
 from statistics import mean
 import jsonpickle
-from postproc import BANDS, BandPrams
+from postproc import BANDS, BandPrams, GET_SMETER_PROTO
 # import flex
 from flex import Flex
 #import smeteravg
-from smeteravg import factory, SMeterAvg, get_quiet
+from smeteravg import factory, SMeterAvg
 # import mysql.connector as mariadb
 from userinput import UserInput
 from smeter import SMeter
@@ -43,7 +43,7 @@ def GET_BAND(wl): return math.trunc(round(wl) / 10) * 10
 
 
 class Bandreadings:
-    """Bandreadings(freqsin, flexradio, bandid=None)
+    """Bandreadings(bandin: str, flexradio: Flex)
 
     freqsin is a list of str frequencies in the band that will be looked at
     if freqs is none, the freq will be '30100000' which will put it in the 10m band
@@ -53,27 +53,29 @@ class Bandreadings:
 
     """
 
-    def __init__(self, freqsin: Sequence[str], flexradio: Flex, bandid=None):
+    def __init__(self, bandin: str, flexradio: Flex):
+        self.myband: BandPrams = None
 
-        freqs = freqsin if freqsin else ['30100000']
+        try:
+            self.myband = BANDS[bandin]
+        except KeyError:
+            raise
+
+        if not self.myband.is_enabled():
+            raise ValueError('Selected Band is not enabled')
+
+        self.v: int = 4
         self.flexradio: Flex = flexradio
-        self.freqt = freqs
-        self.freqi = [int(_) for _ in freqs]
-        self.v: int = 2  # object version number if it exists
-
-        self.bandid = bandid if bandid else str(
-            (GET_BAND(299792458.0 / mean(self.freqi))))
+        self.bandid = self.myband.bandid
+        # self.bandid = bandid if bandid else str(
+        # (GET_BAND(299792458.0 / mean(self.freqi))))
         self.band_signal_strength: SMeterAvg = None
-        self.readings = {f: [] for f in self.freqi}
-        self.dropped_high_noise = False
-        self.single_noise_freq = None
-        self.dropped_freqs = []
-        self.useable: bool = False
 
-    def makefreqcmd(self, a):
-        return f'ZZFA{int(a) :011d};'
+    # def makefreqcmd(self, a):
+        # return f'ZZFA{int(a) :011d};'
 
 # signal_st = {'var': None, 'stddv': None, 'sl': None, }
+
     def __str__(self):
         if self.band_signal_strength:
             adBm = self.band_signal_strength.dBm.get('adBm')
@@ -86,11 +88,12 @@ class Bandreadings:
 
     def __repr__(self):
         if self.band_signal_strength:
-            adBm = self.band_signal_strength.dBm.get('adBm')
-            sl = self.band_signal_strength.signal_st.get('sl')
-            stddv = self.band_signal_strength.signal_st.get('stddv')
-            var = self.band_signal_strength.signal_st.get('var')
-            return f'[Bandreadings: SMeterAvg: band:{self.bandid}, {adBm :.5f}dBm, {sl}, var: {var :.5f}, stddv: {stddv :.5f}]'
+            #adBm = self.band_signal_strength.dBm.get('adBm')
+            #sl = self.band_signal_strength.signal_st.get('sl')
+            #stddv = self.band_signal_strength.signal_st.get('stddv')
+            #var = self.band_signal_strength.signal_st.get('var')
+            # return f'[Bandreadings: SMeterAvg: band:{self.bandid}, {adBm :.5f}dBm, {sl}, var: {var :.5f}, stddv: {stddv :.5f}]'
+            return f'[Bandreadings: SMeterAvg: {str(self)}]'
 
         return f'Bandreadings: no reading, band {self.bandid}'
 
@@ -106,29 +109,31 @@ class Bandreadings:
         2)'./noisy20band.json',
         assuming running in the testing direcotry
         """
+        if not self.myband.is_enabled():
+            raise ValueError('Selected Band is not enabled')
 
         self.get_readings(
             testing=testing)  # saved in self.band_signal_strength
 
-        current_bss = self.band_signal_strength
+        #current_bss = self.band_signal_strength
         #cbssstr = str(current_bss)
-        updated_bss = None
+        #updated_bss = None
         #_a = current_bss.badness()
-        if current_bss.signal_st.get('stddv') > 1.5:
-            #updated_bss = current_bss.get_quiet()
-            updated_bss = get_quiet(current_bss)
+        # if current_bss.signal_st.get('stddv') > 1.5:
+        ##updated_bss = current_bss.get_quiet()
+        #updated_bss = get_quiet(current_bss)
 
-        if updated_bss:
-           # _a = updated_bss.badness()
+        # if updated_bss:
+        ## _a = updated_bss.badness()
 
-            if updated_bss.badness() < 0.21:
-                self.band_signal_strength = updated_bss
-                self.useable = True
-            else:
-                self.useable = self.changefreqs()
-                #a = 0
-        else:
-            self.useable = True
+        # if updated_bss.badness() < 0.21:
+        #self.band_signal_strength = updated_bss
+        #self.useable = True
+        # else:
+        #self.useable = self.changefreqs()
+        ##a = 0
+        # else:
+        #self.useable = True
 
         return self.band_signal_strength
 
@@ -190,40 +195,41 @@ class Bandreadings:
         readings is:?
 
         """
+        pass
         # self.band_signal_strength
-        if self.band_signal_strength.signal_st.get('stddv') < 1.0:
-            return None
+        # if self.band_signal_strength.signal_st.get('stddv') < 1.0:
+        # return None
 
-        bs = self.band_signal_strength
-        avgresa = factory(self.band_signal_strength, bs.band)
-        badness = avgresa.badness()
-        if badness and badness < 0.334:
-            avgresb = factory(avgresa.noise.get('lownoise') +
-                              avgresa.noise.get('midnoise'), bs.band)
-            self.dropped_high_noise = True
-            self.single_noise_freq = len(avgresa.get_noise_freqs()) == 1
-            self.dropped_freqs = list(avgresa.get_noise_freqs())
-            self.dropped_freqs.sort()
+        #bs = self.band_signal_strength
+        #avgresa = factory(self.band_signal_strength, bs.band)
+        #badness = avgresa.badness()
+        # if badness and badness < 0.334:
+        # avgresb = factory(avgresa.noise.get('lownoise') +
+        # avgresa.noise.get('midnoise'), bs.band)
+        #self.dropped_high_noise = True
+        #self.single_noise_freq = len(avgresa.get_noise_freqs()) == 1
+        #self.dropped_freqs = list(avgresa.get_noise_freqs())
+        # self.dropped_freqs.sort()
 
-            return avgresb
+        # return avgresb
 
-        bs.usable = False
-        return bs
+        #bs.usable = False
+        # return bs
 
         # remove smeters with adBm being more than 1/2 std dev from asctime
-        ## halfstd = avgresa.signal_st.get('stddv') / 2
-        #maxst = avgresa.dBm.get('adBm') + (avgresa.signal_st.get('stddv') / 2)
+        ### halfstd = avgresa.signal_st.get('stddv') / 2
+        ##maxst = avgresa.dBm.get('adBm') + (avgresa.signal_st.get('stddv') / 2)
 
-        ## minst = -130.0
-        #modsmlist = [_ for _ in avgresa.smlist if -130.0 < _.signal_st.get('dBm') < maxst]
+        ### minst = -130.0
+        ##modsmlist = [_ for _ in avgresa.smlist if -130.0 < _.signal_st.get('dBm') < maxst]
 
-        #abgresb = SMeterAvg(modsmlist, band)
+        ##abgresb = SMeterAvg(modsmlist, band)
         # remvove freq of tup0
-        ## modtup1 = [sm for sm in tup[1] if sm.freq != tup[0].freq]
-        #modreadings = [sm for sm in readings if sm.freq != tup[0].freq]
-        #jjj = SMeterAvg(tup[1], bs.band)
-        #kkk = SMeterAvg(modreadings, bs.band)
-        #a = 0
+        ### modtup1 = [sm for sm in tup[1] if sm.freq != tup[0].freq]
+        ##modreadings = [sm for sm in readings if sm.freq != tup[0].freq]
+        ##jjj = SMeterAvg(tup[1], bs.band)
+        ##kkk = SMeterAvg(modreadings, bs.band)
+        ##a = 0
         # return avgresa
 
     def changefreqs(self, testing=None) -> bool:
@@ -231,17 +237,18 @@ class Bandreadings:
 
 
         """
-        bs = self.band_signal_strength
-        readings = self.cf_get_readings(testing=testing)
-        bsmod = self.cf_process_readings(readings)
-        print('change freq scan')
-        if bs.usable and ((bs.dBm.get('mdBm') - bsmod.dBm.get('mdBm')) ** 2) < .3:
-            self.band_signal_strength = bsmod
-            return True
-        else:
-            # print('NotImplementedError code') here
-            #raise NotImplementedError
-            return False
+        return False
+        #bs = self.band_signal_strength
+        #readings = self.cf_get_readings(testing=testing)
+        #bsmod = self.cf_process_readings(readings)
+        #print('change freq scan')
+        # if bs.usable and ((bs.dBm.get('mdBm') - bsmod.dBm.get('mdBm')) ** 2) < .3:
+        #self.band_signal_strength = bsmod
+        # return True
+        # else:
+        # print('NotImplementedError code') here
+        ##raise NotImplementedError
+        # return False
 
     def get_readings(self, testing: str = None) -> SMeterAvg:
         """get_readings(testing=None)
@@ -253,36 +260,64 @@ class Bandreadings:
         """
 
         if testing is None:
-            for _freq in self.freqt:
-                acmd = None
-                ares = None
-                trimedr: str = None
-                try:
-                    cmd: str = self.makefreqcmd(_freq)
-                    acmd = cmd
-                    result: str = ''
-                    for _ in range(5):
-                        result = self.flexradio.do_cmd(cmd)
-                        ares = result
-                        if 'ZZFA' in result:
-                            break
-                        time.sleep(0.5)
+            # for _freq in self.freqt:
+                #acmd = None
+                #ares = None
+                # trimedr: str = None
+                # try:
+                    # cmd: str = self.makefreqcmd(_freq)
+                    #acmd = cmd
+                    # result: str = ''
+                    # for _ in range(5):
+                        #result = self.flexradio.do_cmd(cmd)
+                        #ares = result
+                        # if 'ZZFA' in result:
+                            # break
+                        # time.sleep(0.5)
 
-                    print(result)
-                    trimedr = result[4:-1]
-                    freq = int(trimedr)
-                    #freq = int(self.flexradio.do_cmd(cmd)[4:-1])
-                    band_sig_str_lst = self.flexradio.get_cat_data(
-                        postproc.GET_DATA, freq)
-                    self.readings.get(freq).extend(band_sig_str_lst)
-                except ValueError as ve:
-                    print(f'cmd: {acmd}, res: {ares},  trimedr: {trimedr}{ve}')
-                    raise ve
+                    # print(result)
+                    #trimedr = result[4:-1]
+                    #freq = int(trimedr)
+                    ##freq = int(self.flexradio.do_cmd(cmd)[4:-1])
+                    # band_sig_str_lst = self.flexradio.get_cat_data(
+                        # postproc.GET_DATA, freq)
+                    # self.readings.get(freq).extend(band_sig_str_lst)
+                # except ValueError as ve:
+                    # print(f'cmd: {acmd}, res: {ares},  trimedr: {trimedr}{ve}')
+                    #raise ve
 
-            _rl = list(self.readings.values())
-            vals = []
-            [vals.extend(j) for j in _rl]
-            self.band_signal_strength = factory(vals, self.bandid)
+            myband: BandPrams = BANDS[self.bandid]
+            proto: List[Tuple[Any, Any]] = GET_SMETER_PROTO[:]
+            cmdlst: List[Tuple[Any, Any]] = []
+            cmd: str = None
+            for cmd in myband.get_freq_cmds():
+                cmdlst.extend([(cmd, None)])
+                cmdlst.extend(proto)
+
+            cmdresult: List[Any] = self.flexradio.get_cat_dataA(cmdlst)
+            sm_readings: List[SMeter] = [_ for _ in cmdresult if isinstance(_, SMeter)]
+            sm_readings.sort()
+            cmdresultB: List[Any] = [_ for _ in cmdresult if not isinstance(_, SMeter)]
+
+            maplist: List[Mapping[str, float]] = [list(_.signal_st.items()) for _ in sm_readings]
+            keyset: Set[str] = set([list(sm.signal_st.items())[0][1] for sm in sm_readings])
+
+            noisedic: Dict[str, List[SMeter]] = {}
+            for k in keyset:
+                noisedic.setdefault(k, [])
+
+            for ls in maplist:
+                noisedic[ls[0][1]].append(ls[1][1])
+
+            key = sorted(list(noisedic.keys()))[0]
+            low_noise_readings: List[SMeter] = [sm for sm in sm_readings if sm.signal_st['sl'] == key]
+            self.band_signal_strength = SMeterAvg(
+                low_noise_readings, myband.bandid)
+
+            #_rl = list(self.readings.values())
+            #vals = []
+            #[vals.extend(j) for j in _rl]
+            #self.band_signal_strength = factory(vals, self.bandid)
             return self.band_signal_strength
         # --------------------------------
         resu = []
@@ -371,28 +406,26 @@ def main():
         initial_state = flexr.save_current_state()
         print('initializing dbg flex state')
         flexr.do_cmd_list(postproc.INITIALZE_FLEX)
-        bandr = Bandreadings(
-            #['14010000', '14073400', '14110000', '14220000'], \
-            #['07073000', '07122000', '07219000', '07295000'], \
-            ['3_500_000', '3_700_000', '3_983_000', '4_000_000'], \
-            flexr)
+        bandr = Bandreadings('20', flexr)
         print('start scanning for noise')
         bss: SMeterAvg = bandr.doit()
+        if False:
 
-        # with open('banddata.json', 'w') as jso:  # jsonpickle.encode
-        #_ = jsonpickle.encode(bss)
-        # jso.write(_)
+            with open('banddata.json', 'w') as jso:  # jsonpickle.encode
+                _ = jsonpickle.encode(bss)
+                jso.write(_)
 
-        # with open('banddata.json', 'r') as jsi:
-        #aa = jsi.readline()
-        #cpybss = jsonpickle.decode(aa)
-        # if str(bss) != str(cpybss):
-        #print('bss <> cpybss')
+            with open('banddata.json', 'r') as jsi:
+                aa = jsi.readline()
+                cpybss = jsonpickle.decode(aa)
+
+            if str(bss) != str(cpybss):
+                print('bss <> cpybss')
 
         print('end scanning for noise')
         print(f'band noise is {bandr.band_signal_strength}')
 
-    except RuntimeError:
+    except RuntimeError as re:
         raise
     except Exception as e:
         #a = 0

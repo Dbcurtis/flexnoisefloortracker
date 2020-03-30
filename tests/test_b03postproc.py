@@ -31,9 +31,9 @@ class Testpostproc(unittest.TestCase):
         bdl = list(_BAND_DATA.items())
         it1 = bdl[0]
         bp = BandPrams(it1)
-        exp80str = 'band:80, enabled: False, chan: False, [3500000.0, 3550000.0, 3600000.0, 3650000.0, 3700000.0, 3750000.0, 3800000.0, 3850000.0, 3900000.0, 3950000.0, 4000000.0]'
+        exp80str = 'band:80, enabled: False, chan: False, [3500000, 3550000, 3600000, 3650000, 3700000, 3750000, 3800000, 3850000, 3900000, 3950000, 4000000]'
         self.assertEqual(exp80str, str(bp))
-        exp80str = 'BandPrams: band:80, enabled: False, chan: False, [3500000.0, 3550000.0, 3600000.0, 3650000.0, 3700000.0, 3750000.0, 3800000.0, 3850000.0, 3900000.0, 3950000.0, 4000000.0]'
+        exp80str = 'BandPrams: band:80, enabled: False, chan: False, [3500000, 3550000, 3600000, 3650000, 3700000, 3750000, 3800000, 3850000, 3900000, 3950000, 4000000]'
         self.assertEqual(exp80str, repr(bp))
         self.assertEqual('80', bp.bandid)
         cmds: Tuple[str, ...] = bp.get_freq_cmds()
@@ -56,7 +56,8 @@ class Testpostproc(unittest.TestCase):
         self.assertFalse(bp.is_enabled())
 
         self.assertEqual(10, len(BANDS))
-        self.assertEqual(0, enable_bands(['40', '20', '10', ], val=False))
+        # turn off default bands
+        self.assertEqual(3, enable_bands(['40', '20', '30', ], val=False))
         self.assertEqual(
             0, sum([1 for b in BANDS.values() if b.is_enabled()]))
         self.assertEqual(3, enable_bands(['40', '20', '10', ]))

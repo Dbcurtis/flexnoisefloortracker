@@ -141,12 +141,17 @@ class SMeterAvg:
 
             def scoperv2():
 
-                self.singlenoisefreq = len(self.get_noise_freqs()) == 1
+                #self.singlenoisefreq = len(self.get_noise_freqs()) == 1
                 self.v = 2
+
+            def scoperv3():
+                self.v = 3
+                self.noise = {}
 
             scoperv0()
             scoperv1()
             scoperv2()
+            scoperv3()
 
         arg = argin
         self.freqs = {}
@@ -169,38 +174,38 @@ class SMeterAvg:
                     self.signal_st['sl'] = 'S{}'.format(_[2])
                     break
 
-    def get_noise_freqs(self, type='highnoise'):
-        """get_noise_freqs(type=val)
+    # def get_noise_freqs(self, type='highnoise'):
+        # """get_noise_freqs(type=val)
 
-        val = 'highnoise', 'midnoise', or 'lownoise'
+        # val = 'highnoise', 'midnoise', or 'lownoise'
 
-        """
-        if type not in NOISE_TYPES:
-            raise ValueError(
-                'illegal noise type: highnoise, midnoise, lownoise')
-        return {sm.freq for sm in self.noise.get(type)}
+        # """
+        # if type not in NOISE_TYPES:
+            # raise ValueError(
+                # 'illegal noise type: highnoise, midnoise, lownoise')
+        # return {sm.freq for sm in self.noise.get(type)}
 
-    def badness(self):
-        """badness()
+    # def badness(self):
+        # """badness()
 
-        returns rzdio of high noise readings to low and mid noise readings
-        calculated by nf = number of frequences checked,
-        rf is readings per freq
-        nhr is number of high readings
-        nrt is total readings
-        bad is nhr/(nrt-nhr)
+        # returns rzdio of high noise readings to low and mid noise readings
+        # calculated by nf = number of frequences checked,
+        # rf is readings per freq
+        # nhr is number of high readings
+        # nrt is total readings
+        #bad is nhr/(nrt-nhr)
 
-        """
-        result = None
-        if self.noise:
-            nlr = len(self.noise.get('lownoise'))
-            nmr = len(self.noise.get('midnoise'))
-            nhr = len(self.noise.get('highnoise'))
-            # nrt = nlr + nmr + nhr
+        # """
+        #result = None
+        # if self.noise:
+            #nlr = len(self.noise.get('lownoise'))
+            #nmr = len(self.noise.get('midnoise'))
+            #nhr = len(self.noise.get('highnoise'))
+            ## nrt = nlr + nmr + nhr
 
-            result = nhr / (nlr + nmr)
+            #result = nhr / (nlr + nmr)
 
-        return result
+        # return result
 
     def get_start_time_of_readings(self) -> List[Tuple]:
         """get_start_time_of_readings()
@@ -214,28 +219,28 @@ class SMeterAvg:
 
         return result
 
-    def get_quiet(self):  # -> SMeterAvg:
-        """get_quiet()
+    # def get_quiet(self):  # -> SMeterAvg:
+        # """get_quiet()
 
-        returns new SMeterAvg using only the midnoise and lownoise readings if badness is less than
-        0.2
-        """
-        result = None
-        #_debugb = self.badness()
-        if self.badness() < 0.334:
-            result = SMeterAvg(self.noise.get('midnoise') +
-                               self.noise.get('lownoise'), self.band)
-        return result
+        # returns new SMeterAvg using only the midnoise and lownoise readings if badness is less than
+        # 0.2
+        # """
+        #result = None
+        ##_debugb = self.badness()
+        # if self.badness() < 0.334:
+        # result = SMeterAvg(self.noise.get('midnoise') +
+        # self.noise.get('lownoise'), self.band)
+        # return result
 
-    def get_noise(self):  # -> SMeterAvg:
-        """get_noise()
+    # def get_noise(self):  # -> SMeterAvg:
+        # """get_noise()
 
-        returns new SMeterAvg using only the midnoise and high noise readings
-        """
+        # returns new SMeterAvg using only the midnoise and high noise readings
+        # """
 
-        result = SMeterAvg(self.noise.get('midnoise') +
-                           self.noise.get('highnoise'), self.band)
-        return result
+        # result = SMeterAvg(self.noise.get('midnoise') +
+        # self.noise.get('highnoise'), self.band)
+        # return result
 
     def __str__(self):
         result = ''
@@ -340,30 +345,30 @@ def factory(arg, *args, **kwargs):
     return None
 
 
-def get_quiet(sma: SMeterAvg) -> SMeterAvg:
-    """get_quiet()
+# def get_quiet(sma: SMeterAvg) -> SMeterAvg:
+    # """get_quiet()
 
-    returns new SMeterAvg using only the midnoise and lownoise readings if badness is less than
-    0.2
-    """
-    result = sma
-    #_debugb = self.badness()
-    if sma.badness() < 0.334:
-        result = SMeterAvg(sma.noise.get('midnoise') +
-                           sma.noise.get('lownoise'), sma.band)
-    return result
+    # returns new SMeterAvg using only the midnoise and lownoise readings if badness is less than
+    # 0.2
+    # """
+    #result = sma
+    ##_debugb = self.badness()
+    # if sma.badness() < 0.334:
+    # result = SMeterAvg(sma.noise.get('midnoise') +
+    # sma.noise.get('lownoise'), sma.band)
+    # return result
 
 
-def get_noise(sma: SMeterAvg) -> SMeterAvg:
-    """get_noise()
+# def get_noise(sma: SMeterAvg) -> SMeterAvg:
+    # """get_noise()
 
-    returns new SMeterAvg using only the midnoise and high noise readings
-    """
-    result = sma
-    if len(sma.noise.get('highnoise')):
-        result = SMeterAvg(sma.noise.get('midnoise') +
-                           sma.noise.get('highnoise'), sma.band)
-    return result
+    # returns new SMeterAvg using only the midnoise and high noise readings
+    # """
+    #result = sma
+    # if len(sma.noise.get('highnoise')):
+    # result = SMeterAvg(sma.noise.get('midnoise') +
+    # sma.noise.get('highnoise'), sma.band)
+    # return result
 
 
 def main():

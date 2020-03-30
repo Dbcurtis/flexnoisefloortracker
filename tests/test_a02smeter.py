@@ -7,7 +7,7 @@ import datetime
 import unittest
 import random
 import context
-import smeter
+#import smeter
 from smeter import SMeter
 import jsonpickle
 

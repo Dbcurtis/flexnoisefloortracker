@@ -7,13 +7,14 @@ import os
 import logging
 import logging.handlers
 import time
+from typing import List, Sequence, Dict, Mapping, Tuple, Any
 # from statistics import mean
-#import mysql.connector as mariadb
+# import mysql.connector as mariadb
 from userinput import UserInput
-# from smeter import SMeter, _SREAD
+from smeter import SMeter
 # from bandreadings import Bandreadings
-#import dbtools
-#import postproc
+# import dbtools
+# import postproc
 
 LOGGER = logging.getLogger(__name__)
 
@@ -79,10 +80,10 @@ FLEX_CAT_WRITE = frozenset(  # this variable is badly named
 
 FLEX_CAT_READ_ONLY = FLEX_CAT_ALL - FLEX_CAT_WRITE
 # which is \
-#'ZZRY', 'ZZNR', 'ZZMA', 'ZZAG', 'ZZRX', 'ZZLB', 'ZZXS', 'ZZDE', \
-#'ZZBI', 'ZZMG', 'ZZFA', 'ZZME', 'ZZPC', 'ZZFI', 'ZZRG', 'ZZRW', \
-#'ZZFJ', 'ZZLE', 'ZZAR', 'ZZRT', 'ZZGT', 'ZZAI', 'ZZFB', 'ZZIF', \
-#'ZZLF', 'ZZXG', 'ZZNL', 'ZZMD', 'ZZAS'
+# 'ZZRY', 'ZZNR', 'ZZMA', 'ZZAG', 'ZZRX', 'ZZLB', 'ZZXS', 'ZZDE', \
+# 'ZZBI', 'ZZMG', 'ZZFA', 'ZZME', 'ZZPC', 'ZZFI', 'ZZRG', 'ZZRW', \
+# 'ZZFJ', 'ZZLE', 'ZZAR', 'ZZRT', 'ZZGT', 'ZZAI', 'ZZFB', 'ZZIF', \
+# 'ZZLF', 'ZZXG', 'ZZNL', 'ZZMD', 'ZZAS'
 
 
 class Flex:
@@ -134,7 +135,7 @@ class Flex:
             repl = self.do_cmd('ZZFA;')
             initfreq = int(repl[4:-1])
             cmd = f'ZZFA{int(initfreq + 30000) :011d};'
-            #testres = self.do_cmd(cmd)
+            # testres = self.do_cmd(cmd)
             if self.do_cmd(cmd) != cmd:
                 raise Exception('Slice A is Locked, aborting')
 
@@ -172,16 +173,16 @@ class Flex:
         if isinstance(cset, set):
             clist.sort()
 
-        #resultlst = []
-        #cnt = 0
+        # resultlst = []
+        # cnt = 0
         # for cmd in clist:
-            #aa = self.do_cmd(cmd)
+            # aa = self.do_cmd(cmd)
             # if not '?;' in aa:
             # resultlst.append(aa)
             # print(f'{cnt}: cmd {cmd}: {aa}')
-            #cnt += 1
+            # cnt += 1
 
-        #[self.do_cmd(cmd) for cmd in clist]
+        # [self.do_cmd(cmd) for cmd in clist]
         """expected ?
         ZZFJ VFO B DSP Filter Index
         ZZAS VFO B AGC Threshold (0-100)
@@ -193,7 +194,7 @@ class Flex:
         ZZFB VFO B Frequency (11 digit Hz)
         ZZRW VFO B RIT Frequency
         """
-        #aa = len(resultlst)
+        # aa = len(resultlst)
         resultlst = [_ for _ in [self.do_cmd(
             cmd) for cmd in clist] if _ != '?;']
 
@@ -233,7 +234,50 @@ class Flex:
         self._ui.close()
         self.is_open = self._ui.serial_port.is_open
 
-    def get_cat_data(self, cmd_list, freq):
+    def get_cat_dataA(self, cmd_list: List[Tuple[Any, ...]]) -> List[Any]:
+        results: List[SMeter] = []
+        freq = None
+
+        for cmd in cmd_list:
+            result = None
+            c = cmd[0][0:4]
+            if c == 'wait':
+                delay = float(cmd[0][4:])
+                time.sleep(delay)
+                continue
+
+            if c not in FLEX_CAT_ALL:
+                raise Exception('illegal flex command')
+
+            result = self._ui.serial_port.docmd(cmd[0])
+            if c == 'ZZFA':
+                while not result.startswith('ZZFA'):
+                    result = self._ui.serial_port.docmd(cmd[0])
+                freqa = cmd[0][4:-1]
+                freq = int(freqa)
+
+            if cmd[1]:  # process the result if provided
+                _ = result.split(';')
+                vals = None
+                if len(_) > 2:
+                    # extract the results from the command
+                    try:
+
+                        vals = [int(ss[4:]) for ss in _ if ss]
+                    except ValueError as ve:
+                        a = 0
+                        raise ve
+                    # and get the average
+                    avg = int(round(sum(vals) / len(vals)))
+                    result = f'ZZSM{avg :03d};'  # .format(avg)
+
+                # process the results by code in cmd[1]
+                result = cmd[1]((result, freq))
+            results.append(result)
+
+        return results
+
+    def get_cat_data(self, cmd_list: List[Tuple[Any, ...]], freq):
         """get_cat_data(cmd_list)
 
         returns a list of the raw or processed result from Cat results
@@ -252,10 +296,13 @@ class Flex:
                 _ = result.split(';')
                 vals = None
                 if len(_) > 2:
-                    vals = [int(ss[4:]) for ss in _]
+                    # extract the results from the command
+                    vals = [int(ss[4:]) for ss in _ if ss]
+                    # and get the average
                     avg = int(round(sum(vals) / len(vals)))
-                    result = 'ZZSM{:03d};'.format(avg)
+                    result = f'ZZSM{avg :03d};'  # .format(avg)
 
+                # process the results by code in cmd[1]
                 result = cmd[1]((result, freq))
             results.append(result)
 
@@ -302,8 +349,8 @@ if __name__ == '__main__':
     THE_LOGGER.addHandler(LC_HANDLER)
     THE_LOGGER.info('flex executed as main')
     # LOGGER.setLevel(logging.DEBUG)
-    #UI = UserInput()
-    #NOISE = None
+    # UI = UserInput()
+    # NOISE = None
     try:
         main()
         normalexit = True

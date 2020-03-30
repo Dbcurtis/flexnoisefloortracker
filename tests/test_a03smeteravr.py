@@ -115,9 +115,9 @@ class Testsmeteravg(unittest.TestCase):
             repr(sma))
         self.assertEqual(
             '[b:20, -91.00000adBm, -91.00000mdBm, S6, var: 0.00000, stddv: 0.00000]', str(sma))
-        self.assertFalse(sma.noise.get('highnoise'))
-        self.assertFalse(sma.noise.get('lownoise'))
-        self.assertEqual(3, len(sma.noise.get('midnoise')))
+        # self.assertFalse(sma.noise.get('highnoise'))
+        # self.assertFalse(sma.noise.get('lownoise'))
+        #self.assertEqual(3, len(sma.noise.get('midnoise')))
         self.assertEqual(-91.0, sma.dBm.get('mdBm'))
 
         smlf = smeteravg.factory(sml, 20)
@@ -125,10 +125,11 @@ class Testsmeteravg(unittest.TestCase):
             '[b:20, -91.00000adBm, -91.00000mdBm, S6, var: 0.00000, stddv: 0.00000]', str(smlf))
 
         def get_readings(testing):
-            file = open(testing, 'r')
-            resu = []
-            resu = [jsonpickle.decode(_) for _ in file.readlines()]
-            file.close()
+            with open(testing, 'r') as file:
+                #file = open(testing, 'r')
+                resu = []
+                resu = [jsonpickle.decode(_) for _ in file.readlines()]
+            # file.close()
             res = resu[0]
             return res
             # newsmaobj = SMeterAvg(res.smlist, res.band)
@@ -145,7 +146,7 @@ class Testsmeteravg(unittest.TestCase):
 
         # self.assertEqual(
         # '[-91.00000adBm, -91.00000mdBm, S6, var: 0.00000, stddv: 0.00000]', str(newv1object))
-        self.assertEqual(2, newv1object.v,
+        self.assertEqual(3, newv1object.v,
                          'check current version of SMeterAvr')
         _ = 00
 
@@ -161,20 +162,20 @@ class Testsmeteravg(unittest.TestCase):
         self.assertEqual("{'var': 3.5, 'stddv': 1.8708286933869707, 'sl': 'S6'}",
                          str(sma.signal_st))
 
-        self.assertEqual(1, len(sma.noise.get('highnoise')))
-        self.assertEqual(1, len(sma.noise.get('lownoise')))
-        self.assertEqual(4, len(sma.noise.get('midnoise')))
+        #self.assertEqual(1, len(sma.noise.get('highnoise')))
+        #self.assertEqual(1, len(sma.noise.get('lownoise')))
+        #self.assertEqual(4, len(sma.noise.get('midnoise')))
 
-    def test03_get_noise_freqs(self):
-        """test03_get_noise_freqs()
+    # def test03_get_noise_freqs(self):
+        # """test03_get_noise_freqs()
 
-        """
-        sml = [SMeter((f'ZZSM{98+i*2:03};', 14_100_000 + i * 10000)) for i in range(6)]
-        sma = SMeterAvg(sml, 20)
-        hna = sma.get_noise_freqs('highnoise')
-        mna = sma.get_noise_freqs('midnoise')
-        lna = sma.get_noise_freqs('lownoise')
-        a = 0
+        # """
+        # sml = [SMeter((f'ZZSM{98+i*2:03};', 14_100_000 + i * 10000)) for i in range(6)]
+        #sma = SMeterAvg(sml, 20)
+        #hna = sma.get_noise_freqs('highnoise')
+        #mna = sma.get_noise_freqs('midnoise')
+        #lna = sma.get_noise_freqs('lownoise')
+        #a = 0
 
 
 if __name__ == '__main__':

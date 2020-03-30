@@ -52,6 +52,38 @@ class SMeter:
 
     """
 
+    def __init__(self, argin):
+
+        arg = argin[0]
+        freq = argin[1]
+        try:
+            _var = int(arg[4:-1])  # get the ABC
+        except Exception as _jj:
+            print(_jj)
+            _var = 0
+        _dBm = (_var / 2.0) - 140.0
+        self.signal_st = {'sl': 's?'}
+        self.signal_st['dBm'] = _dBm
+        self.time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        self.freq = freq
+
+        if self.signal_st.get('dBm') <= -127.0:
+            self.signal_st['sl'] = 'S0'
+        else:
+            for _ in _SREAD:
+                if self.signal_st.get('dBm') >= _[0] \
+                   and self.signal_st.get('dBm') < _[1]:
+                    self.signal_st['sl'] = f'S{_[2]}'  # .format(_[2])
+                    break
+
+    def __str__(self):
+        return f'[SMeter: freq:{self.freq}, {self.signal_st.get("dBm") :.5f}dBm, { self.signal_st.get("sl")}]' \
+            #  .format(self.freq, self.signal_st.get('dBm'), self.signal_st.get('sl'))
+
+    def __repr__(self):
+        return f'SMeter: freq:{self.freq}, {self.signal_st.get("dBm") :.5f}dBm, {self.signal_st.get("sl")}' \
+            #  .format(self.freq, self.signal_st.get('dBm'), self.signal_st.get('sl'))
+
     def __lt__(self, other):
         if isinstance(other, self.__class__):
             return self.signal_st.get('dBm') < other.signal_st.get('dBm')
@@ -84,38 +116,6 @@ class SMeter:
 
     def __hash__(self):
         return id(self)
-
-    def __init__(self, argin):
-
-        arg = argin[0]
-        freq = argin[1]
-        try:
-            _var = int(arg[4:-1])  # get the ABC
-        except Exception as _jj:
-            print(_jj)
-            _var = 0
-        _dBm = (_var / 2.0) - 140.0
-        self.signal_st = {'sl': 's?'}
-        self.signal_st['dBm'] = _dBm
-        self.time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        self.freq = freq
-
-        if self.signal_st.get('dBm') <= -127.0:
-            self.signal_st['sl'] = 'S0'
-        else:
-            for _ in _SREAD:
-                if self.signal_st.get('dBm') >= _[0] \
-                   and self.signal_st.get('dBm') < _[1]:
-                    self.signal_st['sl'] = 'S{}'.format(_[2])
-                    break
-
-    def __str__(self):
-        return '[SMeter: freq:{}, {:.5f}dBm, {}]' \
-               .format(self.freq, self.signal_st.get('dBm'), self.signal_st.get('sl'))
-
-    def __repr__(self):
-        return 'SMeter: freq:{}, {:.5f}dBm, {}' \
-               .format(self.freq, self.signal_st.get('dBm'), self.signal_st.get('sl'))
 
 
 def main():

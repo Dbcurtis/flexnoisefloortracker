@@ -5,9 +5,13 @@ Test file for need
 
 import time
 import unittest
+from typing import List, Sequence, Dict, Mapping, Set
 import context
+from postproc import BANDS, BandPrams, GET_SMETER_PROTO
 from userinput import UserInput
 from flex import Flex
+from smeter import SMeter
+from smeteravg import SMeterAvg
 import postproc
 
 
@@ -127,7 +131,7 @@ class Testflex(unittest.TestCase):
 
         _aa = int([i for i in newsavedstate if 'ZZFA' in i][0][-12:-1])
         _aa = 14000000 if _aa != 14000000 else 15000000
-        aat = f'ZZFA{_aa:011};'
+        # aat = f'ZZFA{_aa:011};'
 
         self.flex.do_cmd(f'ZZFA{_aa:011};')
         modstate = self.flex.save_current_state()
@@ -176,6 +180,39 @@ class Testflex(unittest.TestCase):
             self.fail("unexpected exception")
             a = 0
             b = 0
+
+    def test11_get_cat_dataA(self):
+        myband: BandPrams = BANDS['20']
+
+        proto: List[Tuple[Any, Any]] = GET_SMETER_PROTO[:]
+        cmdlst: List[Tuple[Any, Any]] = []
+        for cmd in myband.get_freq_cmds():
+            cmdlst.extend([(cmd, None)])
+            cmdlst.extend(proto)
+
+        cmdresult: List[Any] = self.flex.get_cat_dataA(cmdlst)
+        sm_readings: List[SMeter] = [_ for _ in cmdresult if isinstance(_, SMeter)]
+        sm_readings.sort()
+
+        cmdresultB: List[Any] = [_ for _ in cmdresult if not isinstance(_, SMeter)]
+        cmdrestup = tuple(cmdresultB)
+        self.assertEqual(myband.get_freq_cmds(), cmdrestup)
+
+        maplist: List[Mapping[str, float]] = [list(_.signal_st.items()) for _ in sm_readings]
+        keyset: Set[str] = set([list(sm.signal_st.items())[0][1] for sm in sm_readings])
+
+        noisedic: Dict[str, List[SMeter]] = {}
+        for k in keyset:
+            noisedic.setdefault(k, [])
+
+        for ls in maplist:
+            noisedic[ls[0][1]].append(ls[1][1])
+
+        key = sorted(list(noisedic.keys()))[0]
+        dkdk: List[SMeter] = [sm for sm in sm_readings if sm.signal_st['sl'] == key]
+
+        sma: SMeterAvg = SMeterAvg(dkdk, myband.bandid)
+        a = 0
 
 
 if __name__ == '__main__':
