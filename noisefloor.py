@@ -23,6 +23,7 @@ from flex import Flex
 import postproc
 import noisefloor
 from postproc import BANDS, BandPrams
+from qdatainfo import NFQ
 #from trackermain import QUEUES, STOP_EVENTS, CTX
 
 
@@ -138,6 +139,9 @@ class NFResult:
     def completed(self) -> bool:
         return self._started and self._ended
 
+    def gen_sql(self):
+        pass
+
 
 class Noisefloor:
     """Noisefloor(flex, out_queue, stop_event, testdata=None, testing=False)
@@ -229,8 +233,8 @@ class Noisefloor:
         """
         # for br in noisefloordata:
         #br.flexradio = None
-
-        self.out_queue.put(noisefloordata)
+        _nfq = NFQ(noisefloordata)
+        self.out_queue.put(_nfq)
         # print (f'queued {noisefloordata}')
 
     def _oneloopallbands(self) -> noisefloor.NFResult:

@@ -5,6 +5,7 @@ import os
 import sys
 import logging
 import logging.handlers
+from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict
 import serial
 # from userinput import UserInput
 
@@ -15,7 +16,7 @@ LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/myserial'
 
 
-def byte_2_string(byte_string):
+def byte_2_string(byte_string) -> str:
     """byte_2_string(byte_string)
 
     Takes a byte array (byte_string) and returns the corrosponding string
@@ -84,21 +85,21 @@ class MySerial(serial.Serial):  # pylint: disable=too-many-ancestors
         MySerial._dbidx += 1
         return result
 
-    def docmd(self, cmd):
+    def docmd(self, cmd: str):
         """docmd(cmd)
 
         cmd is a command string that can be terminated by a ; but if not
-        it will be added
+        the ; will be added
 
         returns the response to the command
         """
         _sp = self
-        cmd1 = cmd
+        cmd1: str = cmd
         if not cmd.endswith(';'):
             cmd1 = cmd1 + ';'
 
         _sp.write(string_2_byte(cmd1))
-        cmd2 = cmd1[0:4] + ';'
+        cmd2: str = cmd1[0:4] + ';'
         _sp.write(string_2_byte(cmd2))
         result = byte_2_string(_sp.dread(9999))
         _ = result.split(';')

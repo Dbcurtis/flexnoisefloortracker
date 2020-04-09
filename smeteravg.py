@@ -10,7 +10,7 @@ import datetime
 import math
 
 from smeter import _SREAD, SMeter
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Sequence, Mapping
 
 
 LOGGER = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ class SMeterAvg:
 
     """
 
-    def __init__(self, argin, band):
+    def __init__(self, argin: List[SMeter], band):
         def _init_phase1(arg):
             self.freqs = {_.freq for _ in arg}
             # tot = sum([_sm.signal_st.get('dBm') for _sm in arg])
@@ -206,14 +206,16 @@ class SMeterAvg:
             #result = nhr / (nlr + nmr)
 
         # return result
+    def gen_sql(self):
+        pass
 
-    def get_start_time_of_readings(self) -> List[Tuple]:
+    def get_start_time_of_readings(self) -> List[Tuple[str, int]]:
         """get_start_time_of_readings()
 
         returns a list of tupales with (str datetime, int freq)
         for all readings that make up the average
         """
-        result = []
+        result: List[Tuple[str, int]] = []
         for sm in self.smlist:
             result.append((sm.time, sm.freq,))
 
@@ -280,7 +282,7 @@ var: {s.signal_st.get('var'):.5f}, stddv: {s.signal_st.get('stddv'):.5f}]"
 # -----------------------------------
 
 
-def get_median(lst) -> float:
+def get_median(lst: List[SMeter]) -> float:
     """get_median(lst)
 
     lst is a list/of SMeter
@@ -293,9 +295,9 @@ def get_median(lst) -> float:
         raise ValueError('list needs at least one element')
 
     lst.sort()
-    lstsize = len(lst)
-    iseven = (lstsize % 2) == 0
-    median = None
+    lstsize: int = len(lst)
+    iseven: bool = (lstsize % 2) == 0
+    median: float = None
     if isinstance(lst[0], SMeter):
 
         if iseven:

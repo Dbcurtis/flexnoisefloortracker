@@ -92,13 +92,13 @@ class Flex:
     represents the state of the flex radio.
     """
 
-    def __init__(self, ui):
+    def __init__(self, ui: UserInput):
         """Constructor
         ui is a UserInput object that is connected to the CAT port for the flex
         """
-        self._ui = ui
-        self.is_open = False
-        self.saved_state = []
+        self._ui: UserInput = ui
+        self.is_open: bool = False
+        self.saved_state: List[str] = []
 
     def __str__(self):
         cp = self._ui.comm_port if self._ui.comm_port else "unspecified"
@@ -148,7 +148,7 @@ class Flex:
 
         return result
 
-    def do_cmd(self, cmd):
+    def do_cmd(self, cmd: str) -> str:
         """do_cmd(cmd)
 
         """
@@ -158,14 +158,14 @@ class Flex:
             cmd = f'{cmd};'
         return self._ui.serial_port.docmd(cmd)
 
-    def do_cmd_list(self, cset):
+    def do_cmd_list(self, cset: Sequence) -> List[str]:
         """do_cmd_list(clist)
 
         cset is a list or a set.
         If a set, it is converted into a list and sorted.
 
         """
-        resultlst = []
+        resultlst: List[str] = []
         if not self.is_open:
             return self.saved_state
 

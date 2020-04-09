@@ -5,12 +5,14 @@
 import sys
 import os
 import concurrent.futures
+from typing import List, Tuple, Dict, Set, Mapping, Sequence, Any
 
 from queue import Empty as QEmpty, Full as QFull
 
 import logging
 import logging.handlers
 import multiprocessing as mp
+
 import time
 import datetime
 from collections import deque
@@ -22,6 +24,7 @@ import userinput
 import flex
 from flex import Flex
 from noisefloor import Noisefloor
+from qdatainfo import DataQ, DbQ, DpQ, LWQ
 
 
 LOGGER = logging.getLogger(__name__)
@@ -85,10 +88,10 @@ class DBwriter:
     """
 
     def __init__(self, thread_info):
-        self.dpQ_IN = thread_info[3]['dbQ']
-        self.execute = thread_info[0]
-        self.barrier = thread_info[1]
-        self.stop_event = thread_info[2]
+        self.dpQ_IN: CTX.JoinableQueue = thread_info[3]['dbQ']
+        self.execute: bool = thread_info[0]
+        self.barrier: ctx.Barrier = thread_info[1]
+        self.stop_event: CTX.Event = thread_info[2]
 
     def run(self):
         """run()
@@ -97,10 +100,10 @@ class DBwriter:
         if not self.execute:
             return
 
-        indata = Deck(100)  # deque([])
+        indata: Deck = Deck(100)  # deque([])
         self.barrier.wait()
 
-        print ('Aggratator started')
+        print ('DBwriter started')
 
         while not self.stop_event.wait(10):
             while True:
@@ -144,11 +147,11 @@ class Aggratator:
     """
 
     def __init__(self, thread_info, aggfn=jjj):
-        self.dpQ_IN = thread_info[3]['dpQ']
-        self.dbQ_OUT = thread_info[3]['dbQ']
-        self.execute = thread_info[0]
+        self.dpQ_IN: CTX.JoinableQueue = thread_info[3]['dpQ']
+        self.dbQ_OUT: CTX.JoinableQueue = thread_info[3]['dbQ']
+        self.execute: bool = thread_info[0]
         self.barrier = thread_info[1]
-        self.stop_event = thread_info[2]
+        self.stop_event: CTX.Event = thread_info[2]
         self.consolidate = Consolidate()
         self.fn = aggfn
 
@@ -222,7 +225,11 @@ def Get_LW(rawDataQ_OUT):
     """
     _lw = LocalWeather()
     _lw.load()
-    rawDataQ_OUT.put(_lw)
+    content: str = _lw.gen_sql()
+    pkg: LWQ = LWQ(content)
+    rawDataQ_OUT.put(pkg)
+
+    # rawDataQ_OUT.put(_lw)
 
 
 def Get_NF(rawDataQ_OUT):
@@ -556,7 +563,7 @@ def shutdown(futures, queues, stopevents):
             time.sleep(0.001)
 
 
-def main(ctx, hours=0.5):
+def main(hours: float = 0.5):
     """main(ctx, hours=0.5)
 
     """
@@ -564,22 +571,25 @@ def main(ctx, hours=0.5):
     queues = QUEUES
     # need to log starting
     # setup thread processor
-    timetup = (hours, 60 * hours, 3600 * hours,)
-    runtimehours = hours
-    runtimemin = 60 * runtimehours
-    runtimesec = 60 * runtimemin
+    # (hours, min, seconds)
+    timetup: Tuple[float, ...] = (hours, 60 * hours, 3600 * hours,)
+    runtimehours: float = float(hours)
+    runtimemin: float = 60 * runtimehours
+    runtimesec: float = 60 * runtimemin
 
-    bollst = [True, True, True, True, True]
-    bc = sum([1 for _ in bollst if _]) + 1
+    # turn on all the threads
+    bollst: List[bool] = [True, True, True, True, True]
+    bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
 
-    barrier = ctx.Barrier(bc)
+    barrier: ctx.Barrier = ctx.Barrier(bc)
 
-    trackerinitialized = time.monotonic()
-    trackerTimeout = trackerinitialized + timetup
+    trackerinitialized: float = time.monotonic()  # returns seconds
+    # >>>>>>>>>>>>>>>>>>>>>>>>error here
+    trackerTimeout: float = trackerinitialized + timetup[2]
 
     trackerstarted = None
     while (True):
-        futures = {}
+        futures: Dict[str, Any] = {}
         with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
 
             futures = {
@@ -616,8 +626,8 @@ def main(ctx, hours=0.5):
             shutdown(futures, queues, STOP_EVENTS)
             # break  # breack out of ppex
             barrier.wait()  # start them all working
-            trackerstarted = time.monotonic()
-            trackerschedend = trackerstarted + runtimesec
+            trackerstarted: float = time.monotonic()
+            trackerschedend: float = trackerstarted + runtimesec
             time.monotonic() < trackerschedend
             while time.monotonic() < trackerTimeout:
                 time.sleep(5)
@@ -653,15 +663,21 @@ if __name__ == '__main__':
     THE_LOGGER.addHandler(LC_HANDLER)
     THE_LOGGER.info('trackermain executed as main')
     # LOGGER.setLevel(logging.DEBUG)
-
-    ctx = mp.get_context('spawn')
+    _aa = time.gmtime(0)
+    if 'time.struct_time(tm_year=1970, tm_mon=1, tm_mday=1, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=3, tm_yday=1, tm_isdst=0)' != str(time.gmtime(0)):
+        print(str(time.gmtime(0)))
+        raise SystemError(
+            'Wrong epic starting date/time, must be Jan 1, 1970 midnight utc')
 
     try:
-        main(ctx)
+        main()
 
     except(Exception, KeyboardInterrupt) as exc:
         print(exc)
         sys.exit(str(exc))
+    except SystemError as se:
+        print(se)
+        sys.exit(str(se))
 
     finally:
         sys.exit('normal exit')

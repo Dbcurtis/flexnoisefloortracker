@@ -4,6 +4,7 @@
 import os
 import logging
 import logging.handlers
+from typing import List, Sequence, Dict, Mapping, Any
 #import mysql.connector as mariadb
 #import datetime
 
@@ -15,7 +16,7 @@ LOG_FILE = '/medfordor'
 # the following is useful for finding out what these values mean
 # https://www.geonames.org
 
-Medford_or_Info = {
+Medford_or_Info: Dict[str, Any] = {
     "id": 5740099,
     "coord": {
         "lon": -122.875587,

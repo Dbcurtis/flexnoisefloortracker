@@ -1,29 +1,20 @@
 #!/usr/bin/env python3
 
-"""This script prompts for user input for serial port etc."""
+"""bandreadings.py contains code to get the get the noise floor for a particular band"""
 
 import sys
 import os
 import logging
 import logging.handlers
-from typing import List, Sequence, Dict, Mapping
-# import datetime
-import time
-import math
-# import time
+from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict
 from statistics import mean
 import jsonpickle
 from postproc import BANDS, BandPrams, GET_SMETER_PROTO
-# import flex
 from flex import Flex
-#import smeteravg
 from smeteravg import factory, SMeterAvg
-# import mysql.connector as mariadb
 from userinput import UserInput
 from smeter import SMeter
-#import dbtools
 import postproc
-from typing import List
 
 
 LOGGER = logging.getLogger(__name__)
@@ -31,15 +22,10 @@ LOGGER = logging.getLogger(__name__)
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/bandreadings'
 
-#_DT = dbtools.DBTools()
-#_DB = _DT.dbase
-#_CU = _DT.cursor
-# jsonpickle.set_preferred_backend('json')
-
 
 # f'ZZSM{98+i*2:03};'
 
-def GET_BAND(wl): return math.trunc(round(wl) / 10) * 10
+#def GET_BAND(wl): return math.trunc(round(wl) / 10) * 10
 
 
 class Bandreadings:
@@ -67,12 +53,10 @@ class Bandreadings:
         self.v: int = 4
         self.flexradio: Flex = flexradio
         self.bandid = self.myband.bandid
-        # self.bandid = bandid if bandid else str(
-        # (GET_BAND(299792458.0 / mean(self.freqi))))
         self.band_signal_strength: SMeterAvg = None
 
-    # def makefreqcmd(self, a):
-        # return f'ZZFA{int(a) :011d};'
+    def makefreqcmd(self, a):
+        return f'ZZFA{int(a) :011d};'
 
 # signal_st = {'var': None, 'stddv': None, 'sl': None, }
 
@@ -114,26 +98,6 @@ class Bandreadings:
 
         self.get_readings(
             testing=testing)  # saved in self.band_signal_strength
-
-        #current_bss = self.band_signal_strength
-        #cbssstr = str(current_bss)
-        #updated_bss = None
-        #_a = current_bss.badness()
-        # if current_bss.signal_st.get('stddv') > 1.5:
-        ##updated_bss = current_bss.get_quiet()
-        #updated_bss = get_quiet(current_bss)
-
-        # if updated_bss:
-        ## _a = updated_bss.badness()
-
-        # if updated_bss.badness() < 0.21:
-        #self.band_signal_strength = updated_bss
-        #self.useable = True
-        # else:
-        #self.useable = self.changefreqs()
-        ##a = 0
-        # else:
-        #self.useable = True
 
         return self.band_signal_strength
 
@@ -232,12 +196,11 @@ class Bandreadings:
         ##a = 0
         # return avgresa
 
-    def changefreqs(self, testing=None) -> bool:
-        """changefreqs(testing=None)
+    # def changefreqs(self, testing=None) -> bool:
+        # """changefreqs(testing=None)
 
-
-        """
-        return False
+        # """
+        # return False
         #bs = self.band_signal_strength
         #readings = self.cf_get_readings(testing=testing)
         #bsmod = self.cf_process_readings(readings)
@@ -311,7 +274,7 @@ class Bandreadings:
 
             key = sorted(list(noisedic.keys()))[0]
             low_noise_readings: List[SMeter] = [sm for sm in sm_readings if sm.signal_st['sl'] == key]
-            self.band_signal_strength = SMeterAvg(
+            self.band_signal_strength: SMeterAvg = SMeterAvg(
                 low_noise_readings, myband.bandid)
 
             #_rl = list(self.readings.values())
@@ -394,9 +357,9 @@ def main():
     # bandrd = Bandreadings(
     # ['14000000', '14073400', '14100000', '14200000'], None)
     #bd = bandrd.bandid
-    ui = UserInput()
+    ui: UserInput = UserInput()
     ui.request(port='com4')
-    flexr = Flex(ui)
+    flexr: Flex = Flex(ui)
     initial_state = None
     try:
         if not flexr.open():
@@ -439,7 +402,7 @@ def main():
 
 
 if __name__ == '__main__':
-    import trackermain
+    #import trackermain
     if not os.path.isdir(LOG_DIR):
         os.mkdir(LOG_DIR)
     LF_HANDLER = logging.handlers.RotatingFileHandler(

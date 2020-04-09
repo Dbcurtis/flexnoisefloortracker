@@ -3,17 +3,27 @@
 """gets local weather info from openweathermap.org"""
 import os
 import sys
+from typing import List, Sequence, Dict, Mapping, Any, Tuple
 from multiprocessing import freeze_support
 import logging
 import logging.handlers
 import requests
+#from dbtools import get_bigint_timestamp
 #from json.decoder import JSONDecodeError
-import jsonpickle
-# import pickle
+#import jsonpickle
+import pickle
+from queue import Empty as QEmpty
+import multiprocessing as mp
 # import mysql.connector as mariadb
-import time
-from medfordor import Medford_or_Info as MI
+from time import sleep as Sleep
 import dbtools
+#import pytz
+
+from datetime import datetime as Dtc
+from datetime import timezone
+
+from medfordor import Medford_or_Info as MI
+#import dbtools
 
 
 LOGGER = logging.getLogger(__name__)
@@ -28,9 +38,9 @@ OW_First = 'https://api.openweathermap.org/data/2.5/weather'
 
 PAYLOAD = {'id': str(MI['id']), 'APPID': '1320944048cabbe1aebe1fbe9c1c7d6c'}
 
-_DT = dbtools.DBTools()
-_DB = _DT.dbase
-_CU = _DT.cursor
+#_DT = dbtools.DBTools()
+#_DB = _DT.dbase
+#_CU = _DT.cursor
 
 _VALID_UNITS = ['std', 'metric', 'imperial']
 
@@ -38,9 +48,9 @@ _VALID_UNITS = ['std', 'metric', 'imperial']
 # jsonpickle.set_preferred_backend('json')
 
 
-def converttemp(k):
+def converttemp(k) -> List[str]:
     """converttemp(k)
-    k is degrees in Kelven
+    k is degrees in Kelven as int, float or str
 
     returns List [xK, xC, xF]
     """
@@ -58,9 +68,9 @@ def converttemp(k):
     return result
 
 
-def convertspeed(msin):
+def convertspeed(msin) -> float:
     """convertspeed(msin)
-    msin - meters per seconds
+    msin - meters per seconds as int, float or str
 
     return list (meters per sec, miles per hour)
     """
@@ -105,26 +115,45 @@ class MyTime(ComparableMixin):
 
     """
 
-    def __init__(self, timestamp=time.mktime(time.localtime())):
-        self.ts = int(timestamp)
-        localts = time.localtime(self.ts)
-        self.localats = time.asctime(localts)
-        self.utcats = time.asctime(time.gmtime(self.ts))
-        self.localtz = localts.tm_zone
-        self.localoffset = localts.tm_gmtoff / 3600  # 60*60
+    # timestamp=time.mktime(time.localtime())):
+    def __init__(self, timestamp: float = Dtc.now(timezone.utc)):
 
-    def get(self):
+        self.ts: float = float(timestamp)
+        self.utc: Dtc = Dtc.fromtimestamp(self.ts, tz=timezone.utc)
+        self.localt: Dtc = self.utc.astimezone()
+        self.localats: str = f"local: {self.localt.strftime('%Y/%m/%d %H:%M:%S')}"
+        self.utcats: str = f"UTC: {self.utc.strftime('%Y/%m/%d %H:%M:%S')}"
+        self.localtz: str = self.localt.tzname()
+        _tcs = self.localt.utcoffset()
+        self.localoffset: int = int(24 * _tcs.days + _tcs.seconds / 3600)
+        a = 0
+
+    def get_local_sql_timestamp_Notneeded(self) -> str:
+        """
+
+        YYYY-MM-DD HH:MM:SS
+
+        """
+
+        _fmt: str = '%Y-%m-%d %H:%M:%S'
+        result: str = ''
+
+        result = self.localt.strftime(_fmt)
+
+        return result
+
+    def get(self) -> List[Any]:
         """get()
 
-        returns a list of the timestamp, the utc and local times, the local time zone, and the local offset
+        returns a list of the  the utc and local times, the local time zone, and the local offset
         """
-        return [self.ts, self.utcats, self.localtz, self.localoffset]
+        return [self.utcats, self.localtz, self.localoffset]
 
     def __str__(self):
-        return f'utc: {self.utcats},  {self.localtz}: {self.localats}  {self.localoffset}'
+        return f'{self.utcats},  {self.localtz}: {self.localats}  {self.localoffset}'
 
     def __repr__(self):
-        return f'localweather.MyTime, utc: {self.utcats},  {self.localtz}: {self.localats}  {self.localoffset}'
+        return f'localweather.MyTime, {self.utcats},  {self.localtz}: {self.localats}  {self.localoffset}'
 
     # def __eq__(self, other):
         # return self.ts == other.ts
@@ -149,31 +178,45 @@ class MyTime(ComparableMixin):
     def _cmpkey(self):
         return self.ts
 
-    def get_local_time(self):
-        return time.localtime(self.ts)
+    def get_local_time(self) -> Dtc:
+        return self.localt
 
-    def get_utc_time(self):
-        return self.utcats
+    def get_utc_time(self) -> Dtc:
+        return self.utc
 
 
-def different(self, other):
+def different(arg1: Any, arg2: Any) -> bool:
     """different(other)
 
     """
 
     result = False
-    if isinstance(other, LocalWeather) and isinstance(self, LocalWeather):
-        o = other
-        mains = self.rjson['main']
-        omains = other.rjson['main']
-        return self.times['sunup'] != o.times['sunup'] or \
-            self.times['sunset'] != o.times['sunset'] or \
+    if isinstance(arg2, LocalWeather) and isinstance(arg1, LocalWeather):
+        o: LocalWeather = arg2
+        mains = arg1.rjson['main']
+        omains = arg2.rjson['main']
+        return arg1.times['sunup'] != o.times['sunup'] or \
+            arg1.times['sunset'] != o.times['sunset'] or \
             mains['temp'] != omains['temp'] or \
             mains['temp_min'] != omains['temp_min'] or \
             mains['temp_max'] != omains['temp_max'] or \
-            self.rjson['wind'] != o.rjson['wind']
+            arg1.rjson['wind'] != o.rjson['wind']
 
     return result
+
+
+_SQL_COLUMN_NAMES_LIST: List[str] = [
+    'WRECID',
+    'timerecid',
+    'RecDT',
+    'Sunset',
+    'Sunrise',
+    'Humidity',
+    'TempF',
+    'WindS',
+    'WindD',
+    'WindG',
+]
 
 
 class LocalWeather(ComparableMixin):
@@ -186,6 +229,7 @@ class LocalWeather(ComparableMixin):
     units = 'std'
     netstatus = []
     maint = {}
+    version = '00.00.01'
 
     def __init__(self):
         """LocalWeather()
@@ -226,6 +270,40 @@ class LocalWeather(ComparableMixin):
         result = str(self)
         return f'Localweather: valid:{self.valid}, {result}'
 
+    def gen_sql(self) -> str:
+        # weather fields
+        # WRECID
+        # timerecid
+        # RecDT
+        # Sunset
+        # Sunrise
+        # Humidity
+        # TempF
+        # WindS
+        # WindD
+        # WindG
+
+        mm = self.maint
+
+        tempf = mm['temp'][0][2][:-1].strip()
+        wnd = mm['wind']
+        wnds = wnd['speed'][0][1][:-3].strip()
+        wdir = wnd['dir'][:-8].strip()
+        wgust = wnd['speed'][1][1][:-3].strip()
+        hum = mm['humidity'][:-1].strip()
+
+        #sss = dbtools.get_bigint_timestamp(self.times['dt'])
+        trecdt: int = dbtools.get_bigint_timestamp(self.times['dt'])
+        tsup: int = dbtools.get_bigint_timestamp(self.times['sunup'])
+        tsdn: int = dbtools.get_bigint_timestamp(self.times['sunset'])
+
+        times = f"Sunset = {tsdn}, Sunrise = {tsup}, RecDT = {trecdt}"
+        wind = f"WindS = {wnds}, WindD = {wdir}, WindG = {wgust}"
+        htemp = f"Humidity = {hum}, TempF = {tempf}"
+
+        result: str = f'INSERT INTO weather SET {times}, {wind}, {htemp}'
+        return result
+
     def has_changed(self, other):
         result = False
         if isinstance(other, LocalWeather):
@@ -244,21 +322,21 @@ class LocalWeather(ComparableMixin):
     def load_from_other(self, other):
         if not isinstance(other, LocalWeather):
             raise ValueError('other must be a LocalWeather object')
-        self._load_from_json(other.rjson)
+        self.load_from_json(other.rjson)
 
-    def _load_from_json(self, js):
+    def load_from_json(self, js: str):
         """_load_from_json(js)
 
         Note that netstatus does not get copied over and is None
 
         """
         self.valid = True
-        self.rjson = js
-        sys = self.rjson['sys']
+        self.rjson: str = js
+        jsys = self.rjson['sys']
 
         self.times = {'dt': MyTime(self.rjson['dt']),
-                      'sunup': MyTime(sys['sunrise']),
-                      'sunset': MyTime(sys['sunset'])}
+                      'sunup': MyTime(jsys['sunrise']),
+                      'sunset': MyTime(jsys['sunset'])}
         mains = self.rjson['main']
         hum = float(mains['humidity'])
         wind = self.rjson['wind']
@@ -268,7 +346,12 @@ class LocalWeather(ComparableMixin):
         except:
             gust = 0
 
-        degree = round(float(wind['deg']), 0)
+        degree = -11.0
+        try:
+            degree = round(float(wind['deg']), 0)
+        except KeyError as ke:
+            pass
+
         rspeed = convertspeed(speed)
         rgust = convertspeed(gust)
 
@@ -294,27 +377,20 @@ class LocalWeather(ComparableMixin):
 
         try:
             self.rjson = request_status.json()
-            self._load_from_json(self.rjson)
+            self.load_from_json(self.rjson)
 
         except Exception as e:
             print(request_status)
             print(e)
 
-    # def set_Units(self, u):  # std, metric, imperial
-        # uu = u.lower()
-        # if uu not in _VALID_UNITS:
-        # raise ValueError("units must be std, metric, or imperial")
-        # self.units = uu
-
     def get_DateTime(self, local=True):
         if local:
-            return f'local: {self.times["dt"]["localats"]} {self.times["dt"]["localtz"]}'
+            return f'{self.times["dt"].localats} {self.times["dt"].localtz}'
 
-        return f'utc: {self.times["dt"]["utcats"]}'
+        return f'{self.times["dt"].utcats}'
 
-    def get_Weather(self):
-        self.rjson['main']
-        pass
+    def get_Weather(self) -> Dict[str, Any]:
+        return self.rjson['main']
 
     def get_wind(self, local=True):
         return self.maint['wind']
@@ -329,38 +405,15 @@ class LocalWeather(ComparableMixin):
 
 
 def main():
-    # _lw = LocalWeather()
-    # _lw.load()
-    # print(f'valid: {_lw.valid}')
-    # print(f'times:\t{_lw.times["dt"]}\n\tsunup:{_lw.times["sunup"]}\n\tsundown:{_lw.times["sunset"]}')
-    # print(f'hum: {_lw.maint["humidity"]}, temp: {_lw.maint["temp"][0][2]}, wind: dir {_lw.maint["wind"]["dir"]}, speed: {_lw.maint["wind"]["speed"][1][1]}')
-    # jp = jsonpickle.encode(_lw)
-    # lwj = jsonpickle.encode(_lw)
-    # duplw = jsonpickle.decode(lwj)
-    # jjjj = _lw == dupl
+    from trackermain import CTX, QUEUES
 
-    saved = []
-    #restored = []
-    #lwobjs = []
-    _lw = LocalWeather()
-    LocalWeather.__module__ = 'localweather'
+    que = QUEUES['dataQ']
 
-    # for i in range(16):
-    # _lw = LocalWeather()
-    # _lw.load()
-    # lwobjs.append(_lw)
-    # lwj = jsonpickle.encode(_lw)
-    # fl.write(lwj)
-    # print('.', end='')
-    # time.sleep(15)
-    _lw.load()
-    #aa = str(_lw)
-    #bb = repr(_lw)
-    #c = 0
-
-    with open('testlocalWeather60.json', 'w') as fl:
-        numreadings = 20
-        delaymin = 7
+    saved: List[LocalWeather] = []
+    numreadings = 10
+    fn: str = 'testlocalWeather62.pickle'
+    delaymin = 7
+    if True:
         for i in range(numreadings):
             _lw = LocalWeather()
             _lw.load()
@@ -369,39 +422,57 @@ def main():
             if i >= numreadings - 1:
                 continue
             for _ in range(4 * delaymin):
-                time.sleep(15)
+                Sleep(15)
+
+        with open(fn, 'wb') as fl:
+
+            try:
+                pickle.dump(saved, fl)
+            except Exception as ex:
+                a = 0
+
+        restored: List[LocalWeather] = None
+        with open(fn, 'rb') as fl:
+            try:
+                restored = pickle.load(fl)
+            except Exception as ex:
+                a = 0
+
+        if restored[0] != saved[0]:
+            print ('saved and restored first entry are not equal')
+
+    with open(fn, 'rb') as fl:
         try:
-            # lw = LocalWeather()
-            # LocalWeather.__module__ = 'localweather
-            #jsons0 = jsonpickle.encode(saved[0])
-            #val0 = jsonpickle.decode(jsons0)
-            jsons = jsonpickle.encode(saved, unpicklable=True)
-            # saved1 = jsonpickle.decode(jsons0, classes=(
-            # LocalWeather, MyTime,))
-            fl.write(jsons)
-            # pickle.dump(saved, fl, fix_imports=False)
+            saved = pickle.load(fl)
         except Exception as ex:
             a = 0
 
-    """
-    restored = []
-    with open('testlocalWeather60.json', 'r') as fl1:
+    for v in saved:
+        que.put(v)
 
+    restoredq = []
+    running = True
+    while running:
         try:
-            jj = fl1.read()
-            restored = jsonpickle.decode(jj, classes=(
-                LocalWeather, MyTime,))
-            a = 0
-        except Exception as ex:
-            a = 0
-    a = 0
-    """
+            val = que.get(True, 0.01)
+            restoredq.append(val)
+            que.task_done()
+        except Exception:
+            running = False
 
-    a = 0
+    if restoredq[0] != saved[0]:
+        print ('saved and restoredq first entry are not equal')
+
+    print ('all done')
 
 
 if __name__ == '__main__':
+
     freeze_support()
+    from localweather import LocalWeather
+    import datetime
+    from datetime import timezone
+    from time import sleep as Sleep
     if not os.path.isdir(LOG_DIR):
         os.mkdir(LOG_DIR)
 
@@ -433,6 +504,6 @@ if __name__ == '__main__':
         sys.exit(str(exc))
 
     finally:
-        sys.exit()
+        sys.exit('normal exit')
 
 

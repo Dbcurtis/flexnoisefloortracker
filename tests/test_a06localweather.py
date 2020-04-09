@@ -7,11 +7,12 @@ Tests the local weather module
 import unittest
 import multiprocessing as mp
 from multiprocessing import queues
-import time
+from time import sleep as Sleep
+import calendar
 from collections import deque
 
-import jsonpickle
-#import pickle
+#import jsonpickle
+import pickle
 import context
 import localweather
 from localweather import MyTime, LocalWeather
@@ -80,7 +81,7 @@ class TestLocalweather(unittest.TestCase):
             strr = str(_lw)
             self.assertTrue('ws:' in strr)
             self.assertTrue('temp:' in strr)
-            self.assertTrue('utc:' in strr)
+            self.assertTrue('UTC:' in strr)
             self.assertTrue('Time:' in strr)
 
             reprr = repr(_lw)
@@ -96,6 +97,17 @@ class TestLocalweather(unittest.TestCase):
         self.assertFalse(_lw is _lw2)
         self.assertTrue(_lw2.netstatus is None)
         self.assertEqual(200, _lw.netstatus)
+        _lw3 = LocalWeather()
+        _lw3.load_from_json(_lw.rjson)
+        self.assertEqual(_lw, _lw3)
+        jslw1 = pickle.dumps(_lw)
+        lw4 = pickle.loads(jslw1)
+        self.assertEqual(lw4, _lw)
+        self.assertEqual(str(lw4), str(_lw))
+        self.assertEqual(_lw, lw4)
+        lw5 = LocalWeather()
+        lw5.load_from_other(_lw)
+        self.assertEqual(_lw, lw5)
 
     def test01b_instat(self):
         """test01b_instat()
@@ -120,9 +132,9 @@ class TestLocalweather(unittest.TestCase):
             self.assertFalse(_mt < _mtz)
             self.assertFalse(_mt > _mtz)
 
-            self.assertEqual('Wed Dec  4 16:30:44 2019', _mt.localats)
+            self.assertEqual('local: 2019/12/04 16:30:44', _mt.localats)
 
-            self.assertEqual('Thu Dec  5 00:30:44 2019', _mt.utcats)
+            self.assertEqual('UTC: 2019/12/05 00:30:44', _mt.utcats)
             _dst = MyTime(timestamp=1555000000)
 
             self.assertTrue(_mt.localtz == 'Pacific Standard Time')
@@ -131,14 +143,14 @@ class TestLocalweather(unittest.TestCase):
             self.assertEqual(-7.0, _dst.localoffset)
 
             self.assertEqual(
-                'utc: Thu Dec  5 00:30:44 2019,  Pacific Standard Time: Wed Dec  4 16:30:44 2019  -8.0', str(_mt))
+                'UTC: 2019/12/05 00:30:44,  Pacific Standard Time: local: 2019/12/04 16:30:44  -8', str(_mt))
             self.assertEqual(
-                'utc: Thu Apr 11 16:26:40 2019,  Pacific Daylight Time: Thu Apr 11 09:26:40 2019  -7.0', str(_dst))
+                'UTC: 2019/04/11 16:26:40,  Pacific Daylight Time: local: 2019/04/11 09:26:40  -7', str(_dst))
 
             mtrep = repr(_mt)
             mtstr = str(_mt)
-            self.assertTrue('localweather.MyTime,' in mtrep)
-            self.assertFalse('localweather.MyTime,' in mtstr)
+            self.assertTrue('localweather.MyTime' in mtrep)
+            self.assertFalse('localweather.MyTime' in mtstr)
             self.assertTrue(mtstr in mtrep)
 
             _mtlater = MyTime(timestamp=1575506844)
@@ -160,10 +172,25 @@ class TestLocalweather(unittest.TestCase):
             self.assertFalse(_mt > _mtz)
 
             self.assertEqual(
-                "[1575506844, 'Thu Dec  5 00:47:24 2019', 'Pacific Standard Time', -8.0]", str(_mtlater.get()))
+                "['UTC: 2019/12/05 00:47:24', 'Pacific Standard Time', -8]", str(_mtlater.get()))
 
-            a = 0
+            _mt = MyTime(timestamp=86400)  # one utc day
+            self.assertEqual(
+                'localweather.MyTime, UTC: 1970/01/02 00:00:00,  Pacific Standard Time: local: 1970/01/01 16:00:00  -8', repr(_mt))
 
+            sqlts = _mt.get_local_sql_timestamp()
+            self.assertEqual('1970-01-01 16:00:00',
+                             _mt.get_local_sql_timestamp())
+
+            _mt = MyTime(timestamp=86400 + 28800)  # start second day pst
+            self.assertEqual(
+                'localweather.MyTime, utc: Fri Jan  2 08:00:00 1970,  Pacific Standard Time: Fri Jan  2 00:00:00 1970  -8.0', repr(_mt))
+
+            self.assertEqual('1970-01-02 00:00:00',
+                             _mt.get_local_sql_timestamp())
+
+        except AssertionError:
+            raise
         except Exception as ex:
             print(str(ex))
 
@@ -200,11 +227,11 @@ class TestLocalweather(unittest.TestCase):
         for _ in range(3):  # process can only be started once
             ps = ctx.Process(target=Get_LW, args=(q,))
             ps.start()
-            time.sleep(0.0001)
+            Sleep(0.0001)
 
         #[p.start() for p in ps]
         # for i in range(3):  # process can only be started once
-            # time.sleep(0.0001)
+            # Sleep(0.0001)
 
         results = []
         try:
@@ -224,7 +251,7 @@ class TestLocalweather(unittest.TestCase):
             strr = str(_lw)
             self.assertTrue('ws:' in strr)
             self.assertTrue('temp:' in strr)
-            self.assertTrue('utc:' in strr)
+            self.assertTrue('UTC:' in strr)
             self.assertTrue('Time:' in strr)
         q.join()
         q.close()
@@ -234,39 +261,67 @@ class TestLocalweather(unittest.TestCase):
 
         if object works
         """
-        local_weather_lst = []
-        _lw = LocalWeather()
-        with open('testlocalWeather60.json', 'r') as fl1:
+        local_weather_lst: LocalWeather = []
+        # _lw:LocalWeather = LocalWeather()
+        with open('testlocalWeather62.pickle', 'rb') as fl1:
             try:
-                kk = fl1.read()
-                local_weather_lst = jsonpickle.decode(
-                    kk, classes=(LocalWeather, MyTime,))
+                local_weather_lst = pickle.load(fl1)
                 a = 0
             except Exception as ex:
                 a = 0
+                raise
         #deck = deque(local_weather_lst)
         lw1: LocalWeather = local_weather_lst[0]
-        #temptupal1 = lw1.get_temp()
-        self.assertEqual(['278.03K', '4.88C', '40.78F'], lw1.get_temp()[0])
-        self.assertEqual(['275.37K', '2.22C', '36.00F'], lw1.get_temp()[1])
-        self.assertEqual(['280.15K', '7.00C', '44.60F'], lw1.get_temp()[2])
 
-        ws = lw1.get_wind()
-        self.assertEqual({'dir': '140 degrees', 'speed':
-                          [['1.5 m/s', '3.4 mph'], ['0.0 m/s', '0.0 mph']]}, lw1.get_wind())
-        a = 0
+        # ftexttemp: str = lw1.get_temp()[0][2]
+        temp: float = float(lw1.get_temp()[0][2][:-1])
+        self.assertAlmostEqual(67.08, temp, places=2)
+
+        self.assertEquals(
+            'local: 2020/04/08 13:57:00 Pacific Daylight Time', lw1.get_DateTime())
+        self.assertEquals(
+            'UTC: 2020/04/08 20:57:00', lw1.get_DateTime(local=False))
+        self.assertEqual(
+            "{'temp': 292.64, 'feels_like': 291.39, 'temp_min': 290.15, 'temp_max': 294.26, 'pressure': 1018, 'humidity': 51}", repr(lw1.get_Weather()))
+
+        self.assertEqual(
+            "{'speed': [['1.5 m/s', '3.4 mph'], ['0.0 m/s', '0.0 mph']], 'dir': '280 degrees'}", str(lw1.get_wind()))
+
         self.assertEqual(200, lw1.netstatus)
-        self.assertEqual(
-            "dict_keys(['base', 'clouds', 'cod', 'coord', 'dt', 'id', 'main', 'name', 'sys', 'timezone', 'visibility', 'weather', 'wind'])", str(lw1.rjson.keys()))
+        keylst = list(lw1.rjson.keys())
+        keylst.sort()
 
         self.assertEqual(
-            'local: Wed Feb 12 19:52:07 2020 Pacific Standard Time', lw1.get_DateTime())
+            "['base', 'clouds', 'cod', 'coord', 'dt', 'id', 'main', 'name', 'sys', 'timezone', 'visibility', 'weather', 'wind']", str(keylst))
 
-        self.assertEqual('utc: Thu Feb 13 03:52:07 2020',
-                         lw1.get_DateTime(local=False))
+    def test05_gen_sql(self):
+        #from localweather import LocalWeather, MyTime
 
-        a = 0
-        # deck = deque(local_weather_lst)
+        local_weather_lst: LocalWeather = []
+        # _lw:LocalWeather = LocalWeather()
+        with open('testlocalWeather62.pickle', 'rb') as fl1:
+            try:
+                local_weather_lst = pickle.load(fl1)
+
+            except Exception as ex:
+                raise
+        #deck = deque(local_weather_lst)
+        lw1: LocalWeather = local_weather_lst[0]
+        a = str(lw1)
+
+        lw2 = LocalWeather()
+        lw2.load_from_json(lw1.rjson)
+        lw3 = LocalWeather()
+        lw3.load_from_other(lw1)
+
+        aaa: List[str] = [
+            'INSERT INTO weather SET Sunset = 1586375106000000,',
+            'Sunrise = 1586328050000000,',
+            'RecDT = 1586354220000000, WindS = 3.4, WindD = 280,',
+            'WindG = 0.0, Humidity = 51.0, TempF = 67.08'
+        ]
+        ans: str = ' '.join(aaa)
+        self.assertEqual(ans, lw1.gen_sql())
 
 
 if __name__ == '__main__':
