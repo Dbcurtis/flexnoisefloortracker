@@ -2,29 +2,29 @@
 
 """defines classes of objects that are sent over the Queues"""
 
-import sys
+#import sys
 import os
-import concurrent.futures
-from typing import List, Tuple, Dict, Set, Mapping, Sequence, Any
+#import concurrent.futures
+from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set
 
-from queue import Empty as QEmpty, Full as QFull
+#from queue import Empty as QEmpty, Full as QFull
 
 
 import logging
 import logging.handlers
-import multiprocessing as mp
+#import multiprocessing as mp
 
-from trackermain import CTX, QUEUES
+#from trackermain import CTX, QUEUES
 from datetime import datetime as DateTime
-from collections import deque
+#from collections import deque
 
-from deck import Deck
-from localweather import LocalWeather
-import threading
-import userinput
-import flex
-from flex import Flex
-from noisefloor import Noisefloor
+#from deck import Deck
+
+#import threading
+#import userinput
+#import flex
+#from flex import Flex
+#from noisefloor import Noisefloor
 
 
 LOGGER = logging.getLogger(__name__)
@@ -41,10 +41,13 @@ class Qdatainfo:
         pass
 
     def __str__(self):
-        return "not implemented"
+        return f"t: { self.utctime.ctime()}, c: {str(self.content)}"
 
     def __repr__(self):
-        return 'not implemented'
+        return f'Qdatainfo: {str(self)}'
+
+    def get(self) -> Any:
+        return self.content
 
 
 """The data queues are:
@@ -63,56 +66,80 @@ class DataQ(Qdatainfo):
         pass
 
     def __str__(self):
-        return "not implemented"
+        return f'{super().__str__()}'
 
     def __repr__(self):
-        return 'not implemented'
+        return f'DataQ: {super().__str__()}'
 
 
 class LWQ(DataQ):
-    def __init__(self, content: str):
+    #from localweather import LocalWeather
+
+    def __init__(self, content: Any):
         super().__init__(content)
 
     def __str__(self):
-        return "not implemented"
+        return f'{super().__str__()}'
 
     def __repr__(self):
-        return 'not implemented'
+        return f'LWQ: {super().__str__()}'
+
+    def get(self):
+        return self.content
 
 
 class NFQ(DataQ):
-    def __init__(self, content: Sequence[Bandreadings]):
+    """NFQ(content:List[Bandreadings])
+
+
+    """
+    #from smeteravg import SMeterAvg
+    from nfresult import NFResult
+
+    def __init__(self, content: NFResult):
         super().__init__(content)
 
     def __str__(self):
-        return "not implemented"
+        return f'{super().__str__()}'
 
     def __repr__(self):
-        return 'not implemented'
+        return f'NFQ: {super().__str__()}'
+
+    def get(self) -> List[NFResult]:
+        """get()
+
+        returns the NFResult
+        """
+        return self.content
 
 
 class DbQ(Qdatainfo):
+
     def __init__(self, content: any):
-        super().__init__(content, 'dbQ')
+        super().__init__(content)
         pass
 
     def __str__(self):
-        return "not implemented"
+        return f'{super().__str__()}'
 
     def __repr__(self):
-        return 'not implemented'
+        return f'DbQ: {super().__str__()}'
 
 
 class DpQ(Qdatainfo):
     def __init__(self, content: any):
-        super().__init__(content, 'dpQ')
+        super().__init__(content)
         pass
 
     def __str__(self):
-        return "not implemented"
+        return f'{super().__str__()}'
 
     def __repr__(self):
-        return 'not implemented'
+        return f'DpQ: {super().__str__()}'
+
+
+def main():
+    pass
 
 
 if __name__ == '__main__':

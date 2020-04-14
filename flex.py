@@ -4,10 +4,12 @@
 
 import sys
 import os
+from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict
 import logging
 import logging.handlers
-import time
-from typing import List, Sequence, Dict, Mapping, Tuple, Any
+#import time
+from time import sleep as Sleep
+
 # from statistics import mean
 # import mysql.connector as mariadb
 from userinput import UserInput
@@ -200,7 +202,7 @@ class Flex:
 
         return resultlst[:]
 
-    def save_current_state(self):
+    def save_current_state(self) -> List[str]:
         """save_current_state()
 
         """
@@ -213,16 +215,16 @@ class Flex:
         """
         self.restore_state(self.saved_state)
 
-    def restore_state(self, cmdlst):
+    def restore_state(self, cmdlst: List[str]) -> List[str]:
         """restore_state()
 
         """
-        results = []
+        results: List[str] = []
         if self._ui.serial_port.is_open and cmdlst:
             for cmd in cmdlst:
                 if cmd[0:4] in 'ZZIF':
                     continue
-                cmdreply = self._ui.serial_port.docmd(cmd)
+                cmdreply: str = self._ui.serial_port.docmd(cmd)
                 results.append(cmdreply)
             self.save_current_state()
         return results
@@ -243,11 +245,11 @@ class Flex:
             c = cmd[0][0:4]
             if c == 'wait':
                 delay = float(cmd[0][4:])
-                time.sleep(delay)
+                Sleep(delay)
                 continue
 
             if c not in FLEX_CAT_ALL:
-                raise Exception('illegal flex command')
+                raise ValueError('illegal flex command')
 
             result = self._ui.serial_port.docmd(cmd[0])
             if c == 'ZZFA':
@@ -262,13 +264,11 @@ class Flex:
                 if len(_) > 2:
                     # extract the results from the command
                     try:
-
                         vals = [int(ss[4:]) for ss in _ if ss]
                     except ValueError as ve:
-                        a = 0
                         raise ve
                     # and get the average
-                    avg = int(round(sum(vals) / len(vals)))
+                    avg: float = int(round(sum(vals) / len(vals)))
                     result = f'ZZSM{avg :03d};'  # .format(avg)
 
                 # process the results by code in cmd[1]
@@ -277,22 +277,27 @@ class Flex:
 
         return results
 
-    def get_cat_data(self, cmd_list: List[Tuple[Any, ...]], freq):
-        """get_cat_data(cmd_list)
+    def get_cat_data(self, cmd_list: List[Tuple[Any, ...]], freq: int) -> List[str]:
+        """get_cat_data(cmd_list, freq)
+        cmd_list is a list of Tuples
 
         returns a list of the raw or processed result from Cat results
 
+        this differes from get_cat_dataA by how?
+
         """
-        results = []
+        results: List[str] = []
         for cmd in cmd_list:
             if cmd[0][0:4] == 'wait':
                 delay = float(cmd[0][4:])
-                time.sleep(delay)
+                Sleep(delay)
                 continue
+
             if cmd[0][0:4] not in FLEX_CAT_ALL:
-                raise Exception('illegal flex command')
-            result = self._ui.serial_port.docmd(cmd[0])
-            if cmd[1]:  # process the result if provided
+                raise ValueError('illegal flex command')
+
+            result: str = self._ui.serial_port.docmd(cmd[0])
+            if cmd[1]:  # process the result if routine is provided
                 _ = result.split(';')
                 vals = None
                 if len(_) > 2:

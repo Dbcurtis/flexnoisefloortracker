@@ -6,11 +6,13 @@ import sys
 import os
 import logging
 import logging.handlers
-import datetime
-import math
-
-from smeter import _SREAD, SMeter
 from typing import List, Tuple, Dict, Sequence, Mapping
+
+from datetime import datetime as Dtc
+from datetime import timezone
+import math
+from smeter import _SREAD, SMeter
+import timestampaux
 
 
 LOGGER = logging.getLogger(__name__)
@@ -27,35 +29,35 @@ NOISE_TYPES = ('lownoise', 'highnoise', 'midnoise', )
 # lst is a list/of SMeter
 # """
 # if lst is None:
-#raise ValueError('None not allowed')
+# raise ValueError('None not allowed')
 # if not isinstance(lst, list):
-#raise ValueError('lst needs to be a list')
+# raise ValueError('lst needs to be a list')
 # if not lst:
-#raise ValueError('list needs at least one element')
+# raise ValueError('list needs at least one element')
 
 # lst.sort()
-#lstsize = len(lst)
-#iseven = (lstsize % 2) == 0
-#median = None
+# lstsize = len(lst)
+# iseven = (lstsize % 2) == 0
+# median = None
 # if isinstance(lst[0], SMeter):
 
 # if iseven:
-#mididx = int(lstsize / 2)
+# mididx = int(lstsize / 2)
 # median = (lst[mididx - 1].signal_st.get('dBm') +
 # lst[mididx].signal_st.get('dBm')) / 2
 # else:
 # mididx = lstsize - \
-#1 if lstsize == 1 else int(math.trunc((lstsize) / 2))
-#median = lst[mididx].signal_st.get('dBm')
+# 1 if lstsize == 1 else int(math.trunc((lstsize) / 2))
+# median = lst[mididx].signal_st.get('dBm')
 # else:
 
 # if iseven:
-#mididx = int(lstsize / 2)
-#median = (lst[mididx - 1] + lst[mididx]) / 2
+# mididx = int(lstsize / 2)
+# median = (lst[mididx - 1] + lst[mididx]) / 2
 # else:
 # mididx = lstsize - \
-#1 if lstsize == 1 else int(math.trunc((lstsize) / 2))
-#median = lst[mididx]
+# 1 if lstsize == 1 else int(math.trunc((lstsize) / 2))
+# median = lst[mididx]
 # return median
 
 
@@ -64,7 +66,7 @@ NOISE_TYPES = ('lownoise', 'highnoise', 'midnoise', )
 
 # """
 # def versionadj(version, sma):
-#_debugversion = version
+# _debugversion = version
 
 # return SMeterAvg(sma.smlist, sma.band)
 
@@ -72,14 +74,14 @@ NOISE_TYPES = ('lownoise', 'highnoise', 'midnoise', )
 # return SMeterAvg(arg, args[0])
 
 # if isinstance(arg, SMeterAvg):
-#sma = arg
-#_v = None
+# sma = arg
+# _v = None
 
 # try:
-#_v = sma.v
+# _v = sma.v
 
 # except Exception:
-#_v = 0
+# _v = 0
 
 # return versionadj(_v, sma)
 # return None
@@ -101,7 +103,10 @@ class SMeterAvg:
             self.dBm['adBm'] = sum([_sm.signal_st.get('dBm')
                                     for _sm in arg]) / len(arg)
             self.dBm['mdBm'] = get_median(arg[:])
-            self.time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            self.dtime: Dtc = Dtc.now(timezone.utc)
+            local: Dtc = self.dtime.astimezone()
+            self.time: str = local.strftime('%Y-%m-%d %H:%M:%S')
+
             self.smlist = arg[:]
 
             def scoperv0():
@@ -141,7 +146,7 @@ class SMeterAvg:
 
             def scoperv2():
 
-                #self.singlenoisefreq = len(self.get_noise_freqs()) == 1
+                # self.singlenoisefreq = len(self.get_noise_freqs()) == 1
                 self.v = 2
 
             def scoperv3():
@@ -193,21 +198,39 @@ class SMeterAvg:
         # rf is readings per freq
         # nhr is number of high readings
         # nrt is total readings
-        #bad is nhr/(nrt-nhr)
+        # bad is nhr/(nrt-nhr)
 
         # """
-        #result = None
+        # result = None
         # if self.noise:
-            #nlr = len(self.noise.get('lownoise'))
-            #nmr = len(self.noise.get('midnoise'))
-            #nhr = len(self.noise.get('highnoise'))
-            ## nrt = nlr + nmr + nhr
+            # nlr = len(self.noise.get('lownoise'))
+            # nmr = len(self.noise.get('midnoise'))
+            # nhr = len(self.noise.get('highnoise'))
+            # nrt = nlr + nmr + nhr
 
-            #result = nhr / (nlr + nmr)
+            # result = nhr / (nlr + nmr)
 
         # return result
-    def gen_sql(self):
-        pass
+    def gen_sql(self) -> str:
+
+        # sss = dbtools.get_bigint_timestamp(self.times['dt'])
+        # trecdt: int = dbtools.get_bigint_timestamp(self.times['dt'])
+        # tsup: int = dbtools.get_bigint_timestamp(self.times['sunup'])
+        # tsdn: int = dbtools.get_bigint_timestamp(self.times['sunset'])
+        sl: str = self.signal_st['sl']
+        stdev: float = self.signal_st['stddv']
+        timedone: int = timestampaux.get_bigint_timestamp(self.dtime)
+        jjj: List[str] = [
+            f"timedone = {timedone},",
+            f"band = {self.band},",
+            f"adBm = {self.dBm['adBm']},",
+            f"mdBm = {self.dBm['adBm']},",
+            f"sval = '{sl}',",
+            f"stdev = {stdev}"
+        ]
+        sets: str = ' '.join(jjj)
+        result: str = f'INSERT INTO bandreadings SET {sets}'
+        return result
 
     def get_start_time_of_readings(self) -> List[Tuple[str, int]]:
         """get_start_time_of_readings()
@@ -227,8 +250,8 @@ class SMeterAvg:
         # returns new SMeterAvg using only the midnoise and lownoise readings if badness is less than
         # 0.2
         # """
-        #result = None
-        ##_debugb = self.badness()
+        # result = None
+        # _debugb = self.badness()
         # if self.badness() < 0.334:
         # result = SMeterAvg(self.noise.get('midnoise') +
         # self.noise.get('lownoise'), self.band)
@@ -274,9 +297,9 @@ var: {s.signal_st.get('var'):.5f}, stddv: {s.signal_st.get('stddv'):.5f}]"
         # returns the SMeter (max_SM) with the max out of variance
         # and the other SMeters
         # """
-        ## other = self.smlist[:]
-        #max_SM = self.deva.get('max')[1]
-        #other = [aa for aa in self.smlist if aa.freq != max_SM.freq]
+        # other = self.smlist[:]
+        # max_SM = self.deva.get('max')[1]
+        # other = [aa for aa in self.smlist if aa.freq != max_SM.freq]
         # return (max_SM, other)
 
 # -----------------------------------
@@ -353,8 +376,8 @@ def factory(arg, *args, **kwargs):
     # returns new SMeterAvg using only the midnoise and lownoise readings if badness is less than
     # 0.2
     # """
-    #result = sma
-    ##_debugb = self.badness()
+    # result = sma
+    # _debugb = self.badness()
     # if sma.badness() < 0.334:
     # result = SMeterAvg(sma.noise.get('midnoise') +
     # sma.noise.get('lownoise'), sma.band)
@@ -366,7 +389,7 @@ def factory(arg, *args, **kwargs):
 
     # returns new SMeterAvg using only the midnoise and high noise readings
     # """
-    #result = sma
+    # result = sma
     # if len(sma.noise.get('highnoise')):
     # result = SMeterAvg(sma.noise.get('midnoise') +
     # sma.noise.get('highnoise'), sma.band)

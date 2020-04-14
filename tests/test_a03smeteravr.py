@@ -10,7 +10,7 @@ import datetime
 import context
 from smeter import SMeter
 from flex import Flex
-import smeteravg
+#import smeteravg
 from smeteravg import SMeterAvg
 import userinput
 from userinput import UserInput
@@ -54,6 +54,7 @@ class Testsmeteravg(unittest.TestCase):
         """test00_functions()
 
         """
+        import smeteravg
         val = None
         try:
             val = smeteravg.get_median(None)
@@ -89,7 +90,7 @@ class Testsmeteravg(unittest.TestCase):
         """test01_instat()
 
         """
-
+        import smeteravg
         sml = [SMeter(('ZZSM098;', 14_100_000 + i * 10000)) for i in range(3)]
         datemarker = datetime.datetime.now().strftime('%Y-%m-%d')
         sma = SMeterAvg(sml, 20)
@@ -166,16 +167,29 @@ class Testsmeteravg(unittest.TestCase):
         #self.assertEqual(1, len(sma.noise.get('lownoise')))
         #self.assertEqual(4, len(sma.noise.get('midnoise')))
 
-    # def test03_get_noise_freqs(self):
-        # """test03_get_noise_freqs()
+    def test03_get_sql(self):
+        """ttest03_get_sql
 
-        # """
-        # sml = [SMeter((f'ZZSM{98+i*2:03};', 14_100_000 + i * 10000)) for i in range(6)]
-        #sma = SMeterAvg(sml, 20)
-        #hna = sma.get_noise_freqs('highnoise')
-        #mna = sma.get_noise_freqs('midnoise')
-        #lna = sma.get_noise_freqs('lownoise')
-        #a = 0
+        """
+        sml = [SMeter((f'ZZSM{98+i*2:03};', 14_100_000 + i * 10000)) for i in range(6)]
+        sma = SMeterAvg(sml, 20)
+        self.assertEqual(-88.5, sma.dBm.get('adBm'))
+        self.assertEqual(-88.5, sma.dBm.get('mdBm'))
+        self.assertEqual(20, sma.band)
+        self.assertEqual("{'var': 3.5, 'stddv': 1.8708286933869707, 'sl': 'S6'}",
+                         str(sma.signal_st))
+        sql: str = sma.gen_sql()
+        expl: List[str] = [
+            'INSERT INTO bandreadings SET',
+            'timedone = 1586436952269148, band = 20,',
+            "adBm = -88.5, mdBm = -88.5, sval = 'S6',",
+            'stdev = 1.8708286933869707'
+        ]
+        exp = ' '.join(expl)
+        # "INSERT INTO bandreadings SET timedone = 1586436952269148, band = 20, adBm = -88.5, mdBm = -88.5, sval = 'S6', stdev = 1.8708286933869707"
+        self.assertTrue('INSERT INTO bandreadings SET timedone = ' in sql)
+        self.assertTrue(
+            ", band = 20, adBm = -88.5, mdBm = -88.5, sval = 'S6', stdev = 1.8708286933869707" in sql)
 
 
 if __name__ == '__main__':

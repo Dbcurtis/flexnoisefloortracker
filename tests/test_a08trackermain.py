@@ -17,10 +17,10 @@ from collections import deque
 import context
 from deck import Deck
 import trackermain
-from trackermain import QUEUES as queues
-from trackermain import RESET_QS as reset_queues
-from trackermain import CTX as ctx
-from trackermain import STOP_EVENTS as stopevents
+from queuesandevents import QUEUES as queues
+from queuesandevents import RESET_QS as reset_queues
+from queuesandevents import CTX as ctx
+from queuesandevents import STOP_EVENTS as stopevents
 
 
 def marktime(dly=2.5, cnt=6):
@@ -643,7 +643,7 @@ class TestTrackermain(unittest.TestCase):
 
     def test003_trimdups(self):
         from localweather import LocalWeather, MyTime
-        import jsonpickle
+        import pickle
 
         print('test03_trimdups\n', end='')
         deck = deque([])
@@ -689,11 +689,11 @@ class TestTrackermain(unittest.TestCase):
                          [j[2].v for j in results])
         a = 0
         local_weather_lst = []
-        with open('testlocalWeather60.json', 'r') as fl1:
+        with open('testlocalWeather62.pickle', 'rb') as fl1:
             try:
-                kk = fl1.read()
-                local_weather_lst = jsonpickle.decode(
-                    kk, classes=(LocalWeather, MyTime,))
+
+                local_weather_lst = pickle.load(fl1)
+
                 a = 0
             except Exception as ex:
                 a = 0
@@ -706,7 +706,8 @@ class TestTrackermain(unittest.TestCase):
         trimlst = trackermain.trim_dups(deck, equaltemps)
         trimlstf = [(a[1], a[2],) for a in trimlst if not a[0]]
         trimlstt = [(a[1], a[2],) for a in trimlst if a[0]]
-        a = 0
+        self.assertEqual(3, len(trimlstf))
+        self.assertEqual(6, len(trimlstt))
 
 
 if __name__ == '__main__':

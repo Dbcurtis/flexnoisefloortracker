@@ -8,7 +8,8 @@ import unittest
 from datetime import datetime as Dtc
 from datetime import tzinfo, timezone
 import context
-from dbtools import DBTools, get_bigint_timestamp
+from dbtools import DBTools
+from timestampaux import get_bigint_timestamp, get_float_timestamp
 
 
 class MyTime:

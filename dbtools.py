@@ -13,9 +13,10 @@ from datetime import tzinfo, timezone
 from datetime import datetime as Dtc
 from datetime import timedelta as Tdelta
 
-
+import smeteravg
 from noisefloor import NFResult
 from bandreadings import Bandreadings
+from timestampaux import get_bigint_timestamp, get_float_timestamp
 
 
 LOGGER = logging.getLogger(__name__)
@@ -24,32 +25,15 @@ LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/dbtools'
 
 
-def get_bigint_timestamp(dt: Any = None) -> int:
-    # dutc: Dtc = Dtc.utcnow()
-    utc: Dtc = None
-    if isinstance(dt, Dtc):
-        utc = Dtc.fromtimestamp(dt.timestamp())
-
-    elif isinstance(dt, float):
-        utc = Dtc.fromtimestamp(dt)
-    elif 'MyTime' in str(dt.__class__):
-        utc = Dtc.fromtimestamp(dt.ts)
-    else:
-        utc = Dtc.utcnow()
-
-    ts1: float = (utc - Dtc(1970, 1, 1)) / Tdelta(seconds=1)
-    return int(ts1 * 1000000)
-
-
-def get_float_timestamp(bigint: int) -> float:
-    result: float = bigint / 1000000.0
-    return result
-
-
 class DBTools:
     """DBTools
 
     """
+    try:
+        from noisefloor import NFResult
+    except ImportError as ie:
+        import sys
+        noisefloor = sys.modules[__package__ + '.NFresult']
 
     def __init__(self, dbid: str = "python1"):
         self.dbid = dbid

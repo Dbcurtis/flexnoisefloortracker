@@ -178,16 +178,16 @@ class TestLocalweather(unittest.TestCase):
             self.assertEqual(
                 'localweather.MyTime, UTC: 1970/01/02 00:00:00,  Pacific Standard Time: local: 1970/01/01 16:00:00  -8', repr(_mt))
 
-            sqlts = _mt.get_local_sql_timestamp()
-            self.assertEqual('1970-01-01 16:00:00',
-                             _mt.get_local_sql_timestamp())
+            #sqlts = _mt.get_local_sql_timestamp()
+            # self.assertEqual('1970-01-01 16:00:00',
+            # _mt.get_local_sql_timestamp())
 
             _mt = MyTime(timestamp=86400 + 28800)  # start second day pst
             self.assertEqual(
-                'localweather.MyTime, utc: Fri Jan  2 08:00:00 1970,  Pacific Standard Time: Fri Jan  2 00:00:00 1970  -8.0', repr(_mt))
+                'localweather.MyTime, UTC: 1970/01/02 08:00:00,  Pacific Standard Time: local: 1970/01/02 00:00:00  -8', repr(_mt))
 
-            self.assertEqual('1970-01-02 00:00:00',
-                             _mt.get_local_sql_timestamp())
+            # self.assertEqual('1970-01-02 00:00:00',
+            # _mt.get_local_sql_timestamp())
 
         except AssertionError:
             raise

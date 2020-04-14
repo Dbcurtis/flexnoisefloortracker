@@ -5,26 +5,31 @@
 import sys
 import os
 import concurrent.futures
-from typing import List, Tuple, Dict, Set, Mapping, Sequence, Any
+from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set
 
 from queue import Empty as QEmpty, Full as QFull
 
+import multiprocessing as mp
+from queuesandevents import CTX, QUEUES, STOP_EVENTS
 import logging
 import logging.handlers
-import multiprocessing as mp
 
-import time
-import datetime
+
+from time import sleep as Sleep
+from time import monotonic
+from datetime import datetime as Dtc
+from datetime import timezone
 from collections import deque
 
 from deck import Deck
 from localweather import LocalWeather
 import threading
-import userinput
-import flex
+from userinput import UserInput
+from nfresult import NFResult
+
 from flex import Flex
-from noisefloor import Noisefloor
-from qdatainfo import DataQ, DbQ, DpQ, LWQ
+#from noisefloor import Noisefloor
+#from qdatainfo import DataQ, DbQ, DpQ, LWQ
 
 
 LOGGER = logging.getLogger(__name__)
@@ -34,37 +39,37 @@ LOG_FILE = '/trackermain'
 
 EXITING = False
 
-CTX = mp.get_context('spawn')  # threading context
+# CTX = mp.get_context('spawn')  # threading context
 
-QUEUES = {
-    # from data acquisition threads, received by the aggragator thread
-    'dataQ': CTX.JoinableQueue(maxsize=100),
-    # database commands generateed (usually) ty the aggrator thread
-    'dbQ': CTX.JoinableQueue(maxsize=100),
-    # written to by the aggrator thread, read by the data processor which generates sql commands to dbq
-    'dpQ': CTX.JoinableQueue(maxsize=100)
-}
+# QUEUES = {
+# from data acquisition threads, received by the aggragator thread
+# 'dataQ': CTX.JoinableQueue(maxsize=100),
+# database commands generateed (usually) ty the aggrator thread
+# 'dbQ': CTX.JoinableQueue(maxsize=100),
+# written to by the aggrator thread, read by the data processor which generates sql commands to dbq
+# 'dpQ': CTX.JoinableQueue(maxsize=100)
+# }
 
-STOP_EVENTS = {
-    'acquireData': CTX.Event(),
-    'trans': CTX.Event(),
-    'dbwrite': CTX.Event(),
-    'agra': CTX.Event(),
-}
+# STOP_EVENTS = {
+# 'acquireData': CTX.Event(),
+# 'trans': CTX.Event(),
+# 'dbwrite': CTX.Event(),
+# 'agra': CTX.Event(),
+# }
 
 
-def RESET_QS():
-    """RESET_QS()
+# def RESET_QS():
+# """RESET_QS()
 
-    empties all the queues, marks task_done as each is removed.
-    """
-    for _ in QUEUES.values():
-        try:
-            while True:
-                _.get_nowait()
-                _.task_done()
-        except QEmpty:
-            continue
+# empties all the queues, marks task_done as each is removed.
+# """
+# for _ in QUEUES.values():
+# try:
+# while True:
+# _.get_nowait()
+# _.task_done()
+# except QEmpty:
+# continue
 
 
 class Consolidate:
@@ -90,7 +95,7 @@ class DBwriter:
     def __init__(self, thread_info):
         self.dpQ_IN: CTX.JoinableQueue = thread_info[3]['dbQ']
         self.execute: bool = thread_info[0]
-        self.barrier: ctx.Barrier = thread_info[1]
+        self.barrier: CTX.Barrier = thread_info[1]
         self.stop_event: CTX.Event = thread_info[2]
 
     def run(self):
@@ -128,7 +133,7 @@ class DBwriter:
                 except QFull:
                     # put pending data on the left of the sqlcmdlst
                     sqlcmdlst.appendleft(pendingwrite)
-                    time.sleep(10)
+                    Sleep(10)
 
             if self.stop_event.is_set():
                 break
@@ -190,7 +195,7 @@ class Aggratator:
                         except QFull:
                             # put pending data on the left of the sqlcmdlst
                             sqlcmdlst.appendleft(pendingwrite)
-                            time.sleep(10)
+                            Sleep(10)
 
                         except IndexError:  # indata is now empty
                             break
@@ -223,6 +228,7 @@ def Get_LW(rawDataQ_OUT):
     Gets Local Medfrod weather in a LocalWeather object and adds it to the rawDataQ_OUT queue.
 
     """
+    from qdatainfo import LWQ
     _lw = LocalWeather()
     _lw.load()
     content: str = _lw.gen_sql()
@@ -236,7 +242,8 @@ def Get_NF(rawDataQ_OUT):
     """Get_NF(rawDataQ_OUT)
 
     """
-    UI = userinput.UserInput()
+    from noisefloor import Noisefloor
+    UI = UserInput()
     NOISE = None
     try:
         UI.request(port='com4')
@@ -338,7 +345,7 @@ def dataQ_reader(thread_info, fn=lambda outQ, data: outQ.put(data, False)):
                             cnt = indeck.popleft()
                             if isinstance(cnt, LocalWeather):
                                 wetherdec.append(cnt)
-                            elif isinstance(cnt, NoiseFloorResult):
+                            elif isinstance(cnt, NFResult):
                                 noisedeck.append(cnt)
                             else:
                                 raise AssertionError("need to handle")
@@ -371,7 +378,7 @@ def dataQ_reader(thread_info, fn=lambda outQ, data: outQ.put(data, False)):
                         # put pending data on the left of the queue
                         # locald.deqPrams[0].appendleft(data_tobe_processed)
                         locald.deqPrams[0].push(data_tobe_processed)
-                        time.sleep(10)
+                        Sleep(10)
 
                     except IndexError:  # indata is now empty
                         break
@@ -470,7 +477,7 @@ def timed_work(thread_info, delayseconds, fu):
 
         def __init__(self, delayseconds):
             self.delayseconds = delayseconds
-            nowis = time.monotonic()
+            nowis = monotonic()
             self.to_do_sched = deque(
                 [nowis + t * delayseconds for t in range(20)])
 
@@ -479,10 +486,10 @@ def timed_work(thread_info, delayseconds, fu):
 
             Defines if it is time to do something on a todo schedule
             """
-            if self.to_do_sched[0] > time.monotonic():
+            if self.to_do_sched[0] > monotonic():
                 return False
 
-            while self.to_do_sched[0] < time.monotonic():
+            while self.to_do_sched[0] < monotonic():
                 self.to_do_sched.popleft()
                 self.to_do_sched.append(self.to_do_sched[-1] + delayseconds)
 
@@ -499,15 +506,15 @@ def timed_work(thread_info, delayseconds, fu):
         locald.last10executtimes = deque([], 10)  # queue of max length 10
         # print('timed_work waiting to pass barrier\n',end="")
         thread_info[1].wait()
-        # print(f'timed_work started: {time.monotonic()}\n',end="")
+        # print(f'timed_work started: {monotonic()}\n',end="")
 
         locald.seq = Sequencer(delayseconds)
         while not locald.stop_event.wait(1):
             if locald.seq.do_it_now():
-                locald.last10executtimes.append(f'{str(datetime.datetime.now().time())}, {str(locald.fu)}')
+                locald.last10executtimes.append(f'{str(Dtc.now().time())}, {str(locald.fu)}')
                 # print(datetime.datetime.now().time())
                 locald.fu(raw_data_Q)
-                time.sleep(0.00001)
+                Sleep(0.00001)
 
             if locald.stop_event.is_set():
                 break
@@ -522,7 +529,7 @@ def shutdown(futures, queues, stopevents):
     # stop the data generating processes
     stopevents['acquireData'].set()
     stopevents['trans'].set()
-    time.sleep(0.001)
+    Sleep(0.001)
     validkeys = list(futures.keys())
 
     # isdone = True
@@ -531,7 +538,7 @@ def shutdown(futures, queues, stopevents):
     keys = [k for k in validkeys if k in ('weather', 'noise',)]
 
     while True:
-        time.sleep(0.001)
+        Sleep(0.001)
         bb = [futures[k].done() for k in keys]
 
         cc = [v for v in bb if v]
@@ -540,27 +547,27 @@ def shutdown(futures, queues, stopevents):
 
     # wait until the dataQ fileed by the data generating processes empty
     while not queues['dataQ'].empty():
-        time.sleep(0.001)
+        Sleep(0.001)
 
     # the dataQ is empty now ok to stop the datareader
     stopevents['trans'].set()
     if 'transfer' in validkeys:
         while not futures['transfer'].done():
-            time.sleep(0.001)
+            Sleep(0.001)
 
     # stop the data aggragator
     stopevents['agra'].set()
     if 'dataagragator' in validkeys:
         while not futures['dataagragator'].done():
-            time.sleep(0.001)
+            Sleep(0.001)
 
     while not queues['dpQ'].empty():
-        time.sleep(0.001)
+        Sleep(0.001)
     # stop the data base writer
     stopevents['dbwrite'].set()
     if 'dbwriter' in validkeys:
         while not futures['dbwriter'].done():
-            time.sleep(0.001)
+            Sleep(0.001)
 
 
 def main(hours: float = 0.5):
@@ -581,10 +588,9 @@ def main(hours: float = 0.5):
     bollst: List[bool] = [True, True, True, True, True]
     bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
 
-    barrier: ctx.Barrier = ctx.Barrier(bc)
+    barrier: CTX.Barrier = CTX.Barrier(bc)
 
-    trackerinitialized: float = time.monotonic()  # returns seconds
-    # >>>>>>>>>>>>>>>>>>>>>>>>error here
+    trackerinitialized: float = monotonic()  # returns seconds
     trackerTimeout: float = trackerinitialized + timetup[2]
 
     trackerstarted = None
@@ -607,30 +613,30 @@ def main(hours: float = 0.5):
 
             }
 
-            # setup multiprocessor
+# setup multiprocessor
 
-            # with concurrent.futures.ProcessPoolExecutor(max_workers=2) as ppex:
-            # reads all the data received in the data processing Q organizes it and sends the results to be written
-            # futures['dataagragator'] = ppex.submit(
-            # dataaggrator, bollst[3], barrier, stopevents['agra'], queues)
-            # reads the database Q and writes it to the database
-            # futures['dbwriter'] = tpex.submit(
-            # dbQ_writer, bollst[4], barrier, stopevents['dbwrite'], queues)
+# with concurrent.futures.ProcessPoolExecutor(max_workers=2) as ppex:
+# reads all the data received in the data processing Q organizes it and sends the results to be written
+# futures['dataagragator'] = ppex.submit(
+# dataaggrator, bollst[3], barrier, stopevents['agra'], queues)
+# reads the database Q and writes it to the database
+# futures['dbwriter'] = tpex.submit(
+# dbQ_writer, bollst[4], barrier, stopevents['dbwrite'], queues)
 
-            # barrier.wait()  # start them all working
-            # trackerstarted = time.monotonic()
-            # trackerschedend = trackerstarted + runtimesec
-            # time.monotonic() < trackerschedend
-            # while time.monotonic() < trackerTimeout:
-            # time.sleep(5)
+# barrier.wait()  # start them all working
+# trackerstarted = time.monotonic()
+# trackerschedend = trackerstarted + runtimesec
+# time.monotonic() < trackerschedend
+# while time.monotonic() < trackerTimeout:
+# Sleep(5)
             shutdown(futures, queues, STOP_EVENTS)
-            # break  # breack out of ppex
+            #                                               break  # breack out of ppex
             barrier.wait()  # start them all working
-            trackerstarted: float = time.monotonic()
+            trackerstarted: float = monotonic()
             trackerschedend: float = trackerstarted + runtimesec
-            time.monotonic() < trackerschedend
-            while time.monotonic() < trackerTimeout:
-                time.sleep(5)
+            monotonic() < trackerschedend
+            while monotonic() < trackerTimeout:
+                Sleep(5)
             shutdown(futures, queues, STOP_EVENTS)
             break  # break out of tpex
         a = 0
@@ -663,9 +669,9 @@ if __name__ == '__main__':
     THE_LOGGER.addHandler(LC_HANDLER)
     THE_LOGGER.info('trackermain executed as main')
     # LOGGER.setLevel(logging.DEBUG)
-    _aa = time.gmtime(0)
-    if 'time.struct_time(tm_year=1970, tm_mon=1, tm_mday=1, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=3, tm_yday=1, tm_isdst=0)' != str(time.gmtime(0)):
-        print(str(time.gmtime(0)))
+    _aa = Dtc.now(timezone.utc)
+    if 'time.struct_time(tm_year=1970, tm_mon=1, tm_mday=1, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=3, tm_yday=1, tm_isdst=0)' != str(Dtc.now(timezone.utc)):
+        print(str(Dtc.now(timezone.utc)))
         raise SystemError(
             'Wrong epic starting date/time, must be Jan 1, 1970 midnight utc')
 

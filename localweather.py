@@ -3,27 +3,21 @@
 """gets local weather info from openweathermap.org"""
 import os
 import sys
-from typing import List, Sequence, Dict, Mapping, Any, Tuple
+from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set
 from multiprocessing import freeze_support
 import logging
 import logging.handlers
 import requests
-#from dbtools import get_bigint_timestamp
-#from json.decoder import JSONDecodeError
-#import jsonpickle
 import pickle
-from queue import Empty as QEmpty
-import multiprocessing as mp
-# import mysql.connector as mariadb
-from time import sleep as Sleep
-import dbtools
-#import pytz
-
 from datetime import datetime as Dtc
 from datetime import timezone
-
+from queue import Empty as QEmpty
+import multiprocessing as mp
+from time import sleep as Sleep
+import qdatainfo
+import dbtools
+import timestampaux
 from medfordor import Medford_or_Info as MI
-#import dbtools
 
 
 LOGGER = logging.getLogger(__name__)
@@ -35,17 +29,8 @@ LOG_FILE = '/localweather'
 OW_DEFAULTKEY = '&appid=a723524c61b7e34a683dfbc79bd683cd'
 OW_RVMKEY = '&appid=1320944048cabbe1aebe1fbe9c1c7d6c'
 OW_First = 'https://api.openweathermap.org/data/2.5/weather'
-
 PAYLOAD = {'id': str(MI['id']), 'APPID': '1320944048cabbe1aebe1fbe9c1c7d6c'}
-
-#_DT = dbtools.DBTools()
-#_DB = _DT.dbase
-#_CU = _DT.cursor
-
 _VALID_UNITS = ['std', 'metric', 'imperial']
-
-# jsonpickle.set_preferred_backend('json')  # ('json')
-# jsonpickle.set_preferred_backend('json')
 
 
 def converttemp(k) -> List[str]:
@@ -271,6 +256,7 @@ class LocalWeather(ComparableMixin):
         return f'Localweather: valid:{self.valid}, {result}'
 
     def gen_sql(self) -> str:
+
         # weather fields
         # WRECID
         # timerecid
@@ -293,9 +279,9 @@ class LocalWeather(ComparableMixin):
         hum = mm['humidity'][:-1].strip()
 
         #sss = dbtools.get_bigint_timestamp(self.times['dt'])
-        trecdt: int = dbtools.get_bigint_timestamp(self.times['dt'])
-        tsup: int = dbtools.get_bigint_timestamp(self.times['sunup'])
-        tsdn: int = dbtools.get_bigint_timestamp(self.times['sunset'])
+        trecdt: int = timestampaux.get_bigint_timestamp(self.times['dt'])
+        tsup: int = timestampaux.get_bigint_timestamp(self.times['sunup'])
+        tsdn: int = timestampaux.get_bigint_timestamp(self.times['sunset'])
 
         times = f"Sunset = {tsdn}, Sunrise = {tsup}, RecDT = {trecdt}"
         wind = f"WindS = {wnds}, WindD = {wdir}, WindG = {wgust}"
@@ -406,6 +392,7 @@ class LocalWeather(ComparableMixin):
 
 def main():
     from trackermain import CTX, QUEUES
+    from qdatainfo import LWQ
 
     que = QUEUES['dataQ']
 
@@ -413,7 +400,7 @@ def main():
     numreadings = 10
     fn: str = 'testlocalWeather62.pickle'
     delaymin = 7
-    if True:
+    if False:
         for i in range(numreadings):
             _lw = LocalWeather()
             _lw.load()
@@ -441,21 +428,22 @@ def main():
         if restored[0] != saved[0]:
             print ('saved and restored first entry are not equal')
 
-    with open(fn, 'rb') as fl:
+    with open(f'./tests/{fn}', 'rb') as fl:
         try:
             saved = pickle.load(fl)
         except Exception as ex:
             a = 0
 
     for v in saved:
-        que.put(v)
+        qv: LWQ = LWQ(v)
+        que.put(qv)
 
-    restoredq = []
+    restoredq: List[LocalWeather] = []
     running = True
     while running:
         try:
-            val = que.get(True, 0.01)
-            restoredq.append(val)
+            qval: LWQ = que.get(True, 0.01)
+            restoredq.append(qval.get())
             que.task_done()
         except Exception:
             running = False
