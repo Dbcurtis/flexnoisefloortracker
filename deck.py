@@ -7,6 +7,7 @@ import os
 import logging
 import logging.handlers
 import multiprocessing as mp
+from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque, Iterable
 from collections import deque
 from multiprocessing import freeze_support
 from queue import Empty as QEmpty, Full as QFull
@@ -23,14 +24,14 @@ def _ident(a):
 
 class Deck:
 
-    def __init__(self, maxsize):
-        self.deck = deque([])
-        self.maxsize = maxsize
-        self.qlen = 0
-        self.tlock = mp.Lock()
+    def __init__(self, maxsize: int):
+        self.deck: Deque[Any] = deque([])
+        self.maxsize: int = maxsize
+        self.qlen: int = 0
+        self.tlock: mp.Lock = mp.Lock()
 
     def __str__(self):
-        result = ''
+        result: str = ''
         with self.tlock:
             val = None
             if self.qlen > 0:
@@ -44,10 +45,10 @@ class Deck:
             result = f'Deck= max: {self.maxsize}, len: {self.qlen}, {str(self.deck)}'
         return result
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.qlen
 
-    def _append(self, d):
+    def _append(self, d: Iterable):
         """_extend(d)
 
         append iterable d to deck
@@ -59,12 +60,12 @@ class Deck:
         self.deck.append(d)
         self.qlen += 1
 
-    def extend(self, iterable):
+    def extend(self, iterable: Iterable) -> int:
         """extend(iterable)
 
         append iterable to deck while deck is locked
         """
-        result = None
+        result: int = None
         with self.tlock:
             for v in iterable:
                 self._append(v)
@@ -74,38 +75,39 @@ class Deck:
 
         return result
 
-    def _popleft(self):
+    def _popleft(self) -> Any:
         """_popleft()
 
         pops the value from the left side of the deck, if deck is empty raises IndexError
         """
-        result = self.deck.popleft()
+        result: Any = self.deck.popleft()
         self.qlen -= 1
         return result
 
-    def popleft(self):
+    def popleft(self) -> Any:
         """popleft()
 
         pops the value from the left side of the deck, if deck is empty raises IndexError
         while deck is locked
 
         """
-        result = None
+        result: Any = None
         with self.tlock:
             result = self._popleft()
         return result
 
-    def pop(self):
+    def pop(self) -> Any:
         """pop()
         pops the value from the right side of the deck, if deck is empty raises IndexError
         while deck is locked
         """
+        result: Any = None
         with self.tlock:
             result = self.deck.pop()
             self.qlen -= 1
         return result
 
-    def append(self, d):
+    def append(self, d: Any) -> int:
         """append(d)
 
         append d to right of deck
@@ -114,7 +116,7 @@ class Deck:
             self._append(d)
         return self.qlen
 
-    def _push(self, d):
+    def _push(self, d: Any):
         """_push(d)
 
         appendleft d to deck
@@ -125,7 +127,7 @@ class Deck:
         self.deck.appendleft(d)
         self.qlen += 1
 
-    def push(self, d):
+    def push(self, d: Any) -> int:
         """push(d)
 
         appendleft d to deck while deck is locked
@@ -134,7 +136,7 @@ class Deck:
             self._push(d)
         return self.qlen
 
-    def load_from_Q(self, inQ, mark_done=False, wait_sec=10):
+    def load_from_Q(self, inQ, mark_done: bool = False, wait_sec=10.0) -> int:
         """load_from_Q(inQ, mark_done=False, wait_sec=10)
 
         loads the deck from the inQ and if mark_done is True, does so as each Q entry is added to the deck
@@ -142,7 +144,7 @@ class Deck:
 
         rases QFull if deck reaches maxsize
         """
-        count = 0
+        count: int = 0
         with self.tlock:
             while self.qlen >= 0 and self.qlen < self.maxsize:
                 if self.qlen >= self.maxsize:
@@ -157,8 +159,8 @@ class Deck:
                     break
         return count
 
-    def loadQ(self, outQ, done_Q=None, fn=_ident):
-        count = None
+    def loadQ(self, outQ, done_Q=None, fn=_ident) -> int:
+        count: int = None
         try:
             with self.tlock:
                 if self.qlen == 0:
@@ -168,7 +170,7 @@ class Deck:
             raise
         return count
 
-    def _loadQ(self, outQ, done_Q, fn):
+    def _loadQ(self, outQ, done_Q, fn) -> int:
         """loadQ(outQ)
 
         emptys the deck into the specified outQ,
@@ -177,11 +179,11 @@ class Deck:
         rasies QFull if the queue becomes full
 
         """
-        count = None
+        count: int = None
         v = None
         while True:
             try:
-                v = self._popleft()
+                v: Any = self._popleft()
                 outQ.put(fn(v), False)
                 if not done_Q is None:
                     done_Q.task_done()
@@ -209,12 +211,12 @@ class Deck:
 
         return result
 
-    def look_right(self):
+    def look_right(self) -> Any:
         """look_right()
 
         returns the rightmost entry but leaves it in the deck
         """
-        result = None
+        result: Any = None
         with self.tlock:
             if self.qlen > 0:
                 result = self.deck[-1]
