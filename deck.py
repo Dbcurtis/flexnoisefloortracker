@@ -2,12 +2,13 @@
 """
 stuff to manipulate a Deck (fancy deque)
 """
-from __future__ import annotations
+
 import os
 import logging
 import logging.handlers
 import multiprocessing as mp
-from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque, Iterable
+from typing import Any, Deque, Iterable
+#from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque, Iterable
 from collections import deque
 from multiprocessing import freeze_support
 from queue import Empty as QEmpty, Full as QFull
@@ -136,7 +137,7 @@ class Deck:
             self._push(d)
         return self.qlen
 
-    def load_from_Q(self, inQ, mark_done: bool = False, wait_sec=10.0) -> int:
+    def load_from_Q(self, inQ, mark_done: bool = False, wait_sec: float = 10.0) -> int:
         """load_from_Q(inQ, mark_done=False, wait_sec=10)
 
         loads the deck from the inQ and if mark_done is True, does so as each Q entry is added to the deck
@@ -160,23 +161,33 @@ class Deck:
         return count
 
     def loadQ(self, outQ, done_Q=None, fn=_ident) -> int:
+        """loadQ(outQ, done_Q=None, fn=_ident)
+
+        emptys the deck into the specified outQ,
+        if done_Q is specified, will do a task_done operation on the done_Q
+        fn operates on the value being loaded(which defaults to returning the unchanged value)
+
+        rasies QFull if the queue becomes full
+
+        """
         count: int = None
         try:
             with self.tlock:
                 if self.qlen == 0:
                     raise IndexError
                 count = self._loadQ(outQ, done_Q, fn)
-        except IndexError:
+        except QFull:
             raise
         return count
 
-    def _loadQ(self, outQ, done_Q, fn) -> int:
+    def _loadQ(self, outQ, done_Q=None, fn=_ident) -> int:
         """loadQ(outQ)
 
-        emptys the deck into the specified outQ,
-        if done_Q is specified, will do a task_done operation on the done_Q
+        emptys the deck into the specified outQ,  If the outQ becomes full, the transfer stops, only values written to the que are
+        removed from the deck and QFull is raised.  More items can be added to the Deck
 
-        rasies QFull if the queue becomes full
+        if done_Q is specified, will do a task_done operation on the done_Q
+        fn operates on the value being loaded(which defaults to returning the unchanged value)
 
         """
         count: int = None

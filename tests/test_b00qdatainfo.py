@@ -8,7 +8,6 @@ from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapp
 import unittest
 #from time import sleep as Sleep
 import context
-from qdatainfo import *
 
 
 class Testqdatainfo(unittest.TestCase):
@@ -58,6 +57,7 @@ class Testqdatainfo(unittest.TestCase):
         # flex.close()
 
     def test_01_inst_Qdatainfo(self):
+        from qdatainfo import Qdatainfo
         qdi: Qdatainfo = None
         try:
             qdi = Qdatainfo()
@@ -83,7 +83,7 @@ class Testqdatainfo(unittest.TestCase):
         self.assertTrue('Qdatainfo: t:' in aa)
 
     def test_02_inst_DataQ(self):
-
+        from qdatainfo import DataQ, Qdatainfo
         qdi: DataQ = None
         try:
             qdi = DataQ()
@@ -101,7 +101,7 @@ class Testqdatainfo(unittest.TestCase):
         self.assertTrue('DataQ: t: ', aa)
 
     def test_03_inst_LWQ(self):
-
+        from qdatainfo import LWQ, DataQ, Qdatainfo
         qdi: LWQ = None
         try:
             qdi = LWQ()
@@ -119,6 +119,7 @@ class Testqdatainfo(unittest.TestCase):
         self.assertTrue('LWQ: t: ', aa)
 
     def test_04_inst_NFQ(self):
+        from qdatainfo import NFQ, DataQ, Qdatainfo
         from nfresult import NFResult
         import pickle
         qdi: NFQ = None
@@ -154,7 +155,7 @@ class Testqdatainfo(unittest.TestCase):
                          str(reading0.signal_st))
 
     def test_05_inst_DbQ(self):
-
+        from qdatainfo import DbQ, DataQ, Qdatainfo
         qdi: DbQ = None
         try:
             qdi = DbQ()
@@ -172,7 +173,7 @@ class Testqdatainfo(unittest.TestCase):
         self.assertTrue('DbQ: t: ', aa)
 
     def test_06_inst_DbQ(self):
-
+        from qdatainfo import DpQ, DataQ, Qdatainfo
         qdi: DpQ = None
         try:
             qdi = DpQ()

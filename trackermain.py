@@ -4,16 +4,18 @@
 
 import sys
 import os
-import concurrent.futures
-from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set
+
+
+# from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque
+from typing import Any, Tuple, List, Dict, Deque
 
 from queue import Empty as QEmpty, Full as QFull
-
+import concurrent.futures
 import multiprocessing as mp
 from queuesandevents import CTX, QUEUES, STOP_EVENTS
 import logging
 import logging.handlers
-
+import pickle
 
 from time import sleep as Sleep
 from time import monotonic
@@ -28,8 +30,8 @@ from userinput import UserInput
 from nfresult import NFResult
 
 from flex import Flex
-#from noisefloor import Noisefloor
-#from qdatainfo import DataQ, DbQ, DpQ, LWQ
+# from noisefloor import Noisefloor
+# from qdatainfo import DataQ, DbQ, DpQ, LWQ
 
 
 LOGGER = logging.getLogger(__name__)
@@ -74,7 +76,7 @@ class DBwriter:
             return
 
         indata: Deck = Deck(100)  # deque([])
-        self.barrier.wait()
+        # self.barrier.wait()
 
         print ('DBwriter started')
 
@@ -135,7 +137,7 @@ class Aggratator:
         if not self.execute:
             return 0
         count = [0]
-        self.barrier.wait()
+        # self.barrier.wait()
 
         print ('Aggratator started')
 
@@ -190,6 +192,11 @@ def dataaggrator(thread_info, aggfn=None, debugfn=None):
         return ag.run()
 
 
+def Get_LW1(rawDataQ_OUT):
+    times: str = str(Dtc.now(timezone.utc))
+    rawDataQ_OUT.put(times)
+
+
 def Get_LW(rawDataQ_OUT):
     """Get_LW(rawDataQ_OUT)
 
@@ -199,8 +206,8 @@ def Get_LW(rawDataQ_OUT):
     from qdatainfo import LWQ
     _lw = LocalWeather()
     _lw.load()
-    content: str = _lw.gen_sql()
-    pkg: LWQ = LWQ(content)
+    parital_sql: str = _lw.gen_sql()
+    pkg: LWQ = LWQ(parital_sql)
     rawDataQ_OUT.put(pkg)
 
     # rawDataQ_OUT.put(_lw)
@@ -254,68 +261,216 @@ def trim_dups(mydeck, boolfn):
     return tuplst
 
 
-def get_noise():
-    if thread_info[0]:  # execute:
+def get_noise(*args):
+    """
 
+    *args is (execute, barrier, stop_event, queues,)
+    """
+    from flex import Flex
+    from postproc import BANDS, BandPrams, INITIALZE_FLEX
+    from noisefloor import Noisefloor
+    queues: Dict[str, Any] = args[3]
+    stop_event = args[2]
+    resultQ = queues['dataQ']
+    barrier = args[1]
+
+    if args[0]:  # execute:
+        # barrier.wait()
         print('get_noise started\n', end="")
-        pass
-    print('get_noise ended\n', end="")
-    return locald.count
+        UI: UserInput = UserInput()
+        nf: Noisefloor = None
 
+        UI.request(port='com4')
+        flexr: Flex = Flex(UI)
+        print('saving flex state')
+        initial_state = flexr.save_current_state()
+        try:
+            if not flexr.open():
+                raise (RuntimeError('Flex not connected to serial serial port'))
+
+            nf = Noisefloor(flexr, resultQ, stop_event)
+            nf.open()
+            nf.doit(loops=0, interval=90, runtime=0, dups=True)
+
+        finally:
+            print('restore flex prior state')
+            flexr.restore_state(initial_state)
+
+            if nf:
+                nf.close()
+            UI.close()
+
+    print('get_noise ended\n', end="")
+    return
+
+
+# -----------------------
+
+
+# try:
+    # if not flexr.open():
+    # raise (RuntimeError('Flex not connected to serial serial port'))
+    # print('saving current flex state')
+    # initial_state = flexr.save_current_state()
+    # print('initializing dbg flex state')
+    # flexr.do_cmd_list(INITIALZE_FLEX)
+    # flexr.close()
+    # resultQ = queues.get('dataQ')
+    # stop_event = stop_events.get('acquireData')
+
+    # NOISE = Noisefloor(flexr, resultQ, stop_event)
+    # NOISE.open()
+    # loops must be less than 100 as that is the queue size and I am not emptying it here
+    # NOISE.doit(loops=90, interval=90, dups=True)
+    # NOISE.doit(runtime=1, interval=60)
+    # stop_event.set()
+
+    # indata: List[NFQ] = []
+
+    # a = indata[0]
+    # b = outdata[0]
+
+# except(Exception, KeyboardInterrupt) as exc:
+    # if NOISE:
+    # NOISE.close()
+    # UI.close()
+    # raise exc
+
+# finally:
+    # print('restore flex prior state')
+    # flexr.restore_state(initial_state)
+
+    # if NOISE:
+    # NOISE.close()
+    # UI.close()
+
+
+# ---------------------
 # write_2_q):
 
 
-def dataQ_reader(thread_info, fn=lambda outQ, data: outQ.put(data, False)):
-    """dataQ_reader(thread_info)
-
-    this is the 'transfer' thread in futures
-
-     thread_info is (execute, barrier, stop_event, queues,),
-     fn is the function to be applied to the input data and defaults to writing data
-     to the outQ
-
+# , fn=lambda outQ, data: outQ.put(data, False)):
+def dataQ_reader_datagen(*args, **kwargs):
     """
-    if thread_info[0]:  # execute:
-        import localweather
+
+    this is the 'transfer' thread in futures for the datagen1 main routine
+
+     *args is (execute, barrier, stop_event, queues,)
+    """
+    ti_dict: Dict[str, Any] = {}
+    ti_dict['execute'] = args[0]
+    ti_dict['barrier'] = args[1]
+    ti_dict['stop_event'] = args[2]
+    ti_dict['queues'] = args[3]
+
+    if ti_dict['execute']:  # execute:
+
         locald = threading.local()
 
-        rawDataQ_IN = thread_info[3]['dataQ']
-        dpQ_OUT = thread_info[3]['dpQ']
-        stop_event = thread_info[2]
+        locald.rawDataQ_IN = ti_dict['queues']['dataQ']
+
         locald.count = 0
-        thread_info[1].wait()
-        print('dataQ_reader started\n', end="")
+        # ti_dict['barrier'].wait()  # wait for the barrier
+        print('dataQ_reader_datagen started\n', end="")
         # the deque, max size, single element  size inititally 0
         # locald.deqPrams = (Deck(50), 50, [0])
         indeck = Deck(100)
-        wetherdec = Deck(100)
-        noisedeck = Deck(100)
-        lastweather = None
-        lastnoise = None
+
+        while True:
+            try:  # empty rawDataW into indata
+                # waits for 10sec to try to empty Q
+                indeck.load_from_Q(locald.rawDataQ_IN, mark_done=True)
+
+            except QFull:  # the deck is full
+                print(f'indeck is full {len(indeck)}')
+
+            finally:
+                if len(indeck) >= 20:  # deck is 100 so this should work w/o problems
+                    break
+
+        templst: List[Any] = []
+        try:
+            while True:
+                templst.append(indeck.popleft())
+        except IndexError:
+            pass  # indeck now wmpty
+        with open('localweathersqlshort.pickle', 'wb') as fl:
+            try:
+                pickle.dump(templst, fl)
+            except Exception as ex:
+                a = 0
+
+        print('dataQ_reader_datagen ended\n', end="")
+        return locald.count
+
+    pass
+
+
+def dataQ_reader(*args, **kwargs):
+    """dataQ_reader(*args, **kwargs)
+
+    this is the 'transfer' thread in futures
+
+     *args is (execute, barrier, stop_event, queues,),
+     'fn' in kwargs is the function to be applied to the input data and defaults to writing data
+     to the outQ
+
+    """
+    locald = threading.local()
+    locald.ti_dict: Dict[str, Any] = {}
+    locald.ti_dict['execute'] = args[0]
+    locald.ti_dict['barrier'] = args[1]
+    locald.ti_dict['stop_event'] = args[2]
+    locald.ti_dict['queues'] = args[3]
+    locald.fn = None
+    try:
+        locald.fn = kwargs['fn']
+    except KeyError:
+        pass
+
+    if locald.ti_dict['execute']:  # execute:
+        import localweather
+
+        locald.rawDataQ_IN = locald.ti_dict['queues']['dataQ']
+        locald.dpQ_OUT = locald.ti_dict['queues']['dpQ']
+        locald.stop_event = locald.ti_dict['stop_event']
+        locald.count = 0
+        locald.ti_dict['barrier'].wait()
+        for _ in range(10):
+            Sleep(0.0001)
+        print('dataQ_reader started\n', end="")
+        # the deque, max size, single element  size inititally 0
+        # locald.deqPrams = (Deck(50), 50, [0])
+        locald.indeck = Deck(100)
+        locald.wetherdec = Deck(100)
+        locald.noisedeck = Deck(100)
+        locald.lastweather = None
+        locald.lastnoise = None
 
         while True:
 
             try:  # empty rawDataW into indata
-                indeck.load_from_Q(rawDataQ_IN, mark_done=False)
+                locald.indeck.load_from_Q(
+                    locald.rawDataQ_IN, mark_done=False)
 
             except QFull:
                 pass
 
             finally:
-                if len(indeck) > 0:
+                if len(locald.indeck) > 0:
 
-                    wetherdec.clear()
-                    wetherdec.push(lastweather)
-                    noisedeck.clear()
-                    noisedeck.push(lastnoise)
+                    locald.wetherdec.clear()
+                    locald.wetherdec.push(locald.lastweather)
+                    locald.noisedeck.clear()
+                    locald.noisedeck.push(locald.lastnoise)
                     # separate the indeck contents
                     try:
-                        while(len(indeck) > 0):
-                            cnt = indeck.popleft()
+                        while(len(locald.indeck) > 0):
+                            cnt = locald.indeck.popleft()
                             if isinstance(cnt, LocalWeather):
-                                wetherdec.append(cnt)
+                                locald.wetherdec.append(cnt)
                             elif isinstance(cnt, NFResult):
-                                noisedeck.append(cnt)
+                                locald.noisedeck.append(cnt)
                             else:
                                 raise AssertionError("need to handle")
                     except IndexError:
@@ -323,11 +478,12 @@ def dataQ_reader(thread_info, fn=lambda outQ, data: outQ.put(data, False)):
                     finally:
                         pass
                     data_tobe_processed = None
-                    tuplst = trim_dups(wetherdec, localweather.different)
+                    locald.tuplst = trim_dups(
+                        locald.wetherdec, localweather.different)
 
-                    noiselist = list(noisedeck)
-                    noisemarkers = [i for i in range(1, len(weatherlist)) if
-                                    (weatherlist[i - 1].has_changedweatherlist[i])]
+                    locald.noiselist = list(locald.noisedeck)
+                    locald.noisemarkers = [i for i in range(1, len(weatherlist)) if
+                                           (weatherlist[i - 1].has_changedweatherlist[i])]
 
                     # first item of wetherdec and noisedeck may be None!
                 while True:
@@ -335,12 +491,12 @@ def dataQ_reader(thread_info, fn=lambda outQ, data: outQ.put(data, False)):
                         while True:
                             # data_tobe_processed = locald.deqPrams[0] \
                                 # .popleft()
-                            data_tobe_processed = indeck.popleft(
+                            locald.data_tobe_processed = indeck.popleft(
                             )
                             # process the data
-                            fn(dpQ_OUT, data_tobe_processed)
+                            locald.fn(locald.dpQ_OUT, data_tobe_processed)
                             locald.deqPrams[2][0] = locald.deqPrams[2][0] - 1
-                            rawDataQ_IN.task_done()
+                            locald.rawDataQ_IN.task_done()
                             locald.count += 1
 
                     except QFull:
@@ -352,8 +508,8 @@ def dataQ_reader(thread_info, fn=lambda outQ, data: outQ.put(data, False)):
                     except IndexError:  # indata is now empty
                         break
             # things look done
-            if stop_event.wait(5.0):
-                if rawDataQ_IN.empty() and len(locald.deqPrams[0]) == 0:
+            if locald.stop_event.wait(5.0):
+                if locald.rawDataQ_IN.empty() and len(locald.deqPrams[0]) == 0:
                     break
 
         print('dataQ_reader ended\n', end="")
@@ -423,71 +579,99 @@ def dbQ_writer(thread_info, debugfn=None):
 
 
 # def timed_work(execute, barrier, stop_event, queues, delayseconds, fu):
-def timed_work(thread_info, delayseconds, fu):
+def timed_work(*args, **kwargs):  # thread_info, delayseconds, fu):
     """timed_work(thread_info, delayseconds, fu, )
 
-    thread_info is (execute, barrier, stop_event, queues,),
-
+    *args is (execute, barrier, stop_event, queues),
     execute is a boolean that if True will actually execute fu
     barrier is used to coordinate starting the tasks/threads
     stop_event if set causes the task/thread to stop
-    delayseconds is the number of seconds between calls to fu
-    fu is the function that will be called on the time basis
+
+    **kwargs is
+    'delay' is the number of seconds between calls to fu
+    'timed_func' is the function that will be called on the time basis
+
+    will continue forever until the stop event
+
     queues is the queue dict, but timed_work only uses 'dataQ' from the dict
 
-    this is used for the weather and noise threads
+    this is used for the weather thread
 
     """
 
-    class Sequencer:
-        """Sequencer(delayseconds)
+    # class Sequencer:
+    # """Sequencer(delayseconds:float)
 
-        """
+    # Sets up a 20 repretition delayseconds apart  The repetition stays at 20
+    # resolution is about .5 second (not checked, but guessed)
+    # """
 
-        def __init__(self, delayseconds):
-            self.delayseconds = delayseconds
-            nowis = monotonic()
-            self.to_do_sched = deque(
-                [nowis + t * delayseconds for t in range(20)])
+    # def __init__(self, delayseconds: float):
+    #self.delayseconds = delayseconds
+    #nowis = monotonic()
+    # self.to_do_sched: Deque[float] = deque(
+    # [nowis + t * delayseconds for t in range(1, 21)])  # specifies the first 20 repes
 
-        def do_it_now(self):
-            """ do_it_now()
+    # def do_it_now(self) -> bool:
+    # """ do_it_now()
 
-            Defines if it is time to do something on a todo schedule
-            """
-            if self.to_do_sched[0] > monotonic():
-                return False
+    # Decides if it is time to do something on a todo schedule
+    # """
+    # if self.to_do_sched[0] > monotonic():  # if next scheuled is not yet os
+    # return False
 
-            while self.to_do_sched[0] < monotonic():
-                self.to_do_sched.popleft()
-                self.to_do_sched.append(self.to_do_sched[-1] + delayseconds)
+    # for each schedled time < current,
+    # while self.to_do_sched[0] < monotonic():
+    # self.to_do_sched.popleft()   # remove the scheduled time that is os
+    # and add another scheduled time in the future.
+    # self.to_do_sched.append(
+    # self.to_do_sched[-1] + self.delayseconds)
 
-            return True
+    # return True
 
-    if thread_info[0]:
-        locald = threading.local()
-        locald.execute = thread_info[0]
-        raw_data_Q = thread_info[3]['dataQ']
-        locald.stop_event = thread_info[2]
-        locald.delayseconds = delayseconds
-        locald.fu = fu
+    # def get_nxt_wait(self) -> float:
+    # """get_nxt_wait()
+
+    # """
+    # nextt: float = self.to_do_sched[0]
+    #nextt -= monotonic() * 1.1
+    #nextt = 0 if nextt < 0 else nextt
+    # return nextt
+    from sequencer import Sequencer
+    locald = threading.local()
+    ti_dict: Dict[str, Any] = {}
+    ti_dict['execute'] = args[0]
+    ti_dict['barrier'] = args[1]
+    ti_dict['stop_event'] = args[2]
+    ti_dict['queues'] = args[3]
+
+    print('timed work invoked')
+    if ti_dict['execute']:
+        # locald = threading.local()
+        locald.execute = ti_dict['execute']
+        locald.raw_data_Q = ti_dict['queues']['dataQ']
+        locald.stop_event = ti_dict['stop_event']
+        locald.delayseconds = kwargs['delay']
+        locald.fu = kwargs['timed_func']
 
         locald.last10executtimes = deque([], 10)  # queue of max length 10
         # print('timed_work waiting to pass barrier\n',end="")
-        thread_info[1].wait()
-        # print(f'timed_work started: {monotonic()}\n',end="")
+        # ti_dict['barrier'].wait()  # barrier pass
+        # for _ in range(10):
+        # Sleep(0.0001)
+        print(f'timed_work started: {monotonic()}\n', end="")
 
-        locald.seq = Sequencer(delayseconds)
-        while not locald.stop_event.wait(1):
+        locald.seq = Sequencer(locald.delayseconds)
+        while not locald.stop_event.wait(0.45):
             if locald.seq.do_it_now():
                 locald.last10executtimes.append(f'{str(Dtc.now().time())}, {str(locald.fu)}')
-                # print(datetime.datetime.now().time())
-                locald.fu(raw_data_Q)
-                Sleep(0.00001)
+                # print(locald.last10executtimes)
+                locald.fu(locald.raw_data_Q)
+            # Sleep(0.00001)  # context switch oppertunity
 
             if locald.stop_event.is_set():
                 break
-        # print(f'timed_work ended: {time.monotonic()}\n',end="")
+        print(f'timed_work ended: {time.monotonic()}\n', end="")
         return(locald.last10executtimes)
 
 
@@ -498,7 +682,6 @@ def shutdown(futures, queues, stopevents):
     # stop the data generating processes
     stopevents['acquireData'].set()
     stopevents['trans'].set()
-    Sleep(0.001)
     validkeys = list(futures.keys())
 
     # isdone = True
@@ -547,7 +730,7 @@ def main(hours: float = 0.5):
     queues = QUEUES
     timetup: Tuple[float, ...] = (hours, 60 * hours, 3600 * hours,)
 
-    # turn on all the threads
+    # enable all the threads
     bollst: List[bool] = [True, True, True, True, True]
     bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
 
@@ -556,6 +739,11 @@ def main(hours: float = 0.5):
     trackerinitialized: float = monotonic()  # returns seconds
     trackerTimeout: float = trackerinitialized + timetup[2]
 
+    """
+        'delay' is the number of seconds between calls to fu
+    'timed_func' is the function that will be called on the time basis
+    """
+
     trackerstarted = None
     while (True):
         futures: Dict[str, Any] = {}
@@ -563,12 +751,13 @@ def main(hours: float = 0.5):
 
             futures = {
                 # gets weather data
-                'weather': tpex.submit(timed_work, bollst[0], barrier, STOP_EVENTS['acquireData'], 60 * 10.5, Get_LW, queues),
+                'weather': tpex.submit(timed_work, bollst[0], barrier, STOP_EVENTS['acquireData'], queues, delay=60 * 10.5, timed_func=Get_LW),
                 # gets banddata data
-                # 'noise': tpex.submit(timed_work, bollst[1], barrier, STOP_EVENTS['acquireData'], 60, Get_NF, queues),
+                # 'noise': tpex.submit(timed_work, bollst[1], barrier, STOP_EVENTS['acquireData'],queues, 'delay'=60, Get_NF),
                 'noise': tpex.submit(get_noise, bollst[1], barrier, STOP_EVENTS['acquireData'], queues),
                 # reads the dataQ and sends to the data processing queue dpq
-                'transfer': tpex.submit(dataQ_reader, bollst[2], barrier, STOP_EVENTS['trans'], queues),
+                # fn is wrong
+                'transfer': tpex.submit(dataQ_reader, bollst[2], barrier, STOP_EVENTS['trans'], queues, fn=None),
                 # looks at the data and generates the approprate sql to send to dbwriter
                 'dataagragator': tpex.submit(dataaggrator, bollst[3], barrier, STOP_EVENTS['agra'], queues),
                 # reads the database Q and writes it to the database
@@ -576,25 +765,9 @@ def main(hours: float = 0.5):
 
             }
 
-# setup multiprocessor
-
-# with concurrent.futures.ProcessPoolExecutor(max_workers=2) as ppex:
-# reads all the data received in the data processing Q organizes it and sends the results to be written
-# futures['dataagragator'] = ppex.submit(
-# dataaggrator, bollst[3], barrier, stopevents['agra'], queues)
-# reads the database Q and writes it to the database
-# futures['dbwriter'] = tpex.submit(
-# dbQ_writer, bollst[4], barrier, stopevents['dbwrite'], queues)
-
-# barrier.wait()  # start them all working
-# trackerstarted = time.monotonic()
-# trackerschedend = trackerstarted + runtimesec
-# time.monotonic() < trackerschedend
-# while time.monotonic() < trackerTimeout:
-# Sleep(5)
-            shutdown(futures, queues, STOP_EVENTS)
-            #                                               break  # breack out of ppex
-            barrier.wait()  # start them all working
+        for _ in range(10):  # let things start and reach the waiting state
+            Sleep(0.001)
+            # barrier.wait()  # start them all working
             trackerstarted: float = monotonic()
             trackerschedend: float = trackerstarted + timetup[2]
             monotonic() < trackerschedend
@@ -607,15 +780,18 @@ def main(hours: float = 0.5):
     return
 
 
-def datagen1(hours: float = 0.5):
-    """datagen1(hours=0.5)
+def datagen3(hours: float = 0.5):
+    """datagen3(hours=0.5)
 
     """
+    tsi = sys.getswitchinterval()
+    # sys.setswitchinterval(3)
 
     queues = QUEUES
+    dq = queues['dataQ']
     timetup: Tuple[float, ...] = (hours, 60 * hours, 3600 * hours,)
 
-    # turn on all the threads
+    # turn on selected threads
     bollst: Tuple[bool] = (True, True, True, False, False)
     bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
 
@@ -625,53 +801,220 @@ def datagen1(hours: float = 0.5):
     trackerTimeout: float = trackerinitialized + timetup[2]
 
     trackerstarted = None
+    tempdec: Deck = Deck(30)
+
+    while (True):
+        futures: Dict[str, Any] = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
+            try:
+
+                futures = {
+                    # gets weather data
+                    'weather': tpex.submit(timed_work, bollst[0], barrier, STOP_EVENTS['acquireData'], queues, delay=60 * 10.5, timed_func=Get_LW),
+                    # gets banddata data
+                    # #'noise': tpex.submit(timed_work, bollst[1], barrier, STOP_EVENTS['acquireData'], 60, Get_NF, queues),
+                    # 'noise': tpex.submit(get_noise, bollst[1], barrier, STOP_EVENTS['acquireData'], queues),
+                    # reads the dataQ and sends to the data processing queue dpq
+                    # fn is wrong
+                    # 'transfer': tpex.submit(dataQ_reader, bollst[2], barrier, STOP_EVENTS['trans'], queues, fn=None),
+                    # looks at the data and generates the approprate sql to send to dbwriter
+                    # 'dataagragator': tpex.submit(dataaggrator, bollst[3], barrier, STOP_EVENTS['agra'], queues),
+                    # reads the database Q and writes it to the database
+                    # 'dbwriter': tpex.submit(dbQ_writer, bollst[4], barrier, STOP_EVENTS['dbwrite'], queues),
+
+                }
+            except Exception as e:
+                aa = 0
+
+            [tempdec.append(f.running()) for f in futures.values()]
+            tempdec.loadQ(dq)
+            dataQDeque: Deck = Deck(10000)
+            print('main waiting for start')
+            for _ in Range(200):
+                ss = [(k, v) for k, v in futures.items()]
+                Sleep(1)
+
+            # barrier.wait()  # start them all working
+            print('main continuing')
+            for _ in range(2 * 3600):
+                Sleep(0.5)
+                dataQDeque.load_from_Q(
+                    queues['dataQ'], mark_done=True, wait_sec=0.1)
+                if _ % 120 == 0:
+                    print(f'{str(Dtc.now())} q:{len(dataQDeque)}')
+
+            STOP_EVENTS['acquireData'].set()
+            for _ in range(200):
+                Sleep(0.001)
+
+            dataQDeque.load_from_Q(  # pick up anything left over.
+                queues['dataQ'], mark_done=True, wait_sec=0.1)
+
+            shutdown(futures, queues, STOP_EVENTS)
+            break  # break out of tpex
+        a = 0
+        break  # break out of while loop
+
+    aa: List[Any] = []
+    with open('localweathersqlshort.pickle', 'rb') as fl:
+        try:
+            aa = pickle.load(fl)
+        except Exception as ex:
+            a = 0
+
+    a = 0
+
+    return
+
+
+def datagen2(hours: float = 0.5):
+    """datagen2(hours=0.5)
+
+    """
+
+    queues = QUEUES
+    dq = queues['dataQ']
+    timetup: Tuple[float, ...] = (hours, 60 * hours, 3600 * hours,)
+
+    # turn on selected threads
+    bollst: Tuple[bool] = (True, False, False, False, False)
+    bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
+
+    barrier: CTX.Barrier = CTX.Barrier(bc)
+
+    trackerinitialized: float = monotonic()  # returns seconds
+    trackerTimeout: float = trackerinitialized + timetup[2]
+
+    trackerstarted = None
+    tempdec: Deck = Deck(30)
+
+    while (True):
+        futures: Dict[str, Any] = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
+            try:
+
+                futures = {
+                    # gets weather data
+                    'weather': tpex.submit(timed_work, bollst[0], barrier, STOP_EVENTS['acquireData'], queues, delay=10, timed_func=Get_LW1),
+                    # gets banddata data
+                    # #'noise': tpex.submit(timed_work, bollst[1], barrier, STOP_EVENTS['acquireData'], 60, Get_NF, queues),
+                    # 'noise': tpex.submit(get_noise, bollst[1], barrier, STOP_EVENTS['acquireData'], queues),
+                    # reads the dataQ and sends to the data processing queue dpq
+                    # fn is wrong
+                    # 'transfer': tpex.submit(dataQ_reader_datagen, bollst[2], barrier, STOP_EVENTS['trans'], queues, fn=None),
+                    # looks at the data and generates the approprate sql to send to dbwriter
+                    # 'dataagragator': tpex.submit(dataaggrator, bollst[3], barrier, STOP_EVENTS['agra'], queues),
+                    # reads the database Q and writes it to the database
+                    # 'dbwriter': tpex.submit(dbQ_writer, bollst[4], barrier, STOP_EVENTS['dbwrite'], queues),
+
+                }
+            except Exception as e:
+                aa = 0
+
+            # for _ in range(10):  # let things start and reach the waiting state
+                # Sleep(0.001)
+
+            [tempdec.append(f.running()) for f in futures.values()]
+            tempdec.loadQ(dq)
+
+            # barrier.wait()  # start them all working
+            for _ in range(400):
+                Sleep(0.5)
+            STOP_EVENTS['acquireData'].set()
+            for _ in range(200):
+                Sleep(0.001)
+
+            dataQDeque: Deck = Deck(100)
+            dataQDeque.load_from_Q(
+                queues['dataQ'], mark_done=True, wait_sec=0.1)
+
+            shutdown(futures, queues, STOP_EVENTS)
+            break  # break out of tpex
+        a = 0
+        break  # break out of while loop
+
+    aa: List[Any] = []
+    with open('localweathersqlshort.pickle', 'rb') as fl:
+        try:
+            aa = pickle.load(fl)
+        except Exception as ex:
+            a = 0
+
+    a = 0
+
+    return
+
+
+def datagen1(hours: float = 0.5):
+    """datagen1(hours=0.5)
+    runs the weather task for
+    """
+
+    queues = QUEUES
+    timetup: Tuple[float, ...] = (hours, 60 * hours, 3600 * hours,)
+
+    # turn on selected threads
+    bollst: Tuple[bool] = (False, False, True, False, False)
+    # bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
+
+    barrier: CTX.Barrier = CTX.Barrier(bc)
+
+    trackerinitialized: float = monotonic()  # returns seconds
+    trackerTimeout: float = trackerinitialized + timetup[2]
+
+    trackerstarted = None
+    tempdec: Deck = Deck(30)
+
     while (True):
         futures: Dict[str, Any] = {}
         with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
 
             futures = {
                 # gets weather data
-                'weather': tpex.submit(timed_work, bollst[0], barrier, STOP_EVENTS['acquireData'], 60 * 10.5, Get_LW, queues),
+                'weather': tpex.submit(timed_work, bollst[0], barrier, STOP_EVENTS['acquireData'], queues, delay=60 * 10.5, timed_func=Get_LW),
                 # gets banddata data
-                # 'noise': tpex.submit(timed_work, bollst[1], barrier, STOP_EVENTS['acquireData'], 60, Get_NF, queues),
-                'noise': tpex.submit(get_noise, bollst[1], barrier, STOP_EVENTS['acquireData'], queues),
+                # #'noise': tpex.submit(timed_work, bollst[1], barrier, STOP_EVENTS['acquireData'], 60, Get_NF, queues),
+                # 'noise': tpex.submit(get_noise, bollst[1], barrier, STOP_EVENTS['acquireData'], queues),
                 # reads the dataQ and sends to the data processing queue dpq
-                'transfer': tpex.submit(dataQ_reader, bollst[2], barrier, STOP_EVENTS['trans'], queues),
+                # fn is wrong
+                'transfer': tpex.submit(dataQ_reader_datagen, bollst[2], barrier, STOP_EVENTS['trans'], queues, fn=None),
                 # looks at the data and generates the approprate sql to send to dbwriter
-                'dataagragator': tpex.submit(dataaggrator, bollst[3], barrier, STOP_EVENTS['agra'], queues),
+                # 'dataagragator': tpex.submit(dataaggrator, bollst[3], barrier, STOP_EVENTS['agra'], queues),
                 # reads the database Q and writes it to the database
-                'dbwriter': tpex.submit(dbQ_writer, bollst[4], barrier, STOP_EVENTS['dbwrite'], queues),
+                # 'dbwriter': tpex.submit(dbQ_writer, bollst[4], barrier, STOP_EVENTS['dbwrite'], queues),
 
             }
 
-# setup multiprocessor
+            # for _ in range(10):  # let things start and reach the waiting state
+            # Sleep(0.001)
 
-# with concurrent.futures.ProcessPoolExecutor(max_workers=2) as ppex:
-# reads all the data received in the data processing Q organizes it and sends the results to be written
-# futures['dataagragator'] = ppex.submit(
-# dataaggrator, bollst[3], barrier, stopevents['agra'], queues)
-# reads the database Q and writes it to the database
-# futures['dbwriter'] = tpex.submit(
-# dbQ_writer, bollst[4], barrier, stopevents['dbwrite'], queues)
+            [tempdec.append(f.running()) for f in futures.values()]
+            tempdec.loadQ(dq)
 
-# barrier.wait()  # start them all working
-# trackerstarted = time.monotonic()
-# trackerschedend = trackerstarted + runtimesec
-# time.monotonic() < trackerschedend
-# while time.monotonic() < trackerTimeout:
-# Sleep(5)
-            shutdown(futures, queues, STOP_EVENTS)
-            #                                               break  # breack out of ppex
-            barrier.wait()  # start them all working
+            # barrier.wait()  # start them all working
             trackerstarted: float = monotonic()
             trackerschedend: float = trackerstarted + timetup[2]
-            monotonic() < trackerschedend
+            #monotonic() < trackerschedend
+            # dataQ_reader_datagen will end when done
+            tfut = futures['transfer']
             while monotonic() < trackerTimeout:
-                Sleep(5)
+                Sleep(10)
+                if tfut.done():
+                    break
             shutdown(futures, queues, STOP_EVENTS)
             break  # break out of tpex
         a = 0
         break  # break out of while loop
+
+    aa: List[Any] = []
+    with open('localweathersqlshort.pickle', 'rb') as fl:
+        try:
+            aa = pickle.load(fl)
+        except Exception as ex:
+            a = 0
+
+    a = 0
+
     return
 
 
@@ -701,16 +1044,23 @@ if __name__ == '__main__':
     THE_LOGGER.info('trackermain executed as main')
     # LOGGER.setLevel(logging.DEBUG)
     _aa = Dtc.now(timezone.utc)
-    if 'time.struct_time(tm_year=1970, tm_mon=1, tm_mday=1, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=3, tm_yday=1, tm_isdst=0)' != str(Dtc.now(timezone.utc)):
+    if 'datetime.datetime(1970, 1, 1, 0, 0, tzinfo=datetime.timezone.utc)' != repr(Dtc.fromtimestamp(0, timezone.utc)):
         print(str(Dtc.now(timezone.utc)))
         raise SystemError(
             'Wrong epic starting date/time, must be Jan 1, 1970 midnight utc')
 
     try:
-        if True:
+        val = 1
+        if val == 0:
             main()
-        else:
+        elif val == 1:
             datagen1()
+        elif val == 2:
+            datagen2()
+        elif val == 3:
+            datagen3()
+        else:
+            raise Exception("wrong val")
 
     except(Exception, KeyboardInterrupt) as exc:
         print(exc)

@@ -7,7 +7,8 @@
 
 import sys
 import os
-from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict
+from typing import Any, Union, Tuple, Callable, TypeVar, Generic, List,
+#from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque, Iterable
 import logging
 import logging.handlers
 import datetime
@@ -117,12 +118,13 @@ class Noisefloor:
 
         Sends the band data to the data queue in a NFQ wrapper
         """
-        # for br in noisefloordata:
-        # br.flexradio = None
+
         print('- ', end='')
         _nfq = NFQ(nfr)
         self.out_queue.put(_nfq)
-        # print (f'queued {noisefloordata}')
+        for _ in range(10):
+            Sleep(0.00001)
+        print (f'queued {self.out_queue.qsize()}')
 
     def _oneloopallbands(self) -> NFResult:
         """_oneloopallbands()
@@ -189,6 +191,7 @@ class Noisefloor:
         runtime is the time extent the measurements will be taken if loops is 0
         interval is the number of seconds between each run
         loops is the number of times the measurment will be taken and if >0 overrides the runtime
+        if both loops and runtime are 0, will run until self.stop_event is set
 
         """
         class IntervalAdj:
@@ -199,10 +202,12 @@ class Noisefloor:
                 pass
 
             def start(self):
-                self.starttime: float = monotonic()
+                if self.starttime is None:
+                    self.starttime: float = monotonic()
 
             def end(self):
-                self.endtime: float = monotonic()
+                if self.endtime is None:
+                    self.endtime: float = monotonic()
 
             def getinterval(self) -> float:
                 if self.starttime is None or self.endtime is None:
@@ -210,12 +215,29 @@ class Noisefloor:
                 else:
                     duration: float = self.endtime - self.starttime
                     timeleft: float = self.inter - duration
+                    self.starttime = None
+                    self.endtime = None
                     if timeleft < 0.1:
                         # print(f'dur:{duration : .2f}, delay:0.1')
                         return 0.001
                     else:
                         # print(f'dur:{duration : .2f}, tl:{timeleft : .2f}')
                         return timeleft
+
+        def _do_intervals(intadj):
+            first: bool = False
+            if self.stop_event.is_set():
+                return
+            realint: float = intadj.getinterval()
+            if not first:
+                self.stop_event.wait(realint)
+            else:
+                first = False
+
+            intadj.start()
+            self.oneloop_all_bands(dups=_allow_dups)
+            intadj.end()
+            Sleep(0.001)
 
         # initdata = self.initialize_flex() #if you need to look at the results
         testdl: List[NFQ] = None
@@ -231,14 +253,31 @@ class Noisefloor:
             return
         try:
 
-            self.flex.do_cmd_list(INITIALZE_FLEX)
+            # self.flex.do_cmd_list(INITIALZE_FLEX)
             # _DT.open()
-            first: bool = True
+            # first: bool = True
             # interval_adj: float = 0.0
-            if loops == 0:
+            if loops == 0 and int(runtime) == 0:
+                intadj: IntervalAdj = IntervalAdj(interval)
+                while not self.stop_event.is_set():
+                    _do_intervals(intadj)
+                    # if self.stop_event.is_set():
+                    # return
+                    # realint: float = intadj.getinterval()
+                    # if not first:
+                    # self.stop_event.wait(realint)
+                    # else:
+                    #first = False
+
+                    # intadj.start()
+                    # self.oneloop_all_bands(dups=_allow_dups)
+                    # intadj.end()
+
+            elif loops == 0:
                 start_time = datetime.datetime.now()
                 self.end_time = start_time + \
                     datetime.timedelta(hours=runtime)
+                intadj: IntervalAdj = IntervalAdj(interval)
                 while datetime.datetime.now() < self.end_time:
                     if testdl:
                         for dta in testdl:
@@ -246,18 +285,19 @@ class Noisefloor:
                                 testdata=dta, dups=_allow_dups)
                             Sleep(1)
                     else:
-                        intadj: IntervalAdj = IntervalAdj(interval)
-                        if self.stop_event.is_set():
-                            return
-                        realint: float = intadj.getinterval()
-                        if not first:
-                            self.stop_event.wait(realint)
-                        else:
-                            first = False
+                        # intadj: IntervalAdj = IntervalAdj(interval)
+                        _do_intervals(intadj)
+                        # if self.stop_event.is_set():
+                        # return
+                        # realint: float = intadj.getinterval()
+                        # if not first:
+                        # self.stop_event.wait(realint)
+                        # else:
+                        #first = False
 
-                        intadj.start()
-                        self.oneloop_all_bands(dups=_allow_dups)
-                        intadj.end()
+                        # intadj.start()
+                        # self.oneloop_all_bands(dups=_allow_dups)
+                        # intadj.end()
 
             else:
                 if testdl:
@@ -268,19 +308,18 @@ class Noisefloor:
                 else:
                     intadj: IntervalAdj = IntervalAdj(interval)
                     for _ in range(loops):
-                        if self.stop_event.is_set():
-                            return
+                        _do_intervals(intadj)
+                        # if self.stop_event.is_set():
+                        # return
+                        # realint: float = intadj.getinterval()
+                        # if not first:
+                        # self.stop_event.wait(realint)
+                        # else:
+                        #first = False
 
-                        realint: float = intadj.getinterval()
-                        if not first:
-                            self.stop_event.wait(realint)
-                        else:
-                            first = False
-
-                        # print(f'{_}', end='')
-                        intadj.start()
-                        self.oneloop_all_bands(dups=_allow_dups)
-                        intadj.end()
+                        # intadj.start()
+                        # self.oneloop_all_bands(dups=_allow_dups)
+                        # intadj.end()
 
         except Exception as ex:
             print(f'exception in doit {ex}')
@@ -291,6 +330,7 @@ class Noisefloor:
 
 
 def main(stop_events: Mapping[str, CTX.Event], queues: Mapping[str, CTX.JoinableQueue]):
+    from smeteravg import SMeterAvg
     UI = UserInput()
     NOISE = None
 

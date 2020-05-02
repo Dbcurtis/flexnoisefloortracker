@@ -4,19 +4,14 @@
 
 import sys
 import os
-from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict
+from typing import Any, Tuple, Sequence, List, Set, FrozenSet
+#from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque, Iterable
 import logging
 import logging.handlers
-#import time
 from time import sleep as Sleep
-
-# from statistics import mean
-# import mysql.connector as mariadb
 from userinput import UserInput
 from smeter import SMeter
-# from bandreadings import Bandreadings
-# import dbtools
-# import postproc
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -65,7 +60,7 @@ ZZXG Read / Set VFO A XIT Frequency (+/- 5 digit Hz)
 ZZXS Reads / Sets XIT State (On / Off)
 """
 
-FLEX_CAT_ALL = frozenset(
+FLEX_CAT_ALL: FrozenSet[str] = frozenset(
     [
         'ZZAG', 'ZZAI', 'ZZAR', 'ZZAS', 'ZZBI', 'ZZDE', 'ZZFA', 'ZZFB', 'ZZFI',
         'ZZFJ', 'ZZFR', 'ZZFT', 'ZZGT', 'ZZIF', 'ZZLB', 'ZZLE', 'ZZLF', 'ZZMA',
@@ -75,7 +70,7 @@ FLEX_CAT_ALL = frozenset(
     ]
 )
 
-FLEX_CAT_WRITE = frozenset(  # this variable is badly named
+FLEX_CAT_WRITE: FrozenSet[str] = frozenset(  # this variable is badly named
     ['ZZFR', 'ZZFT', 'ZZPE', 'ZZRC', 'ZZRD',
         'ZZRU', 'ZZSM', 'ZZSW', 'ZZTX', 'ZZXC', ]
 )
@@ -110,7 +105,7 @@ class Flex:
         cp = self._ui.comm_port if self._ui.comm_port else "unspecified"
         return f'[Flex] Flex cat: {cp}, opened: {self.is_open}'
 
-    def open(self, detect_br=False) -> bool:
+    def open(self, detect_br: bool = False) -> bool:
         """open(detect_br)
 
         Configures and opens the serial port if able, otherwise
@@ -132,11 +127,11 @@ class Flex:
             self._ui.open(detect_br)
             self.is_open = self._ui.serial_port.is_open
             # check if port is connected to Flex
-            repl = self.do_cmd('ZZAI;')
-            result = repl.startswith('ZZAI')
+            repl: str = self.do_cmd('ZZAI;')
+            result: bool = repl.startswith('ZZAI')
             repl = self.do_cmd('ZZFA;')
-            initfreq = int(repl[4:-1])
-            cmd = f'ZZFA{int(initfreq + 30000) :011d};'
+            initfreq: int = int(repl[4:-1])
+            cmd: str = f'ZZFA{int(initfreq + 30000) :011d};'
             # testres = self.do_cmd(cmd)
             if self.do_cmd(cmd) != cmd:
                 raise Exception('Slice A is Locked, aborting')
@@ -175,16 +170,6 @@ class Flex:
         if isinstance(cset, set):
             clist.sort()
 
-        # resultlst = []
-        # cnt = 0
-        # for cmd in clist:
-            # aa = self.do_cmd(cmd)
-            # if not '?;' in aa:
-            # resultlst.append(aa)
-            # print(f'{cnt}: cmd {cmd}: {aa}')
-            # cnt += 1
-
-        # [self.do_cmd(cmd) for cmd in clist]
         """expected ?
         ZZFJ VFO B DSP Filter Index
         ZZAS VFO B AGC Threshold (0-100)
@@ -196,7 +181,7 @@ class Flex:
         ZZFB VFO B Frequency (11 digit Hz)
         ZZRW VFO B RIT Frequency
         """
-        # aa = len(resultlst)
+
         resultlst = [_ for _ in [self.do_cmd(
             cmd) for cmd in clist] if _ != '?;']
 
@@ -218,9 +203,12 @@ class Flex:
     def restore_state(self, cmdlst: List[str]) -> List[str]:
         """restore_state()
 
+        TBD
+
         """
         results: List[str] = []
         if self._ui.serial_port.is_open and cmdlst:
+            cmd: str = None
             for cmd in cmdlst:
                 if cmd[0:4] in 'ZZIF':
                     continue
@@ -232,6 +220,8 @@ class Flex:
     def close(self):
         """close()
 
+        TBD
+
         """
         self._ui.close()
         self.is_open = self._ui.serial_port.is_open
@@ -242,7 +232,7 @@ class Flex:
 
         for cmd in cmd_list:
             result = None
-            c = cmd[0][0:4]
+            c: str = cmd[0][0:4]
             if c == 'wait':
                 delay = float(cmd[0][4:])
                 Sleep(delay)
@@ -255,8 +245,8 @@ class Flex:
             if c == 'ZZFA':
                 while not result.startswith('ZZFA'):
                     result = self._ui.serial_port.docmd(cmd[0])
-                freqa = cmd[0][4:-1]
-                freq = int(freqa)
+                _ = cmd[0][4:-1]  # get ascii rep of the frequency
+                freq = int(_)
 
             if cmd[1]:  # process the result if provided
                 _ = result.split(';')
@@ -287,6 +277,7 @@ class Flex:
 
         """
         results: List[str] = []
+        cmd: str = None
         for cmd in cmd_list:
             if cmd[0][0:4] == 'wait':
                 delay = float(cmd[0][4:])
@@ -323,7 +314,6 @@ def main():
     ui.request(port='com4')
     flex = None
     try:
-
         flex = Flex(ui)
         flex.open()
     finally:

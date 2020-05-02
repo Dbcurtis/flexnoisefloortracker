@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
 """gets local weather info from openweathermap.org"""
+# from __future__ import annotations
 import os
 import sys
-from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set
+from typing import Any, List, Dict
+#from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque, Iterable
 from multiprocessing import freeze_support
 import logging
 import logging.handlers
@@ -14,7 +16,7 @@ from datetime import timezone
 from queue import Empty as QEmpty
 import multiprocessing as mp
 from time import sleep as Sleep
-import qdatainfo
+#import qdatainfo
 import dbtools
 import timestampaux
 from medfordor import Medford_or_Info as MI
@@ -33,22 +35,22 @@ PAYLOAD = {'id': str(MI['id']), 'APPID': '1320944048cabbe1aebe1fbe9c1c7d6c'}
 _VALID_UNITS = ['std', 'metric', 'imperial']
 
 
-def converttemp(k) -> List[str]:
+def converttemp(k: Any) -> List[str]:
     """converttemp(k)
     k is degrees in Kelven as int, float or str
 
     returns List [xK, xC, xF]
     """
-    result = []
-    k1 = 0.0
+    result: List[str] = []
+    k1: float = 0.0
     try:
         k1 = float(k)
     except ValueError:
         raise ValueError(
             'f(t) is not int, float or text of a float or int number')
 
-    c = k1 - 273.15
-    f = (c * (9 / 5)) + 32.0
+    c: float = k1 - 273.15
+    f: float = (c * (9 / 5)) + 32.0
     result = [f'{k:.2f}K', f'{c:.2f}C', f'{f:.2f}F']
     return result
 
@@ -60,9 +62,9 @@ def convertspeed(msin) -> float:
     return list (meters per sec, miles per hour)
     """
     result = []
-    ms = float(msin)
-    mh = ms * 2.236936
-    result = [ms, round(mh, 2)]
+    ms: float = float(msin)
+    mh: float = ms * 2.236936
+    result: float = [ms, round(mh, 2)]
     return result
 
 
@@ -119,12 +121,9 @@ class MyTime(ComparableMixin):
         YYYY-MM-DD HH:MM:SS
 
         """
-
         _fmt: str = '%Y-%m-%d %H:%M:%S'
         result: str = ''
-
         result = self.localt.strftime(_fmt)
-
         return result
 
     def get(self) -> List[Any]:
@@ -256,6 +255,10 @@ class LocalWeather(ComparableMixin):
         return f'Localweather: valid:{self.valid}, {result}'
 
     def gen_sql(self) -> str:
+        """gen_sql()
+
+        TBD
+        """
 
         # weather fields
         # WRECID
@@ -287,13 +290,16 @@ class LocalWeather(ComparableMixin):
         wind = f"WindS = {wnds}, WindD = {wdir}, WindG = {wgust}"
         htemp = f"Humidity = {hum}, TempF = {tempf}"
 
-        result: str = f'INSERT INTO weather SET {times}, {wind}, {htemp}'
+        result: str = f'INSERT INTO weather SET {times}, {htemp}, {wind}'
         return result
 
-    def has_changed(self, other):
+    def has_changed(self, other: LocalWeather):
+        """has_changed(other)
+
+        """
         result = False
         if isinstance(other, LocalWeather):
-            o = other
+            o: LocalWeather = other
             omains = other.rjson['main']
             smains = self.rjson['main']
             return self.times['sunup'] != o.times['sunup'] or \
@@ -305,7 +311,10 @@ class LocalWeather(ComparableMixin):
 
         return result
 
-    def load_from_other(self, other):
+    def load_from_other(self, other: LocalWeather):
+        """load_from_other(other)
+
+        """
         if not isinstance(other, LocalWeather):
             raise ValueError('other must be a LocalWeather object')
         self.load_from_json(other.rjson)
@@ -453,6 +462,8 @@ def main():
 
     print ('all done')
 
+
+import qdatainfo
 
 if __name__ == '__main__':
 
