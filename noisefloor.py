@@ -7,7 +7,7 @@
 
 import sys
 import os
-from typing import Any, Union, Tuple, Callable, TypeVar, Generic, List,
+from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Mapping, List
 #from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque, Iterable
 import logging
 import logging.handlers
@@ -124,7 +124,7 @@ class Noisefloor:
         self.out_queue.put(_nfq)
         for _ in range(10):
             Sleep(0.00001)
-        print (f'queued {self.out_queue.qsize()}')
+        print(f'queued {self.out_queue.qsize()}')
 
     def _oneloopallbands(self) -> NFResult:
         """_oneloopallbands()
@@ -133,7 +133,8 @@ class Noisefloor:
         from smeteravg import SMeterAvg
         results: List[SMeterAvg] = []
         BANDS.values()
-        activeBands: List[str] = [bp.bandid for bp in BANDS.values() if bp.is_enabled()]
+        activeBands: List[str] = [
+            bp.bandid for bp in BANDS.values() if bp.is_enabled()]
         nfresult: NFResult = NFResult()
         nfresult.start()
         try:

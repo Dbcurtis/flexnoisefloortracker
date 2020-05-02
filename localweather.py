@@ -2,6 +2,7 @@
 
 """gets local weather info from openweathermap.org"""
 # from __future__ import annotations
+import qdatainfo
 import os
 import sys
 from typing import Any, List, Dict
@@ -169,26 +170,6 @@ class MyTime(ComparableMixin):
         return self.utc
 
 
-def different(arg1: Any, arg2: Any) -> bool:
-    """different(other)
-
-    """
-
-    result = False
-    if isinstance(arg2, LocalWeather) and isinstance(arg1, LocalWeather):
-        o: LocalWeather = arg2
-        mains = arg1.rjson['main']
-        omains = arg2.rjson['main']
-        return arg1.times['sunup'] != o.times['sunup'] or \
-            arg1.times['sunset'] != o.times['sunset'] or \
-            mains['temp'] != omains['temp'] or \
-            mains['temp_min'] != omains['temp_min'] or \
-            mains['temp_max'] != omains['temp_max'] or \
-            arg1.rjson['wind'] != o.rjson['wind']
-
-    return result
-
-
 _SQL_COLUMN_NAMES_LIST: List[str] = [
     'WRECID',
     'timerecid',
@@ -293,7 +274,7 @@ class LocalWeather(ComparableMixin):
         result: str = f'INSERT INTO weather SET {times}, {htemp}, {wind}'
         return result
 
-    def has_changed(self, other: LocalWeather):
+    def has_changed(self, other: Any):
         """has_changed(other)
 
         """
@@ -311,7 +292,7 @@ class LocalWeather(ComparableMixin):
 
         return result
 
-    def load_from_other(self, other: LocalWeather):
+    def load_from_other(self, other: Any):
         """load_from_other(other)
 
         """
@@ -399,6 +380,26 @@ class LocalWeather(ComparableMixin):
         return self.maint['temp']
 
 
+def different(arg1: Any, arg2: Any) -> bool:
+    """different(other)
+
+    """
+
+    result = False
+    if isinstance(arg2, LocalWeather) and isinstance(arg1, LocalWeather):
+        o: LocalWeather = arg2
+        mains = arg1.rjson['main']
+        omains = arg2.rjson['main']
+        return arg1.times['sunup'] != o.times['sunup'] or \
+            arg1.times['sunset'] != o.times['sunset'] or \
+            mains['temp'] != omains['temp'] or \
+            mains['temp_min'] != omains['temp_min'] or \
+            mains['temp_max'] != omains['temp_max'] or \
+            arg1.rjson['wind'] != o.rjson['wind']
+
+    return result
+
+
 def main():
     from trackermain import CTX, QUEUES
     from qdatainfo import LWQ
@@ -435,7 +436,7 @@ def main():
                 a = 0
 
         if restored[0] != saved[0]:
-            print ('saved and restored first entry are not equal')
+            print('saved and restored first entry are not equal')
 
     with open(f'./tests/{fn}', 'rb') as fl:
         try:
@@ -458,12 +459,10 @@ def main():
             running = False
 
     if restoredq[0] != saved[0]:
-        print ('saved and restoredq first entry are not equal')
+        print('saved and restoredq first entry are not equal')
 
-    print ('all done')
+    print('all done')
 
-
-import qdatainfo
 
 if __name__ == '__main__':
 

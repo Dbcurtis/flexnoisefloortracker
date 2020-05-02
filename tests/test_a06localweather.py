@@ -6,10 +6,10 @@ Tests the local weather module
 # import datetime
 import unittest
 import multiprocessing as mp
-from multiprocessing import queues
+#from multiprocessing import queues
 from time import sleep as Sleep
 import calendar
-from collections import deque
+#from collections import deque
 
 #import jsonpickle
 import pickle
@@ -269,7 +269,7 @@ class TestLocalweather(unittest.TestCase):
                 a = 0
             except Exception as ex:
                 a = 0
-                raise
+                raise ex
         #deck = deque(local_weather_lst)
         lw1: LocalWeather = local_weather_lst[0]
 
@@ -304,7 +304,7 @@ class TestLocalweather(unittest.TestCase):
                 local_weather_lst = pickle.load(fl1)
 
             except Exception as ex:
-                raise
+                raise ex
         #deck = deque(local_weather_lst)
         lw1: LocalWeather = local_weather_lst[0]
         a = str(lw1)
@@ -317,10 +317,11 @@ class TestLocalweather(unittest.TestCase):
         aaa: List[str] = [
             'INSERT INTO weather SET Sunset = 1586375106000000,',
             'Sunrise = 1586328050000000,',
-            'RecDT = 1586354220000000, WindS = 3.4, WindD = 280,',
-            'WindG = 0.0, Humidity = 51.0, TempF = 67.08'
+            'RecDT = 1586354220000000,',
+            'Humidity = 51.0, TempF = 67.08, WindS = 3.4, WindD = 280, WindG = 0.0'
         ]
         ans: str = ' '.join(aaa)
+        #val: str = lw1.gen_sql()
         self.assertEqual(ans, lw1.gen_sql())
 
 
