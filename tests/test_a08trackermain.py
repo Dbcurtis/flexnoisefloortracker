@@ -405,12 +405,12 @@ class TestTrackermain(unittest.TestCase):
             if _ not in thejoin:
                 print(_)
             self.assertTrue(_ in thejoin)
-        print('end of subtest 1 ---------------------------------------------------')
+        print('\nend of subtest 1 ---------------------------------------------------\n')
         # turn on selected threads
         bollst = (True, True, True, True, True)
         bc = sum([1 for _ in bollst if _]) + 1  # count them for barrier
 
-        runtime = 61  # either 60, or 120 if not one, some of the asserts are ignored
+        runtime = 120  # either 60, or 120 if not one, some of the asserts are ignored
 
         barrier = CTX.Barrier(bc)
         with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
@@ -468,20 +468,31 @@ class TestTrackermain(unittest.TestCase):
             self.assertTrue(32 <= len(calldic['nf']) <= 34)
         elif runtime == 60:
             self.assertTrue(3 <= len(calldic['tf']) <= 5)
-            self.assertTrue(10 <= len(calldic['da']) <= 12)
-            self.assertTrue(9 <= len(calldic['db']) <= 11)
+            self.assertTrue(11 <= len(calldic['da']) <= 14)
+            self.assertTrue(10 <= len(calldic['db']) <= 12)
             self.assertTrue(13 <= len(calldic['dqr']) <= 15)
             self.assertTrue(16 <= len(calldic['nf']) <= 18)
         else:
             pass
 
         def _genTdif(aa: List[float]) -> List[Tuple[float, ...]]:
+            """_genTdif(aa: List[float])
+
+            generates the differences between adjacent times in aa
+            for each pair, returns a tupal of starttime, endtime, differenc
+
+            """
             result: List[Tuple[float, ...]] = []
             for _ in range(1, len(aa)):
                 result.append((aa[_ - 1], aa[_], aa[_] - aa[_ - 1]))
             return result
 
         def _genTimes(aa: List[str]) -> List[float]:
+            """_genTimes(aa: List[str])
+
+            returns a list of float that have the float value of the t=value string
+
+            """
             result: List[float] = []
             for _v in aa:
                 if 't=' in _v:
@@ -491,6 +502,10 @@ class TestTrackermain(unittest.TestCase):
             return result
 
         def _trimstartend(dic: Dict[str, float], keys: List[str]):
+            """_trimstartend(dic: Dict[str, float], keys: List[str]
+
+            removes the first and last entry of the list value from dic for the selected key
+            """
             for k in keys:
                 if k not in dic.keys():
                     continue
@@ -520,18 +535,9 @@ class TestTrackermain(unittest.TestCase):
             return result
 
         timeddic: Dict[str, float] = _gentimedict(calldic)
-        timeddic: Dict[str, float] = {}
-        # for k, v in calldic.items():
-        #tms: List[float] = _genTimes(v)
-        #difs: List[Tuple[float, ...]] = _genTdif(tms)
-        #timeddic[k] = difs
-
         _trimstartend(timeddic, ['da', 'db', 'dqr', 'nf'])
-
-        avgtdict: Dict[str, float] = _avragedict
+        avgtdict: Dict[str, float] = _avragedict(timeddic)
         self.assertTrue(_checktiming(timesdic, avgtdict))
-
-        a = 0
 
     def testx01a_multiproc_simple(self):
         """test01a_threaded_simple()
