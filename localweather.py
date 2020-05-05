@@ -467,10 +467,10 @@ def main():
 if __name__ == '__main__':
 
     freeze_support()
-    from localweather import LocalWeather
-    import datetime
+    #from localweather import LocalWeather
+    #import datetime
     from datetime import timezone
-    from time import sleep as Sleep
+    #from time import sleep as Sleep
     if not os.path.isdir(LOG_DIR):
         os.mkdir(LOG_DIR)
 

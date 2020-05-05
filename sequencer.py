@@ -24,6 +24,7 @@ class Sequencer:
 
     Sets up a 20 repratition delayseconds apart  The repetition stays at 20
     resolution is about .5 second (not checked, but guessed)
+    the first time is delayseconds past the time the object is instantiated
     """
 
     def __init__(self, delayseconds: float):
@@ -43,11 +44,12 @@ class Sequencer:
         """
         _nowis: float = monotonic()
         if self._to_do_sched[0] > _nowis:  # if next scheuled is not yet
+            #print(self._to_do_sched[0] )
             return False
 
         # for each schedled time < current,
         self.skipped = 0
-        while self._to_do_sched[0] < _nowis:
+        while self._to_do_sched[0] <= _nowis:
             self.skipped += 1
             self._to_do_sched.popleft()   # remove the past scheduled time
             # and add another scheduled time in the future.

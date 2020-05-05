@@ -52,7 +52,7 @@ class TestSequencer(unittest.TestCase):
 
         # sequ: Sequencer = Sequencer(0.1)  # sequencer with an interval of .1 sec
         # sequencer with an interval of 15.0 sec
-        sequ: Sequencer = Sequencer(5.0)  # init for 10 sec delay
+        sequ: Sequencer = Sequencer(5.0)  # init for 5 sec delay
         self.assertAlmostEqual(5.0, sequ.delayseconds)
         self.assertEqual(20, len(sequ._to_do_sched))
         self.assertFalse(sequ.do_it_now())

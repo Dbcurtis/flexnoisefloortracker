@@ -4,14 +4,20 @@ Test file for need
 """
 
 # import datetime
+from typing import Any, List, Dict, Tuple
 from multiprocessing import freeze_support
 import unittest
 import multiprocessing as mp
 from queue import Empty as QEmpty, Full as QFull
-# from multiprocessing import queues as QS
+# from multiprocessing import queues as QS]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]
 import concurrent
 import time
 from collections import deque
+from time import sleep as Sleep
+from time import monotonic
+from concurrent.futures import ALL_COMPLETED, FIRST_EXCEPTION, FIRST_COMPLETED
+import threading
+import statistics
 
 
 import context
@@ -203,13 +209,338 @@ class TestTrackermain(unittest.TestCase):
         """
         pass
 
-    def test01a_multiproc_simple(self):
+    def test0_multithread_disabled(self):
+        from queuesandevents import CTX, QUEUES, STOP_EVENTS
+        # Testing queue to gather info
+        testq = CTX.JoinableQueue(maxsize=500)
+        queues = QUEUES
+        # timetup: Tuple[float, ...] = (hours, 60 * hours, 3600 * hours,)
+
+        # turn on selected threads
+        bollst: Tuple[bool] = (False, False, False, False, False)
+        bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
+
+        barrier: CTX.Barrier = CTX.Barrier(bc)
+
+        timesdic = {'tf': 15, 'nf': 4, 'dqr': 5, 'da': 6, 'db': 7}
+
+        def myprint(st):
+            print(st)
+            testq.put(st)
+
+        def tf(*args):
+            """tf()
+
+            """
+            myprint(
+                f'tf th={threading.current_thread().getName()}, t={monotonic()}')
+
+        """
+                myprint(
+                    f'{name} invoked, t={threading.current_thread().getName()}')
+                Sleep(1.5)
+                if args[0]:
+                    myprint(f'{name}  execution enabled waiting')
+                    args[1].wait()
+                    myprint(f'{name} starting')
+                else:
+                    myprint(f'{name} execution disabled')
+                myprint(f'{name}  end')
+
+        """
+
+        def _funtem(args: List[Any]):
+            """_funtem(*args)
+            *args is (execute, barrier, stop_event, queues,name,interval,doit)
+
+            """
+            locald = threading.local()
+            locald.name = args[4]
+            locald.interval = args[5]
+            locald.doit = args[6]
+            myprint(
+                f'{locald.name} invoked, th={threading.current_thread().getName()}, t={monotonic()}')
+
+            if args[0]:
+                myprint(f'{locald.name} execution enabled waiting')
+                args[1].wait()
+                myprint(
+                    f'{locald.name} starting, th={threading.current_thread().getName()}, t={monotonic()}')
+                while not args[2].wait(locald.interval):
+                    locald.doit()
+
+            else:
+                myprint(f'{locald.name} execution disabled')
+
+            myprint(
+                f'{locald.name} end, th={threading.current_thread().getName()}, t={monotonic()}')
+
+        def nf(*args):
+            """
+
+            *args is (execute, barrier, stop_event, queues,)
+            """
+            name = 'nf'
+            myargs = list(args)
+            myargs.append(name)
+            myargs.append(timesdic[name])
+
+            def doit():
+                myprint(
+                    f'{name} th={threading.current_thread().getName()}, t={monotonic()}')
+            myargs.append(doit)
+            # tup = tuple(myargs)
+            _funtem(myargs)
+
+        def dqr(*args):
+            """
+
+            *args is (execute, barrier, stop_event, queues,)
+            """
+            name = 'dqr'
+            myargs = list(args)
+            myargs.append(name)
+            myargs.append(timesdic[name])
+
+            def doit():
+                myprint(
+                    f'{name} th={threading.current_thread().getName()}, t={monotonic()}')
+            myargs.append(doit)
+            _funtem(myargs)
+
+        def da(*args):
+            """
+
+            *args is (execute, barrier, stop_event, queues,)
+            """
+            name = 'da'
+            myargs = list(args)
+            myargs.append(name)
+            myargs.append(timesdic[name])
+
+            def doit():
+                myprint(
+                    f'{name} th={threading.current_thread().getName()}, t={monotonic()}')
+            myargs.append(doit)
+            _funtem(myargs)
+
+        def db(*args):
+            """
+
+            *args is (execute, barrier, stop_event, queues,)
+            """
+
+            name = 'db'
+            myargs = list(args)
+            myargs.append(name)
+            myargs.append(timesdic[name])
+
+            def doit():
+                myprint(
+                    f'{name} th={threading.current_thread().getName()}, t={monotonic()}')
+            myargs.append(doit)
+            _funtem(myargs)
+
+        futures: Dict[str, Any] = {}
+        myprint('starting')
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
+
+            futures = {
+                # gets weather data
+                'weather': tpex.submit(trackermain.timed_work, bollst[0], barrier, STOP_EVENTS['acquireData'], queues, delay=10.5, timed_func=tf),
+                # gets banddata data
+                # #'noise': tpex.submit(timed_work, bollst[1], barrier, STOP_EVENTS['acquireData'], 60, Get_NF, queues),
+                'noise': tpex.submit(nf, bollst[1], barrier, STOP_EVENTS['acquireData'], queues),
+                # reads the dataQ and sends to the data processing queue dpq
+                'transfer': tpex.submit(dqr, bollst[2], barrier, STOP_EVENTS['trans'], queues),
+                # looks at the data and generates the approprate sql to send to dbwriter
+                'dataagragator': tpex.submit(da, bollst[3], barrier, STOP_EVENTS['agra'], queues),
+                # reads the database Q and writes it to the database
+                'dbwriter': tpex.submit(db, bollst[4], barrier, STOP_EVENTS['dbwrite'], queues),
+
+            }
+
+            barrier.wait()  # start them all working
+
+            # as all the threads are disabled, and will end without need of shutdown,
+            #  we will wait for them all to complete
+            waitresults: Tuple[Set, Set] = concurrent.futures.wait(
+                futures.values(), timeout=20, return_when=ALL_COMPLETED)
+
+            _done = waitresults[0]
+            self.assertEqual(5, len(_done))
+            for _ in _done:
+                self.assertTrue(_.done())
+                self.assertEqual(None, _.result())
+
+            # shutdown(futures, queues, STOP_EVENTS)
+
+        quedstuff = []
+        try:
+            while True:
+                d = testq.get(True, .5)
+                testq.task_done()
+                quedstuff.append(d)
+        except QEmpty:
+            pass
+
+        expected: List[str] = [
+            'starting',
+            'nf invoked,',
+            'dqr invoked,',
+            'da invoked, ',
+            'db invoked,',
+            'dqr execution disabled',
+            'dqr end',
+            'da execution disabled',
+            'da end',
+            'db execution disabled',
+            'db end',
+            'nf execution disabled',
+            'nf end',
+        ]
+        thejoin: str = '\n'.join(quedstuff)
+        for _ in expected:
+            if _ not in thejoin:
+                print(_)
+            self.assertTrue(_ in thejoin)
+        print('end of subtest 1 ---------------------------------------------------')
+        # turn on selected threads
+        bollst = (True, True, True, True, True)
+        bc = sum([1 for _ in bollst if _]) + 1  # count them for barrier
+
+        runtime = 61  # either 60, or 120 if not one, some of the asserts are ignored
+
+        barrier = CTX.Barrier(bc)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
+            futures['weather'] = tpex.submit(
+                trackermain.timed_work, bollst[0], barrier, STOP_EVENTS['acquireData'], queues, delay=timesdic['tf'], timed_func=tf)
+            futures['noise'] = tpex.submit(
+                nf, bollst[1], barrier, STOP_EVENTS['acquireData'], queues)
+            # reads the dataQ and sends to the data processing queue dpq
+            futures['transfer'] = tpex.submit(
+                dqr, bollst[2], barrier, STOP_EVENTS['trans'], queues)
+            # looks at the data and generates the approprate sql to send to dbwriter
+            futures['dataagragator'] = tpex.submit(
+                da, bollst[3], barrier, STOP_EVENTS['agra'], queues)
+            # reads the database Q and writes it to the database
+            futures['dbwriter'] = tpex.submit(
+                db, bollst[4], barrier, STOP_EVENTS['dbwrite'], queues)
+
+            a = 0
+            barrier.wait()  # start them all working
+            Sleep(runtime)
+            trackermain.shutdown(futures, queues, STOP_EVENTS)
+
+        quedstuff = []
+        try:
+            while True:
+                d = testq.get(True, .5)
+                testq.task_done()
+                quedstuff.append(d)
+        except QEmpty:
+            pass
+
+        calldic: Dict(str, List[str]) = {
+            'nf': [],
+            'dqr': [],
+            'da': [],
+            'db': [],
+            'tf': [],
+        }
+        for _ in quedstuff:
+            x = _.split(' ', 1)
+            calldic[x[0]].append(x[1])
+
+        print(len(calldic['tf']))
+        print(len(calldic['da']))
+        print(len(calldic['db']))
+        print(len(calldic['dqr']))
+        print(len(calldic['nf']))
+
+        if runtime == 120:
+
+            self.assertTrue(7 <= len(calldic['tf']) <= 9)
+            self.assertTrue(23 <= len(calldic['da']) <= 25)
+            self.assertTrue(20 <= len(calldic['db']) <= 22)
+            self.assertTrue(26 <= len(calldic['dqr']) <= 28)
+            self.assertTrue(32 <= len(calldic['nf']) <= 34)
+        elif runtime == 60:
+            self.assertTrue(3 <= len(calldic['tf']) <= 5)
+            self.assertTrue(10 <= len(calldic['da']) <= 12)
+            self.assertTrue(9 <= len(calldic['db']) <= 11)
+            self.assertTrue(13 <= len(calldic['dqr']) <= 15)
+            self.assertTrue(16 <= len(calldic['nf']) <= 18)
+        else:
+            pass
+
+        def _genTdif(aa: List[float]) -> List[Tuple[float, ...]]:
+            result: List[Tuple[float, ...]] = []
+            for _ in range(1, len(aa)):
+                result.append((aa[_ - 1], aa[_], aa[_] - aa[_ - 1]))
+            return result
+
+        def _genTimes(aa: List[str]) -> List[float]:
+            result: List[float] = []
+            for _v in aa:
+                if 't=' in _v:
+                    _w = _v.split('t=', 1)
+                    _wf = float(_w[1])
+                    result.append(_wf)
+            return result
+
+        def _trimstartend(dic: Dict[str, float], keys: List[str]):
+            for k in keys:
+                if k not in dic.keys():
+                    continue
+                dic[k] = dic[k][1:-1]
+
+        def _checktiming(d1: Dict[str, float], d2: Dict[str, float]) -> bool:
+            result = True
+            for k in d1.keys():
+                result = result and d1[k] == d2[k]
+
+            return result
+
+        def _avragedict(timeddic) -> Dict[str, float]:
+            result = {}
+            for k, v in timeddic.items():
+                kk = [_[2] for _ in v]
+                s = sum(kk)
+                result[k] = round(s / len(kk), 2)
+            return result
+
+        def _gentimedict(cdi: Dict[str, float]) -> Dict[str, float]:
+            result: Dict[str, float] = {}
+            for k, v in cdi.items():
+                tms: List[float] = _genTimes(v)
+                difs: List[Tuple[float, ...]] = _genTdif(tms)
+                result[k] = difs
+            return result
+
+        timeddic: Dict[str, float] = _gentimedict(calldic)
+        timeddic: Dict[str, float] = {}
+        # for k, v in calldic.items():
+        #tms: List[float] = _genTimes(v)
+        #difs: List[Tuple[float, ...]] = _genTdif(tms)
+        #timeddic[k] = difs
+
+        _trimstartend(timeddic, ['da', 'db', 'dqr', 'nf'])
+
+        avgtdict: Dict[str, float] = _avragedict
+        self.assertTrue(_checktiming(timesdic, avgtdict))
+
+        a = 0
+
+    def testx01a_multiproc_simple(self):
         """test01a_threaded_simple()
 
         test threads started but quick exit as no function is enabled, and that basic queue
         operations work as expected
 
         """
+        return
         print('\ntest01a_threaded_simple\n', end="")
         clearstopevents()
         reset_queues()
@@ -228,7 +559,8 @@ class TestTrackermain(unittest.TestCase):
                 time.sleep(0.00001)
                 barrier.wait(timeout=10)
                 time.sleep(0.00001)
-                print(f'test01a_instat continuing at {str(time.monotonic())}\n', end="")
+                print(
+                    f'test01a_instat continuing at {str(time.monotonic())}\n', end="")
                 # trackerstarted = time.monotonic()
 
                 dpQ_OUT = queues['dpQ']
@@ -263,13 +595,14 @@ class TestTrackermain(unittest.TestCase):
         barrier.reset()
         print('test01a_threaded_simple -- end\n', end="")
 
-    def test01b_threaded_simple(self):
+    def testx01b_threaded_simple(self):
         """test01b_threaded_simple()
 
         Checks to see if the dataQ, timed_work, barrier, and stopevent works plus fundimental timed_work operation
         using only get_lw as the function. No transfer to another queue
 
         """
+        return
         print('\ntest01b_threaded_simple\n', end="")
         clearstopevents()
         reset_queues()
@@ -288,7 +621,8 @@ class TestTrackermain(unittest.TestCase):
                     tpex, bollst, barrier, stopevents, queues)
                 barrier.wait(timeout=10)
                 time.sleep(0.00001)
-                print(f'test01b_instat continuing at {str(time.monotonic())}\n', end="")
+                print(
+                    f'test01b_instat continuing at {str(time.monotonic())}\n', end="")
                 trackerstarted = time.monotonic()
                 marktime(dly=2.5, cnt=6)
                 stopevents['acquireData'].set()
@@ -318,13 +652,14 @@ class TestTrackermain(unittest.TestCase):
         barrier.reset()
         print('test01b_threaded_simple -- end\n', end="")
 
-    def test01c_threaded_simple(self):
+    def testx01c_threaded_simple(self):
         """test01c_threaded_simple()
 
         Checks to see if the dataQ, timed_work, barrier, and stopevent works plus fundimental timed_work operation
         using get_NF and get_LW as the functions. Starting both dataacquisition threads
 
         """
+        return
         print('test0001c_threaded_simple\n', end="")
         clearstopevents()
         reset_queues()
@@ -343,7 +678,8 @@ class TestTrackermain(unittest.TestCase):
                     tpex, bollst, barrier, stopevents, queues)
                 barrier.wait(timeout=10)
                 time.sleep(0.00001)
-                print(f'test01c_instat continuing at {str(time.monotonic())}\n', end="")
+                print(
+                    f'test01c_instat continuing at {str(time.monotonic())}\n', end="")
                 trackerstarted = time.monotonic()
 
                 marktime(dly=2.5, cnt=6)
@@ -393,13 +729,14 @@ class TestTrackermain(unittest.TestCase):
         barrier.reset()
         print('test01c_threaded_simple -- end\n', end="")
 
-    def test01d_threaded_simple(self):
+    def testx01d_threaded_simple(self):
         """test01d_threaded_simple()
 
         Checks to see if the dataQ, timed_work, barrier, and stopevent works plus fundimental timed_work operation
         using get_NF, get_LW, and transfer as the functions. Starting both dataacquisition threads
 
         """
+        return
         print('test01d_threaded_simple\n', end="")
         clearstopevents()
         reset_queues()
@@ -418,7 +755,8 @@ class TestTrackermain(unittest.TestCase):
                     tpex, bollst, barrier, stopevents, queues)
                 barrier.wait(timeout=10)
                 time.sleep(0.00001)
-                print(f'\ntest01d_instat continuing at {str(time.monotonic())}')
+                print(
+                    f'\ntest01d_instat continuing at {str(time.monotonic())}')
                 trackerstarted = time.monotonic()
                 marktime(dly=2.5, cnt=6)
 
@@ -474,7 +812,7 @@ class TestTrackermain(unittest.TestCase):
         barrier.reset()
         print('test01d_threaded_simple -- end\n', end="")
 
-    def test01e_threaded_simple(self):
+    def testx01e_threaded_simple(self):
         """test01e_threaded_simple()
 
         Checks to see if the dataQ, timed_work, barrier, and stopevent works plus fundimental timed_work operation
@@ -482,6 +820,7 @@ class TestTrackermain(unittest.TestCase):
 
 
         """
+        return
         print('test01e_threaded_simple\n', end='')
         clearstopevents()
         reset_queues()
@@ -499,7 +838,8 @@ class TestTrackermain(unittest.TestCase):
                     tpex, bollst, barrier, stopevents, queues)
                 barrier.wait(timeout=100)
                 time.sleep(0.00001)
-                print(f'test01e_instat continuing at {str(time.monotonic())}\n', end='')
+                print(
+                    f'test01e_instat continuing at {str(time.monotonic())}\n', end='')
                 trackerstarted = time.monotonic()
                 marktime(dly=2.5, cnt=6)
 
@@ -569,7 +909,7 @@ class TestTrackermain(unittest.TestCase):
         barrier.reset()
         print('test01e_threaded_simple -- end\n', end='')
 
-    def test02_queue_overflow(self):
+    def testx02_queue_overflow(self):
         """test02_queue_overflow()
 
         tests that the output queue overflow technique works
@@ -577,6 +917,7 @@ class TestTrackermain(unittest.TestCase):
         queues in trackermain have default size of 100
 
         """
+        return
         from trackermain import CTX
 
         print('test02_queue_overflow\n', end='')
@@ -609,7 +950,8 @@ class TestTrackermain(unittest.TestCase):
             futures = startThreads(tpex, bollst, barrier, stopevents, queues)
             barrier.wait(timeout=10)  # wait for transfer to start
 
-            print(f'test02_tqueue_overflow\n {str(time.monotonic())}\n', end='')
+            print(
+                f'test02_tqueue_overflow\n {str(time.monotonic())}\n', end='')
             doonce = True
             # loop until 'transfer is done executing and the qdQ is empty, transfer can end just after puting stuff on dpQ
             while not (futures['transfer'].done() and dpQ.empty()):
@@ -641,10 +983,10 @@ class TestTrackermain(unittest.TestCase):
             self.assertEqual(i, readings[i])
         print('test02_queue_overflow -- end\n', end='')
 
-    def test003_trimdups(self):
+    def testx003_trimdups(self):
         from localweather import LocalWeather, MyTime
         import pickle
-
+        return
         print('test03_trimdups\n', end='')
         deck = deque([])
         results = trackermain.trim_dups(deck, lambda a, b: True)

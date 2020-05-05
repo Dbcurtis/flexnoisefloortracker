@@ -16,6 +16,7 @@ QUEUES = {
     'dbQ': CTX.JoinableQueue(maxsize=100),
     # written to by the aggrator thread, read by the data processor which generates sql commands to dbq
     'dpQ': CTX.JoinableQueue(maxsize=100)
+
 }
 
 # STOP_EVENTS: Dict(str,) = {
