@@ -9,7 +9,7 @@ from multiprocessing import freeze_support
 import unittest
 import multiprocessing as mp
 from queue import Empty as QEmpty, Full as QFull
-# from multiprocessing import queues as QS]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]
+# from multiprocessing import queues as QS
 import concurrent
 import time
 from collections import deque
@@ -209,59 +209,61 @@ class TestTrackermain(unittest.TestCase):
         """
         pass
 
-    def test0_multithread_disabled(self):
+    def test00_basic_thread_operation(self):
+        """test0_multithread_disables
+
+        The two seperate operations in this section make sure that
+        1) disabled threads start and end correctly
+        2) that all the threads can be started and operate reaonable (with test data)
+        3) the only data sent on a queue is to the testq which basically the result of myprint calls
+           and the debug text output for this is disabled by default.
+
+        these tests do check operation of trackermain.timedwork
+        """
         from queuesandevents import CTX, QUEUES, STOP_EVENTS
         # Testing queue to gather info
         testq = CTX.JoinableQueue(maxsize=500)
         queues = QUEUES
         # timetup: Tuple[float, ...] = (hours, 60 * hours, 3600 * hours,)
 
-        # turn on selected threads
-        bollst: Tuple[bool] = (False, False, False, False, False)
-        bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
-
-        barrier: CTX.Barrier = CTX.Barrier(bc)
+        barrier: CTX.Barrier = CTX.Barrier(0)
 
         timesdic = {'tf': 15, 'nf': 4, 'dqr': 5, 'da': 6, 'db': 7}
 
-        def myprint(st):
-            print(st)
+        def myprint(st):  # used to print output, and/or put the output on the testq
+            # print(st)
             testq.put(st)
 
-        def tf(*args):
+        def tf(*args):  # the program periodically executed by the timer thread
             """tf()
 
             """
             myprint(
                 f'tf th={threading.current_thread().getName()}, t={monotonic()}')
 
-        """
-                myprint(
-                    f'{name} invoked, t={threading.current_thread().getName()}')
-                Sleep(1.5)
-                if args[0]:
-                    myprint(f'{name}  execution enabled waiting')
-                    args[1].wait()
-                    myprint(f'{name} starting')
-                else:
-                    myprint(f'{name} execution disabled')
-                myprint(f'{name}  end')
-
-        """
-
         def _funtem(args: List[Any]):
             """_funtem(*args)
+
+            Most of the test thread proxies use this
+
             *args is (execute, barrier, stop_event, queues,name,interval,doit)
 
+            shows that the proxie has been invoked or not, and ended.
+
+            If the proxie is enabled, shows that, waits for the barrier, and then executes doit
+            repeatedly at interval timeing, untill the stop_event is set
+
             """
+            # multiple threads call this, so make the thread variables
             locald = threading.local()
             locald.name = args[4]
             locald.interval = args[5]
             locald.doit = args[6]
+            # show that the module has been invoked
             myprint(
                 f'{locald.name} invoked, th={threading.current_thread().getName()}, t={monotonic()}')
 
-            if args[0]:
+            if args[0]:  # if the module execution is enabled
                 myprint(f'{locald.name} execution enabled waiting')
                 args[1].wait()
                 myprint(
@@ -272,12 +274,13 @@ class TestTrackermain(unittest.TestCase):
             else:
                 myprint(f'{locald.name} execution disabled')
 
+            # and show the module is ending
             myprint(
                 f'{locald.name} end, th={threading.current_thread().getName()}, t={monotonic()}')
 
         def nf(*args):
             """
-
+            noisefloor proxy
             *args is (execute, barrier, stop_event, queues,)
             """
             name = 'nf'
@@ -289,12 +292,11 @@ class TestTrackermain(unittest.TestCase):
                 myprint(
                     f'{name} th={threading.current_thread().getName()}, t={monotonic()}')
             myargs.append(doit)
-            # tup = tuple(myargs)
             _funtem(myargs)
 
         def dqr(*args):
             """
-
+            data processing proxie
             *args is (execute, barrier, stop_event, queues,)
             """
             name = 'dqr'
@@ -310,7 +312,7 @@ class TestTrackermain(unittest.TestCase):
 
         def da(*args):
             """
-
+            Data Aggragator proxie
             *args is (execute, barrier, stop_event, queues,)
             """
             name = 'da'
@@ -326,7 +328,7 @@ class TestTrackermain(unittest.TestCase):
 
         def db(*args):
             """
-
+            database proxie
             *args is (execute, barrier, stop_event, queues,)
             """
 
@@ -341,9 +343,15 @@ class TestTrackermain(unittest.TestCase):
             myargs.append(doit)
             _funtem(myargs)
 
+        # turn off all selected threads so they just start and execute
+        bollst: Tuple[bool] = (False, False, False, False, False)
+        bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
+        barrier: CTX.Barrier = CTX.Barrier(bc)
         futures: Dict[str, Any] = {}
         myprint('starting')
-
+        """
+        Start the threads, all should just activate and then exit
+        """
         with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
 
             futures = {
@@ -364,7 +372,7 @@ class TestTrackermain(unittest.TestCase):
             barrier.wait()  # start them all working
 
             # as all the threads are disabled, and will end without need of shutdown,
-            #  we will wait for them all to complete
+            # wait for them all to complete
             waitresults: Tuple[Set, Set] = concurrent.futures.wait(
                 futures.values(), timeout=20, return_when=ALL_COMPLETED)
 
@@ -376,7 +384,7 @@ class TestTrackermain(unittest.TestCase):
 
             # shutdown(futures, queues, STOP_EVENTS)
 
-        quedstuff = []
+        quedstuff = []  # copy the testq to a list
         try:
             while True:
                 d = testq.get(True, .5)
@@ -400,19 +408,26 @@ class TestTrackermain(unittest.TestCase):
             'nf execution disabled',
             'nf end',
         ]
+        # verify that the operation completed sucessfully
         thejoin: str = '\n'.join(quedstuff)
         for _ in expected:
             if _ not in thejoin:
                 print(_)
             self.assertTrue(_ in thejoin)
+
         print('\nend of subtest 1 ---------------------------------------------------\n')
-        # turn on selected threads
+
+        # turn on all threads
         bollst = (True, True, True, True, True)
-        bc = sum([1 for _ in bollst if _]) + 1  # count them for barrier
-
-        runtime = 120  # either 60, or 120 if not one, some of the asserts are ignored
-
+        # count them for barrier the plus 1 is for this thread
+        bc = sum([1 for _ in bollst if _]) + 1
         barrier = CTX.Barrier(bc)
+        runtime = 120  # either 60, or 120 if not one of these, some of the asserts are ignored
+
+        """
+        Start the threads, all will output to the testq
+        """
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
             futures['weather'] = tpex.submit(
                 trackermain.timed_work, bollst[0], barrier, STOP_EVENTS['acquireData'], queues, delay=timesdic['tf'], timed_func=tf)
@@ -428,12 +443,12 @@ class TestTrackermain(unittest.TestCase):
             futures['dbwriter'] = tpex.submit(
                 db, bollst[4], barrier, STOP_EVENTS['dbwrite'], queues)
 
-            a = 0
             barrier.wait()  # start them all working
-            Sleep(runtime)
+            Sleep(runtime)  # wait for a while to let the threads work
+            #
             trackermain.shutdown(futures, queues, STOP_EVENTS)
 
-        quedstuff = []
+        quedstuff = []  # extract the myprint messages
         try:
             while True:
                 d = testq.get(True, .5)
@@ -449,18 +464,18 @@ class TestTrackermain(unittest.TestCase):
             'db': [],
             'tf': [],
         }
+
         for _ in quedstuff:
             x = _.split(' ', 1)
             calldic[x[0]].append(x[1])
 
-        print(len(calldic['tf']))
-        print(len(calldic['da']))
-        print(len(calldic['db']))
-        print(len(calldic['dqr']))
-        print(len(calldic['nf']))
+        # print(len(calldic['tf']))
+        # print(len(calldic['da']))
+        # print(len(calldic['db']))
+        # print(len(calldic['dqr']))
+        # print(len(calldic['nf']))
 
         if runtime == 120:
-
             self.assertTrue(7 <= len(calldic['tf']) <= 9)
             self.assertTrue(23 <= len(calldic['da']) <= 25)
             self.assertTrue(20 <= len(calldic['db']) <= 22)
@@ -515,7 +530,6 @@ class TestTrackermain(unittest.TestCase):
             result = True
             for k in d1.keys():
                 result = result and d1[k] == d2[k]
-
             return result
 
         def _avragedict(timeddic) -> Dict[str, float]:
@@ -537,7 +551,42 @@ class TestTrackermain(unittest.TestCase):
         timeddic: Dict[str, float] = _gentimedict(calldic)
         _trimstartend(timeddic, ['da', 'db', 'dqr', 'nf'])
         avgtdict: Dict[str, float] = _avragedict(timeddic)
+        print(avgtdict)
         self.assertTrue(_checktiming(timesdic, avgtdict))
+        seqlist: List(Tuple[str, float]) = []
+
+        history: Dict[float, str] = {}  # not analizin this
+        for k, v in calldic.items():
+            for aa in v:
+                if 't=' in aa:
+                    _w = aa.split('t=', 1)
+                    _wf = float(_w[1])
+                    try:
+                        history[_wf].append(f'{k}: {aa}')
+                    except KeyError:
+                        history[_wf] = []
+                        history[_wf].append(f'{k}: {aa}')
+
+        keys = history.keys()
+        keysl = list(keys)
+        keysl.sort()
+        first = keysl[0]
+        last = keysl[-1]
+        timetocomplete: float = last - first
+        self.assertTrue(timetocomplete < runtime + 2.0)
+
+        historyredux: Dict(str, List[str]) = {}
+        for k, v in history.items():
+            sk = str(round(k, 1))
+            try:
+                historyredux[sk].append(f'{k}: {v}')
+            except KeyError:
+                historyredux[sk] = []
+                historyredux[sk].append(f'{k}: {v}')
+
+        print('do something with this data')
+
+        # generate total time sequence
 
     def testx01a_multiproc_simple(self):
         """test01a_threaded_simple()

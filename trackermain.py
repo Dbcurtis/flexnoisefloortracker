@@ -60,6 +60,58 @@ class Consolidate:
         pass
 
 
+# class TPBase:
+    # def __init__(self):
+        #self.locald = threading.local()
+        # pass
+
+    # def __str__(self):
+        # return 'no str yet'
+
+    # def __repr__(self):
+        # return 'no repr yet'
+
+    # def doit(self, datalst):
+        # pass
+
+    # def _funtem(args: List[Any]):
+        # """_funtem(*args)
+
+        # Most of the test thread proxies use this
+
+        # *args is (execute, barrier, stop_event, queues,name,interval,doit)
+
+        # shows that the proxie has been invoked or not, and ended.
+
+        # If the proxie is enabled, shows that, waits for the barrier, and then executes doit
+        # repeatedly at interval timeing, untill the stop_event is set
+
+        # """
+        # multiple threads call this, so make the thread variables
+        #locald = threading.local()
+        #locald.name = args[4]
+        #locald.interval = args[5]
+        #locald.doit = args[6]
+        # show that the module has been invoked
+        # myprint(
+        # f'{locald.name} invoked, th={threading.current_thread().getName()}, t={monotonic()}')
+
+        # if args[0]:  # if the module execution is enabled
+        #myprint(f'{locald.name} execution enabled waiting')
+        # args[1].wait()
+        # myprint(
+        # f'{locald.name} starting, th={threading.current_thread().getName()}, t={monotonic()}')
+        # while not args[2].wait(locald.interval):
+        # locald.doit()
+
+        # else:
+        #myprint(f'{locald.name} execution disabled')
+
+        # and show the module is ending
+        # myprint(
+        # f'{locald.name} end, th={threading.current_thread().getName()}, t={monotonic()}')
+
+
 class DBwriter:
     """DBwriter(thread_info)
 
@@ -592,7 +644,7 @@ def timed_work(*args, **kwargs):  # thread_info, delayseconds, fu):
     stop_event if set causes the task/thread to stop
 
     **kwargs is
-    'delay' is the number of seconds between calls to fu
+    'delay' is the number of seconds between calls to timed_func
     'timed_func' is the function that will be called on the time basis
 
     will continue forever until the stop event
@@ -610,7 +662,8 @@ def timed_work(*args, **kwargs):  # thread_info, delayseconds, fu):
     ti_dict['stop_event'] = args[2]
     ti_dict['queues'] = args[3]
 
-    print(f'timed work invoked as {threading.currentThread().getName()}')
+    print(
+        f'timed work invoked as {threading.currentThread().getName()}, thread: {threading.current_thread().getName()}')
     if ti_dict['execute']:
         # locald = threading.local()
         locald.thread = threading.current_thread()
@@ -925,141 +978,6 @@ def datagen2(hours: float = 0.5):
             a = 0
 
     a = 0
-
-    return
-
-
-def datagenp1(hours: float = 0.5):
-    """datagenp1
-
-    Tests that the threads all start, and end because they have not been enabled.
-    """
-    queues = QUEUES
-    timetup: Tuple[float, ...] = (hours, 60 * hours, 3600 * hours,)
-
-    # turn on selected threads
-    bollst: Tuple[bool] = (False, False, False, False, False)
-    bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
-
-    barrier: CTX.Barrier = CTX.Barrier(bc)
-
-    def tf(*args):
-        print(
-            f'timed function called,  t={threading.current_thread().getName()}')
-
-    def nf(*args):
-        """
-
-        *args is (execute, barrier, stop_event, queues,)
-        """
-        print(f'nf invoked, t={threading.current_thread().getName()}')
-        Sleep(2.0)
-        if args[0]:
-            print('nf execution enabled waiting')
-            args[1].wait()
-            print('nf starting')
-        else:
-            print('nf execution disabled')
-        print('nf end')
-
-    def dqr(*args):
-        """
-
-        *args is (execute, barrier, stop_event, queues,)
-        """
-        try:
-
-            name = 'dqr'
-            print(f'{name} invoked, t={threading.current_thread().getName()}')
-            Sleep(0.5)
-            if args[0]:
-                print(f'{name}  execution enabled waiting')
-                args[1].wait()
-                print(f'{name} starting')
-            else:
-                print(f'{name} execution disabled')
-            print(f'{name}  end')
-        except Exception as ex:
-            a = 0
-
-    def da(*args):
-        """
-
-        *args is (execute, barrier, stop_event, queues,)
-        """
-        name = 'da'
-        print(f'{name} invoked, t={threading.current_thread().getName()}')
-        Sleep(1.0)
-        if args[0]:
-            print(f'{name}  execution enabled waiting')
-            args[1].wait()
-            print(f'{name} starting')
-        else:
-            print(f'{name} execution disabled')
-        print(f'{name}  end')
-
-    def db(*args):
-        """
-
-        *args is (execute, barrier, stop_event, queues,)
-        """
-
-        name = 'db'
-
-        print(f'{name} invoked, t={threading.current_thread().getName()}')
-        Sleep(1.5)
-        if args[0]:
-            print(f'{name}  execution enabled waiting')
-            args[1].wait()
-            print(f'{name} starting')
-        else:
-            print(f'{name} execution disabled')
-        print(f'{name}  end')
-
-    while (True):
-        futures: Dict[str, Any] = {}
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
-
-            futures = {
-                # gets weather data
-                'weather': tpex.submit(timed_work, bollst[0], barrier, STOP_EVENTS['acquireData'], queues, delay=10.5, timed_func=tf),
-                # gets banddata data
-                # #'noise': tpex.submit(timed_work, bollst[1], barrier, STOP_EVENTS['acquireData'], 60, Get_NF, queues),
-                'noise': tpex.submit(nf, bollst[1], barrier, STOP_EVENTS['acquireData'], queues),
-                # reads the dataQ and sends to the data processing queue dpq
-                'transfer': tpex.submit(dqr, bollst[2], barrier, STOP_EVENTS['trans'], queues),
-                # looks at the data and generates the approprate sql to send to dbwriter
-                'dataagragator': tpex.submit(da, bollst[3], barrier, STOP_EVENTS['agra'], queues),
-                # reads the database Q and writes it to the database
-                'dbwriter': tpex.submit(db, bollst[4], barrier, STOP_EVENTS['dbwrite'], queues),
-
-            }
-
-            for _ in range(10):  # let things start and reach the waiting state
-                Sleep(0.001)
-
-            barrier.wait()  # start them all working
-            Sleep(5.0)
-
-            # as all the threads are disabled, and will end without need of shutdown,
-            #  we will wait for them all to complete
-            waitresults: Tuple[Set, Set] = concurrent.futures.wait(
-                futures.values(), timeout=10, return_when=ALL_COMPLETED)
-
-            #shutdown(futures, queues, STOP_EVENTS)
-            break  # break out of tpex
-        a = 0
-        break  # break out of while loop
-
-    aa: List[Any] = []
-    with open('localweathersqlshort.pickle', 'rb') as fl:
-        try:
-            aa = pickle.load(fl)
-        except Exception as ex:
-            a = 0
-
-    a = 0
-
     return
 
 
@@ -1168,11 +1086,10 @@ if __name__ == '__main__':
             'Wrong epic starting date/time, must be Jan 1, 1970 midnight utc')
 
     try:
-        val = 'p1'
+        val = 1
         if val == 0:
             main()
-        elif val == 'p1':
-            datagenp1()
+
         elif val == 1:
             datagen1()
         elif val == 2:
