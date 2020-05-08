@@ -45,6 +45,14 @@ LOG_FILE = '/trackermain'
 
 EXITING = False
 
+_EXECUTE = 0
+_BARRIER = 1
+_STOPE = 2
+_QS = 3
+_NAME = 4
+_INTERVAL = 5
+_DOIT = 6
+
 
 class Consolidate:
     def __init__(self):
@@ -60,56 +68,41 @@ class Consolidate:
         pass
 
 
-# class TPBase:
-    # def __init__(self):
-        #self.locald = threading.local()
-        # pass
+def _thread_template(args: List[Any]):
+    """_funtem(*args)
 
-    # def __str__(self):
-        # return 'no str yet'
+    Most of the test thread proxies use this
+    *args is (execute, barrier, stop_event, queues,name,interval,doit)
+    shows that the proxie has been invoked or not, and ended.
 
-    # def __repr__(self):
-        # return 'no repr yet'
+    If the proxie is enabled, shows that, waits for the barrier, and then executes doit
+    repeatedly at interval timeing, untill the stop_event is set
 
-    # def doit(self, datalst):
-        # pass
+    """
 
-    # def _funtem(args: List[Any]):
-        # """_funtem(*args)
+    # multiple threads call this, so make the thread variables
+    locald = threading.local()
+    locald.name = args[_NAME]
+    locald.interval = args[_INTERVAL]
+    locald.doit = args[_DOIT]
+    # show that the module has been invoked
+    print(
+        f'{locald.name} invoked, th={threading.current_thread().getName()}, t={monotonic()}')
 
-        # Most of the test thread proxies use this
+    if args[0]:  # if the module execution is enabled
+        print(f'{locald.name} execution enabled waiting')
+        args[1].wait()
+        print(
+            f'{locald.name} starting, th={threading.current_thread().getName()}, t={monotonic()}')
+        while not args[_STOPE].wait(locald.interval):
+            locald.doit()
 
-        # *args is (execute, barrier, stop_event, queues,name,interval,doit)
+    else:
+        print(f'{locald.name} execution disabled')
 
-        # shows that the proxie has been invoked or not, and ended.
-
-        # If the proxie is enabled, shows that, waits for the barrier, and then executes doit
-        # repeatedly at interval timeing, untill the stop_event is set
-
-        # """
-        # multiple threads call this, so make the thread variables
-        #locald = threading.local()
-        #locald.name = args[4]
-        #locald.interval = args[5]
-        #locald.doit = args[6]
-        # show that the module has been invoked
-        # myprint(
-        # f'{locald.name} invoked, th={threading.current_thread().getName()}, t={monotonic()}')
-
-        # if args[0]:  # if the module execution is enabled
-        #myprint(f'{locald.name} execution enabled waiting')
-        # args[1].wait()
-        # myprint(
-        # f'{locald.name} starting, th={threading.current_thread().getName()}, t={monotonic()}')
-        # while not args[2].wait(locald.interval):
-        # locald.doit()
-
-        # else:
-        #myprint(f'{locald.name} execution disabled')
-
-        # and show the module is ending
-        # myprint(
-        # f'{locald.name} end, th={threading.current_thread().getName()}, t={monotonic()}')
+    # and show the module is ending
+    print(
+        f'{locald.name} end, th={threading.current_thread().getName()}, t={monotonic()}')
 
 
 class DBwriter:
@@ -249,6 +242,9 @@ def dataaggrator(thread_info, aggfn=None, debugfn=None):
 
 
 def Get_LW1(rawDataQ_OUT):
+    """Get_LW1(Q)
+    Runs on a timed_work thread
+    """
     times: str = str(Dtc.now(timezone.utc))
     rawDataQ_OUT.put(times)
 
@@ -256,6 +252,7 @@ def Get_LW1(rawDataQ_OUT):
 def Get_LW(rawDataQ_OUT):
     """Get_LW(rawDataQ_OUT)
 
+    Runs on a timed_work thread
     Gets Local Medfrod weather in a LocalWeather object and adds it to the rawDataQ_OUT queue.
 
     """
@@ -264,7 +261,11 @@ def Get_LW(rawDataQ_OUT):
     _lw.load()
     parital_sql: str = _lw.gen_sql()
     pkg: LWQ = LWQ(parital_sql)
-    rawDataQ_OUT.put(pkg)
+    try:
+        rawDataQ_OUT.put(pkg)
+    except QFull:
+        print("dataq full for local weather--- skipped")
+        raise
 
     # rawDataQ_OUT.put(_lw)
 
@@ -272,32 +273,35 @@ def Get_LW(rawDataQ_OUT):
 def Get_NF(rawDataQ_OUT):
     """Get_NF(rawDataQ_OUT)
 
+    this thread function is the only one that starts and uses the Flex
+
     """
     from noisefloor import Noisefloor
-    UI = UserInput()
-    NOISE = None
+    _ui: UserInput = UserInput()
+    _noisf = None
     try:
-        UI.request(port='com4')
-        UI.open()
+        _ui.request(port='com4')
+        _ui.open()
         print("Requested Port can be opened")
-        FLEX = Flex(UI)
-        NOISE = Noisefloor(FLEX, rawDataQ_OUT)
-        NOISE.open()
-        NOISE.doit(loops=10, interval=30)
-        NOISE.close()
+        FLEX = Flex(_ui)
+        _noisf = Noisefloor(FLEX, rawDataQ_OUT)
+        _noisf.open()
+        # 10 loops with a 30 second delay between each
+        _noisf.doit(loops=10, interval=30)
+        _noisf.close()
 
     except(Exception, KeyboardInterrupt) as exc:
-        if NOISE:
-            NOISE.close()
-        UI.close()
+        if _noisf:
+            _noisf.close()
+        _ui.close()
         sys.exit(str(exc))
 
     finally:
-        if NOISE:
-            NOISE.close()
-        UI.close()
+        if _noisf:
+            _noisf.close()
+        _ui.close()
         sys.exit(str(exc))
-    _nf = NoiseFloor()
+    #_nf = NoiseFloor()
 
 
 # def load_deque(deqPrams, inQ, markdone):
@@ -317,20 +321,38 @@ def trim_dups(mydeck, boolfn):
     return tuplst
 
 
+def get_noise1(*args):
+    """get_noise(*args)
+    *args is (execute, barrier, stop_event, queues,)
+
+    """
+    name = "get_noise"
+    myargs = list(args)
+    myargs.append(name)
+    myargs.append(None)
+
+    def doit():
+        pass
+    myargs.append(doit)
+    _thread_template(myargs)
+
+
 def get_noise(*args):
     """
+    A thread function to start the data acquisition thread on the flex.
 
     *args is (execute, barrier, stop_event, queues,)
     """
     from flex import Flex
     from postproc import BANDS, BandPrams, INITIALZE_FLEX
     from noisefloor import Noisefloor
-    queues: Dict[str, Any] = args[3]
-    stop_event = args[2]
-    resultQ = queues['dataQ']
-    barrier = args[1]
 
-    if args[0]:  # execute:
+    queues: Dict[str, Any] = args[_QS]
+    stop_event = args[_STOPE]
+    resultQ = queues['dataQ']
+    barrier = args[_BARRIER]
+
+    if args[_EXECUTE]:  # execute:
         barrier.wait()
         print('get_noise started\n', end="")
         UI: UserInput = UserInput()
@@ -462,6 +484,44 @@ def dataQ_reader_datagen(*args, **kwargs):
     pass
 
 
+def dataQ_reader_dbg(*args, **kwargs):
+    """dataQ_reader_dbg
+
+    just passes the entries on the dataQ on to the dpQ
+    """
+    if not args[0]:  # if disabled, just exit to kill the thread
+        return
+    locald = threading.local()
+    locald.rawDataQ_IN = locald.ti_dict['queues']['dataQ']
+    locald.dpQ_OUT = locald.ti_dict['queues']['dpQ']
+    locald.stop_event = locald.ti_dict['stop_event']
+    locald.count = 0
+    print('dataQ_reader_dbg invoked\n', end="")
+    locald.ti_dict['barrier'].wait()
+    print('dataQ_reader_dbg started\n', end="")
+    locald.indeck = Deck(200)
+
+    while True:
+        try:  # empty rawDataW into indata
+            locald.indeck.load_from_Q(
+                locald.rawDataQ_IN, mark_done=False)
+
+        except QFull:
+            pass
+
+        finally:
+            if len(locald.indeck) > 0:
+                locald.indeck.loadQ(locald.dpQ_OUT)
+
+        # things look done
+        if not locald.stop_event.wait(5.0):  # check this
+            if locald.rawDataQ_IN.empty() and len(locald.deqPrams[0]) == 0:
+                break
+
+    print('dataQ_reader_dbg ended\n', end="")
+    return locald.count
+
+
 def dataQ_reader(*args, **kwargs):
     """dataQ_reader(*args, **kwargs)
 
@@ -472,6 +532,9 @@ def dataQ_reader(*args, **kwargs):
      to the outQ
 
     """
+    if not args[0]:  # if disabled, just exit to kill the thread
+        return
+
     locald = threading.local()
     locald.ti_dict: Dict[str, Any] = {}
     locald.ti_dict['execute'] = args[0]
@@ -484,92 +547,89 @@ def dataQ_reader(*args, **kwargs):
     except KeyError:
         pass
 
-    if locald.ti_dict['execute']:  # execute:
-        import localweather
+    import localweather
 
-        locald.rawDataQ_IN = locald.ti_dict['queues']['dataQ']
-        locald.dpQ_OUT = locald.ti_dict['queues']['dpQ']
-        locald.stop_event = locald.ti_dict['stop_event']
-        locald.count = 0
-        locald.ti_dict['barrier'].wait()
-        for _ in range(10):
-            Sleep(0.0001)
-        print('dataQ_reader started\n', end="")
-        # the deque, max size, single element  size inititally 0
-        # locald.deqPrams = (Deck(50), 50, [0])
-        locald.indeck = Deck(100)
-        locald.wetherdec = Deck(100)
-        locald.noisedeck = Deck(100)
-        locald.lastweather = None
-        locald.lastnoise = None
+    locald.rawDataQ_IN = locald.ti_dict['queues']['dataQ']
+    locald.dpQ_OUT = locald.ti_dict['queues']['dpQ']
+    locald.stop_event = locald.ti_dict['stop_event']
+    locald.count = 0
+    locald.ti_dict['barrier'].wait()
+    print('dataQ_reader started\n', end="")
+    # the deque, max size, single element  size inititally 0
+    # locald.deqPrams = (Deck(50), 50, [0])
+    locald.indeck = Deck(100)
+    locald.wetherdec = Deck(100)
+    locald.noisedeck = Deck(100)
+    locald.lastweather = None
+    locald.lastnoise = None
 
-        while True:
+    while True:
 
-            try:  # empty rawDataW into indata
-                locald.indeck.load_from_Q(
-                    locald.rawDataQ_IN, mark_done=False)
+        try:  # empty rawDataW into indata
+            locald.indeck.load_from_Q(
+                locald.rawDataQ_IN, mark_done=False)
 
-            except QFull:
-                pass
+        except QFull:
+            pass
 
-            finally:
-                if len(locald.indeck) > 0:
+        finally:
+            if len(locald.indeck) > 0:
 
-                    locald.wetherdec.clear()
-                    locald.wetherdec.push(locald.lastweather)
-                    locald.noisedeck.clear()
-                    locald.noisedeck.push(locald.lastnoise)
-                    # separate the indeck contents
-                    try:
-                        while(len(locald.indeck) > 0):
-                            cnt = locald.indeck.popleft()
-                            if isinstance(cnt, LocalWeather):
-                                locald.wetherdec.append(cnt)
-                            elif isinstance(cnt, NFResult):
-                                locald.noisedeck.append(cnt)
-                            else:
-                                raise AssertionError("need to handle")
-                    except IndexError:
-                        pass
-                    finally:
-                        pass
-                    data_tobe_processed = None
-                    locald.tuplst = trim_dups(
-                        locald.wetherdec, localweather.different)
+                locald.wetherdec.clear()
+                locald.wetherdec.push(locald.lastweather)
+                locald.noisedeck.clear()
+                locald.noisedeck.push(locald.lastnoise)
+                # separate the indeck contents
+                try:
+                    while(len(locald.indeck) > 0):
+                        cnt = locald.indeck.popleft()
+                        if isinstance(cnt, LocalWeather):
+                            locald.wetherdec.append(cnt)
+                        elif isinstance(cnt, NFResult):
+                            locald.noisedeck.append(cnt)
+                        else:
+                            raise AssertionError(
+                                "not LocalWeather or NFResult in dataq")
+                except IndexError:
+                    pass
+                finally:
+                    pass
+                data_tobe_processed = None
+                locald.tuplst = trim_dups(
+                    locald.wetherdec, localweather.different)
 
-                    locald.noiselist = list(locald.noisedeck)
-                    locald.noisemarkers = [i for i in range(1, len(weatherlist)) if
-                                           (weatherlist[i - 1].has_changedweatherlist[i])]
+                locald.noiselist = list(locald.noisedeck)
+                locald.noisemarkers = [i for i in range(1, len(weatherlist)) if
+                                       (weatherlist[i - 1].has_changedweatherlist[i])]
 
-                    # first item of wetherdec and noisedeck may be None!
-                while True:
-                    try:
-                        while True:
-                            # data_tobe_processed = locald.deqPrams[0] \
-                            # .popleft()
-                            locald.data_tobe_processed = indeck.popleft(
-                            )
-                            # process the data
-                            locald.fn(locald.dpQ_OUT, data_tobe_processed)
-                            locald.deqPrams[2][0] = locald.deqPrams[2][0] - 1
-                            locald.rawDataQ_IN.task_done()
-                            locald.count += 1
+                # first item of wetherdec and noisedeck may be None!
+            while True:
+                try:
+                    while True:
+                        # data_tobe_processed = locald.deqPrams[0] \
+                        # .popleft()
+                        locald.data_tobe_processed = indeck.popleft()
+                        # process the data
+                        locald.fn(locald.dpQ_OUT, data_tobe_processed)
+                        locald.deqPrams[2][0] = locald.deqPrams[2][0] - 1
+                        locald.rawDataQ_IN.task_done()
+                        locald.count += 1
 
-                    except QFull:
-                        # put pending data on the left of the queue
-                        # locald.deqPrams[0].appendleft(data_tobe_processed)
-                        locald.deqPrams[0].push(data_tobe_processed)
-                        Sleep(10)
+                except QFull:
+                    # put pending data on the left of the queue
+                    # locald.deqPrams[0].appendleft(data_tobe_processed)
+                    locald.deqPrams[0].push(data_tobe_processed)
+                    Sleep(10)
 
-                    except IndexError:  # indata is now empty
-                        break
-            # things look done
-            if locald.stop_event.wait(5.0):
-                if locald.rawDataQ_IN.empty() and len(locald.deqPrams[0]) == 0:
+                except IndexError:  # indata is now empty
                     break
+        # things look done
+        if not locald.stop_event.wait(5.0):  # check this
+            if locald.rawDataQ_IN.empty() and len(locald.deqPrams[0]) == 0:
+                break
 
-        print('dataQ_reader ended\n', end="")
-        return locald.count
+    print('dataQ_reader ended\n', end="")
+    return locald.count
 
 
 def read_inQ_2deque():
@@ -633,8 +693,9 @@ def dbQ_writer(thread_info, debugfn=None):
                 break
         print('dbQ_writer ended\n', end='')
 
-
 # def timed_work(execute, barrier, stop_event, queues, delayseconds, fu):
+
+
 def timed_work(*args, **kwargs):  # thread_info, delayseconds, fu):
     """timed_work(thread_info, delayseconds, fu, )
 

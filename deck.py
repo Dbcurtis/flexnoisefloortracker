@@ -137,7 +137,7 @@ class Deck:
             self._push(d)
         return self.qlen
 
-    def load_from_Q(self, inQ, mark_done: bool = False, wait_sec: float = 10.0) -> int:
+    def load_from_Q(self, inQ, mark_done: bool = False, wait_sec: float = 10.0, fn=_ident) -> int:
         """load_from_Q(inQ, mark_done=False, wait_sec=10)
 
         loads the deck from the inQ and if mark_done is True, does so as each Q entry is added to the deck
@@ -151,7 +151,7 @@ class Deck:
                 if self.qlen >= self.maxsize:
                     raise QFull
                 try:
-                    self.deck.append(inQ.get(True, wait_sec))
+                    self.deck.append(fn(inQ.get(True, wait_sec)))
                     self.qlen += 1
                     count += 1
                     if mark_done:
@@ -176,6 +176,7 @@ class Deck:
                 if self.qlen == 0:
                     raise IndexError
                 count = self._loadQ(outQ, done_Q, fn)
+
         except QFull:
             raise
         return count

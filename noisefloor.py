@@ -44,8 +44,6 @@ class Noisefloor:
 
     # , testdata=None):
     def __init__(self, flex: Flex, out_queue: CTX.JoinableQueue, stop_event: CTX.Event):
-     #   def __init__(self, userI, testdata=None):
-
         self.flex: Flex = flex
         self._ui: UserInput = flex._ui
         self.out_queue: CTX.JoinableQueue = out_queue

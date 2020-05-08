@@ -7,7 +7,7 @@ from multiprocessing import freeze_support
 import unittest
 import context
 from deck import Deck
-from queue import Full as QFull, Empty as QEmpty
+from queue import Full as QFull  # , Empty as QEmpty
 
 
 class TestDeck(unittest.TestCase):
@@ -138,7 +138,7 @@ class TestDeck(unittest.TestCase):
         """test02_load_from_Q()
 
         """
-        from queue import Empty as QEmpty, Full as QFull
+        #from queue import Empty as QEmpty, Full as QFull
         import multiprocessing as mp
         CTX = mp.get_context('spawn')
         dataq = CTX.JoinableQueue(maxsize=100)
@@ -156,15 +156,16 @@ class TestDeck(unittest.TestCase):
 
         [dataq.put(x) for x in range(100)]
         deck = Deck(50)
-        deck.load_from_Q(dataq, mark_done=True)
+        deck.load_from_Q(dataq, mark_done=True, wait_sec=1.0)
         self.assertEqual(0, deck.look_left())
         self.assertEqual(49, deck.look_right())
         self.assertEqual(50, dataq.qsize())
         deck.clear()
-        deck.load_from_Q(dataq, mark_done=True)
+        deck.load_from_Q(dataq, mark_done=True, wait_sec=1.0)
         self.assertEqual(50, deck.look_left())
         self.assertEqual(99, deck.look_right())
         self.assertEqual(0, dataq.qsize())
+        dataq.close()
 
     def test03_loadQ(self):
         """test02_loadQ()
@@ -215,9 +216,9 @@ class TestDeck(unittest.TestCase):
 
         deck = Deck(25)
         deck.extend([x for x in range(25)])
-        numtrans = None
+
         try:
-            numtrans = deck.loadQ(dataq)
+            deck.loadQ(dataq)
         except QFull as ex:
 
             self.assertEqual(5, len(deck))
@@ -236,6 +237,37 @@ class TestDeck(unittest.TestCase):
         #self.assertEqual(50, deck.look_left())
         #self.assertEqual(99, deck.look_right())
         #self.assertEqual(0, dataq.qsize())
+        dataq.close()
+
+    def test04_GetLoad(self):
+        """test02_loadQ()
+
+        """
+        #from queue import Empty as QEmpty, Full as QFull
+        import multiprocessing as mp
+        CTX = mp.get_context('spawn')
+        dataqin = CTX.JoinableQueue(maxsize=110)
+        dataqout = CTX.JoinableQueue(maxsize=210)
+
+        #[dataqin.put(x) for x in range(100)]
+        for i in range(100):
+            dataqin.put(i)
+
+        deck: Deck = Deck(110)
+        self.assertEqual(100, deck.load_from_Q(
+            dataqin, mark_done=False, wait_sec=1.0))
+
+        def mkstr(a):
+            return(str(a))
+
+        deck.loadQ(dataqout, done_Q=dataqin, fn=mkstr)
+        dataqin.close()
+
+        deck1: Deck = Deck(110)
+        cccc = deck1.load_from_Q(
+            dataqout, mark_done=True, wait_sec=1.0)
+        self.assertEqual(100, cccc)
+        dataqout.close()
 
 
 if __name__ == '__main__':
