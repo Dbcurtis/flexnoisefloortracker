@@ -23,12 +23,29 @@ def _ident(a):
     return a
 
 
+class Error(Exception):
+    pass
+
+
+class DeckFullError(Error):
+    """Raise when the Deck is fulll"""
+
+    def __init__(self, *args):
+        super(DeckFullError, self).__init__(*args)
+
+
+class OutQFullError(Error):
+    """Raise when the output Q is full"""
+
+    def __init__(self, *args):
+        super(OutQFullError, self).__init__(*args)
+
 class Deck:
 
     def __init__(self, maxsize: int):
-        self.deck: Deque[Any] = deque([])
+        self.deck: Deque[Any] = deque([])  # a deque of the deck contents
         self.maxsize: int = maxsize
-        self.qlen: int = 0
+        self.qlen: int = 0  # number of the items in the deck
         self.tlock: mp.Lock = mp.Lock()
 
     def __str__(self):
@@ -57,7 +74,7 @@ class Deck:
         """
 
         if self.qlen + 1 > self.maxsize:
-            raise QFull
+            raise DeckFullError
         self.deck.append(d)
         self.qlen += 1
 
@@ -124,7 +141,7 @@ class Deck:
 
         """
         if self.qlen + 1 > self.maxsize:
-            raise QFull
+            raise DeckFullError
         self.deck.appendleft(d)
         self.qlen += 1
 
@@ -137,19 +154,20 @@ class Deck:
             self._push(d)
         return self.qlen
 
-    def load_from_Q(self, inQ, mark_done: bool = False, wait_sec: float = 10.0, fn=_ident) -> int:
-        """load_from_Q(inQ, mark_done=False, wait_sec=10)
+    def q2deck(self, inQ, mark_done: bool = False, wait_sec: float = 1.0, fn=_ident) -> int:
+        """load_from_Q(inQ, mark_done=False, wait_sec=10, fn=_ident)
 
         loads the deck from the inQ and if mark_done is True, does so as each Q entry is added to the deck
         wait_sec is max amount to wait after the queue is empty.
 
-        rases QFull if deck reaches maxsize
+        rases DeckFullError if deck reaches maxsize
+        returns the number of items read from the queue on this invocation (Not the deck length)
         """
         count: int = 0
         with self.tlock:
-            while self.qlen >= 0 and self.qlen < self.maxsize:
-                if self.qlen >= self.maxsize:
-                    raise QFull
+            while self.qlen >= 0 and self.qlen <= self.maxsize:
+                if self.qlen >= self.maxsize and not inQ.empty():
+                    raise DeckFullError(f'cnt={count}')
                 try:
                     self.deck.append(fn(inQ.get(True, wait_sec)))
                     self.qlen += 1
@@ -160,25 +178,22 @@ class Deck:
                     break
         return count
 
-    def loadQ(self, outQ, done_Q=None, fn=_ident) -> int:
-        """loadQ(outQ, done_Q=None, fn=_ident)
+    def deck2q(self, outQ, done_Q=None, fn=_ident) -> int:
+        """deck2q(outQ, done_Q=None, fn=_ident)
 
         emptys the deck into the specified outQ,
         if done_Q is specified, will do a task_done operation on the done_Q
         fn operates on the value being loaded(which defaults to returning the unchanged value)
 
-        rasies QFull if the queue becomes full
+        rasies OutQFullError if the queue becomes full
 
         """
         count: int = None
-        try:
-            with self.tlock:
-                if self.qlen == 0:
-                    raise IndexError
+        with self.tlock:
+            if self.qlen == 0:
+                count = 0
+            else:
                 count = self._loadQ(outQ, done_Q, fn)
-
-        except QFull:
-            raise
         return count
 
     def _loadQ(self, outQ, done_Q=None, fn=_ident) -> int:
@@ -191,6 +206,7 @@ class Deck:
         fn operates on the value being loaded(which defaults to returning the unchanged value)
 
         """
+
         count: int = None
         v = None
         while True:
@@ -205,7 +221,7 @@ class Deck:
                 count += 1
             except QFull:
                 self._push(v)
-                raise QFull
+                raise OutQFullError(f'cnt={count}')
 
             except IndexError:
                 break

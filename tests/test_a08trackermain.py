@@ -4,33 +4,47 @@ Test file for need
 """
 
 # import datetime
-from typing import Any, List, Dict, Tuple
-from multiprocessing import freeze_support
-import unittest
-import multiprocessing as mp
-from queue import Empty as QEmpty, Full as QFull
-# from multiprocessing import queues as QS
-import concurrent
-import time
-from collections import deque
-from time import sleep as Sleep
-from time import monotonic
-from concurrent.futures import ALL_COMPLETED, FIRST_EXCEPTION, FIRST_COMPLETED
-import threading
-import statistics
 
+import statistics
+import threading
+from concurrent.futures import ALL_COMPLETED, FIRST_EXCEPTION, FIRST_COMPLETED
+from time import monotonic
+from time import sleep as Sleep
+from collections import deque
+import time
+import concurrent
+from queue import Empty as QEmpty, Full as QFull
+import multiprocessing as mp
+import unittest
+from multiprocessing import freeze_support
+from typing import Any, List, Dict, Tuple
 
 import context
-from deck import Deck
-import trackermain
-from queuesandevents import QUEUES, CTX, STOP_EVENTS
 from queuesandevents import RESET_QS as reset_queues
+from queuesandevents import RESET_STOP_EVENTS
+from queuesandevents import QUEUES, CTX, STOP_EVENTS
+import trackermain
+from deck import Deck
+
+from trackermain import _EXECUTE, _BARRIER, _STOPE, _QS, _NAME, _INTERVAL, _DOIT, _thread_template
+# from multiprocessing import queues as QS
+
+
 #from queuesandevents import CTX as ctx
 #from queuesandevents import STOP_EVENTS
 
 
+#_EXECUTE = 0
+#_BARRIER = 1
+#_STOPE = 2
+#_QS = 3
+#_NAME = 4
+#_INTERVAL = 5
+#_DOIT = 6
+
+
 # Testing queue to gather info
-TESTQ = CTX.JoinableQueue(maxsize=500)
+TESTQ = CTX.JoinableQueue(maxsize=5000)
 
 
 def cleartestq():
@@ -42,15 +56,6 @@ def cleartestq():
             break
 
 
-_EXECUTE = 0
-_BARRIER = 1
-_STOPE = 2
-_QS = 3
-_NAME = 4
-_INTERVAL = 5
-_DOIT = 6
-
-
 def marktime(dly=2.5, cnt=6):
     for _ in range(cnt):
         print('|', end='')
@@ -59,9 +64,10 @@ def marktime(dly=2.5, cnt=6):
 
 
 def clearstopevents():
-    [e.clear() for e in STOP_EVENTS.values()]
+    #[e.clear() for e in STOP_EVENTS.values()]
     # for e in stopevents.values():
     # e.clear()
+    RESET_STOP_EVENTS()
 
 
 def myprint(st):  # used to print output, and/or put the output on the TESTQ
@@ -141,24 +147,24 @@ def aggrfn(thread_info):
     doit = True
     while doit:
 
-        deck.load_from_Q(dpQ_IN, False, 5)
+        deck.q2deck(dpQ_IN, False, 5)
         time.sleep(0.001)  # provide oppertunity to switch threads
 
         notstop = not stop_event.is_set()
         while notstop or len(deck) > 0:
             if len(deck) == 0:
                 break
-            deck.loadQ(dbQ_OUT, dpQ_IN, lambda a: a * 10)
+            deck.deck2q(dbQ_OUT, dpQ_IN, lambda a: a * 10)
             if stop_event.is_set() and dpQ_IN.empty():
                 break
 
         doit = not stop_event.wait(6)
 
     for _ in range(10):  # get any late queued info
-        deck.load_from_Q(dpQ_IN, False, 0.5)
+        deck.q2deck(dpQ_IN, False, 0.5)
         while True:
             try:  # empty deck to dbQ_OUT
-                deck.loadQ(dbQ_OUT, dpQ_IN, lambda a: a * 10)
+                deck.deck2q(dbQ_OUT, dpQ_IN, lambda a: a * 10)
             except QEmpty:
                 break
             except IndexError:
@@ -201,40 +207,41 @@ def do1argnull(arg):
     pass
 
 
-def _thread_template(args: List[Any]):
-    """_funtem(*args)
+# def _thread_template(args: List[Any]):
+# def _thread_template(*args, **kwargs):
+    # """_funtem(*args)
 
-    Most of the test thread proxies use this
-    *args is (execute, barrier, stop_event, queues,name,interval,doit)
-    shows that the proxie has been invoked or not, and ended.
+    # Most of the test thread proxies use this
+    # *args is (execute, barrier, stop_event, queues,name,interval,doit)
+    # shows that the proxie has been invoked or not, and ended.
 
-    If the proxie is enabled, shows that, waits for the barrier, and then executes doit
-    repeatedly at interval timeing, untill the stop_event is set
+    # If the proxie is enabled, shows that, waits for the barrier, and then executes doit
+    # repeatedly at interval timeing, untill the stop_event is set
 
-    """
+    # """
     # multiple threads call this, so make the thread variables
-    locald = threading.local()
-    locald.name = args[_NAME]
-    locald.interval = args[_INTERVAL]
-    locald.doit = args[_DOIT]
+    #locald = threading.local()
+    #locald.name = args[_NAME]
+    #locald.interval = args[_INTERVAL]
+    #locald.doit = args[_DOIT]
     # show that the module has been invoked
-    myprint(
-        f'{locald.name} invoked, th={threading.current_thread().getName()}, t={monotonic()}')
+    # myprint(
+    # f'{locald.name} invoked, th={threading.current_thread().getName()}, t={monotonic()}')
 
-    if args[_EXECUTE]:  # if the module execution is enabled
-        myprint(f'{locald.name} execution enabled waiting')
-        args[_BARRIER].wait()
-        myprint(
-            f'{locald.name} starting, th={threading.current_thread().getName()}, t={monotonic()}')
-        while not args[_STOPE].wait(locald.interval):
-            locald.doit()
+    # if args[_EXECUTE]:  # if the module execution is enabled
+    #myprint(f'{locald.name} execution enabled waiting')
+    # args[_BARRIER].wait()
+    # myprint(
+    # f'{locald.name} starting, th={threading.current_thread().getName()}, t={monotonic()}')
+    # while not args[_STOPE].wait(locald.interval):
+    # locald.doit()
 
-    else:
-        myprint(f'{locald.name} execution disabled')
+    # else:
+    #myprint(f'{locald.name} execution disabled')
 
     # and show the module is ending
-    myprint(
-        f'{locald.name} end, th={threading.current_thread().getName()}, t={monotonic()}')
+    # myprint(
+    # f'{locald.name} end, th={threading.current_thread().getName()}, t={monotonic()}')
 
 
 class TestTrackermain(unittest.TestCase):
@@ -308,42 +315,7 @@ class TestTrackermain(unittest.TestCase):
             myprint(
                 f'tf th={threading.current_thread().getName()}, t={monotonic()}')
 
-        # def _thread_template(args: List[Any]):
-            # """_funtem(*args)
-
-            # Most of the test thread proxies use this
-            # *args is (execute, barrier, stop_event, queues,name,interval,doit)
-            # shows that the proxie has been invoked or not, and ended.
-
-            # If the proxie is enabled, shows that, waits for the barrier, and then executes doit
-            # repeatedly at interval timeing, untill the stop_event is set
-
-            # """
-            # multiple threads call this, so make the thread variables
-            #locald = threading.local()
-            #locald.name = args[_NAME]
-            #locald.interval = args[_INTERVAL]
-            #locald.doit = args[_DOIT]
-            # show that the module has been invoked
-            # myprint(
-            # f'{locald.name} invoked, th={threading.current_thread().getName()}, t={monotonic()}')
-
-            # if args[_EXECUTE]:  # if the module execution is enabled
-            #myprint(f'{locald.name} execution enabled waiting')
-            # args[_BARRIER].wait()
-            # myprint(
-            # f'{locald.name} starting, th={threading.current_thread().getName()}, t={monotonic()}')
-            # while not args[_STOPE].wait(locald.interval):
-            # locald.doit()
-
-            # else:
-            #myprint(f'{locald.name} execution disabled')
-
-            # and show the module is ending
-            # myprint(
-            # f'{locald.name} end, th={threading.current_thread().getName()}, t={monotonic()}')
-
-        def nf(*args):
+        def nf(*args, **kwargs):
             """
             noisefloor proxy
             *args is (execute, barrier, stop_event, queues,)
@@ -357,9 +329,9 @@ class TestTrackermain(unittest.TestCase):
                 myprint(
                     f'{myargs[_NAME]} th={threading.current_thread().getName()}, t={monotonic()}')
             myargs.append(doit)
-            _thread_template(myargs)
+            _thread_template(*myargs, printfun=myprint, **kwargs)
 
-        def dqr(*args):
+        def dqr(*args, **kwargs):
             """
             data processing proxie
             *args is (execute, barrier, stop_event, queues,)
@@ -373,9 +345,9 @@ class TestTrackermain(unittest.TestCase):
                 myprint(
                     f'{myargs[_NAME]} th={threading.current_thread().getName()}, t={monotonic()}')
             myargs.append(doit)
-            _thread_template(myargs)
+            _thread_template(*myargs, printfun=myprint, **kwargs)
 
-        def da(*args):
+        def da(*args, **kwargs):
             """
             Data Aggragator proxie
             *args is (execute, barrier, stop_event, queues,)
@@ -389,9 +361,9 @@ class TestTrackermain(unittest.TestCase):
                 myprint(
                     f'{myargs[_NAME]}  th={threading.current_thread().getName()}, t={monotonic()}')
             myargs.append(doit)
-            _thread_template(myargs)
+            _thread_template(*myargs, printfun=myprint, **kwargs)
 
-        def db(*args):
+        def db(*args, **kwargs):
             """
             database proxie
             *args is (execute, barrier, stop_event, queues,)
@@ -406,7 +378,7 @@ class TestTrackermain(unittest.TestCase):
                 myprint(
                     f'{myargs[_NAME]}  th={threading.current_thread().getName()}, t={monotonic()}')
             myargs.append(doit)
-            _thread_template(myargs)
+            _thread_template(*myargs, printfun=myprint, **kwargs)
 
         # turn off all selected threads so they just start and execute
         bollst: Tuple[bool] = (False, False, False, False, False)
@@ -492,6 +464,7 @@ class TestTrackermain(unittest.TestCase):
         barrier = CTX.Barrier(bc)
         runtime = 60  # either 60, or 120 if not one of these, some of the asserts are ignored
         cleartestq()
+        RESET_STOP_EVENTS()
 
         """
         Start the threads, all will output to the TESTQ
@@ -657,7 +630,7 @@ class TestTrackermain(unittest.TestCase):
 
         # generate total time sequence
 
-    def test01_basic_thread_operation(self):
+    def test0001_basic_thread_operation(self):
         from deck import Deck
         import trackermain
         from queuesandevents import CTX, STOP_EVENTS, QUEUES
@@ -666,23 +639,29 @@ class TestTrackermain(unittest.TestCase):
 
         barrier: CTX.Barrier = None
         futures: Dict[str, Any] = {}
-        # turn on all threads
-        bollst: Tuple[bool] = (True, False, True, True, True)
+        # turn on all threads except the radio thread
+        bollst: Tuple[bool] = (False, False, False, False, False)
         # count them for barrier the plus 1 is for this thread
         bc: int = sum([1 for _ in bollst if _]) + 1
         barrier = CTX.Barrier(bc)
-        # runtime = 120  # either 60, or 120 if not one of these, some of the asserts are ignored
+        runtime = 5  # either 60, or 120 if not one of these, some of the asserts are ignored
+        cleartestq()
+        RESET_STOP_EVENTS()
+        self.assertEqual(0, TESTQ.qsize())
 
         """
-        Start the threads, all will output to the TESTQ
+
+        Start the threads, only the weather will generate data, and the other threads will just pass from
+        their input to their output, and the dbq will empty to the testq
         """
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
             futures['weather'] = tpex.submit(
-                trackermain.timed_work, bollst[0], barrier, STOP_EVENTS['acquireData'], QUEUES, delay=60 * 10.5, timed_func=trackermain.Get_LW)
+                trackermain.timed_work, bollst[0], barrier, STOP_EVENTS['acquireData'], QUEUES,
+                delay=60 * 10.5, timed_func=trackermain.Get_LW)
 
             futures['noise'] = tpex.submit(
-                trackermain.Get_NF, bollst[1], barrier, STOP_EVENTS['acquireData'], QUEUES)
+                trackermain.Get_NF_dbg, bollst[1], barrier, STOP_EVENTS['acquireData'], QUEUES)
             # reads the dataQ and sends to the data processing queue dpq
             futures['transfer'] = tpex.submit(
                 trackermain.dataQ_reader_dbg, bollst[2], barrier, STOP_EVENTS['trans'], QUEUES)
@@ -691,13 +670,53 @@ class TestTrackermain(unittest.TestCase):
                 trackermain.dataaggrator_dbg, bollst[3], barrier, STOP_EVENTS['agra'], QUEUES)
             # reads the database Q and writes it to the database
             futures['dbwriter'] = tpex.submit(
-                trackermain.dbQ_writer_dbg, bollst[4], barrier, STOP_EVENTS['dbwrite'], QUEUES)
+                trackermain.dbQ_writer_dbg, bollst[4], barrier, STOP_EVENTS['dbwrite'], QUEUES,
+                debugResultQ=TESTQ)
 
             barrier.wait()  # start them all working
             Sleep(runtime)  # wait for a while to let the threads work
             #
+            self.assertEqual(0, TESTQ.qsize())
             trackermain.shutdown(futures, QUEUES, STOP_EVENTS)
 
+        print('\nend of subtest 1 ---------------------------------------------------\n')
+
+        cleartestq()
+        RESET_STOP_EVENTS()
+        # turn on all threads except the radio thread
+        bollst: Tuple[bool] = (True, False, True, True, True)
+        # count them for barrier the plus 1 is for this thread
+        bc: int = sum([1 for _ in bollst if _]) + 1
+        barrier = CTX.Barrier(bc)
+        runtime = 120  # either 60, or 120 if not one of these, some of the asserts are ignored
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
+            futures['weather'] = tpex.submit(
+                trackermain.timed_work, bollst[0], barrier, STOP_EVENTS['acquireData'], QUEUES,
+                delay=60, timed_func=trackermain.Get_LW)
+
+            futures['noise'] = tpex.submit(
+                trackermain.Get_NF_dbg, bollst[1], barrier, STOP_EVENTS['acquireData'], QUEUES)
+            # reads the dataQ and sends to the data processing queue dpq
+            futures['transfer'] = tpex.submit(
+                trackermain.dataQ_reader_dbg, bollst[2], barrier, STOP_EVENTS['trans'], QUEUES)
+            # looks at the data and generates the approprate sql to send to dbwriter
+            futures['dataagragator'] = tpex.submit(
+                trackermain.dataaggrator_dbg, bollst[3], barrier, STOP_EVENTS['agra'], QUEUES)
+            # reads the database Q and writes it to the database
+            futures['dbwriter'] = tpex.submit(
+                trackermain.dbQ_writer_dbg, bollst[4], barrier, STOP_EVENTS['dbwrite'], QUEUES,
+                debugResultQ=TESTQ)
+
+            barrier.wait()  # start them all working
+            for _ in range(runtime):
+                QUEUES['dataQ'].put(f'tick: {monotonic()}')
+                Sleep(1)
+            #
+            trackermain.shutdown(futures, QUEUES, STOP_EVENTS)
+
+        deck: Deck = Deck(400)
+        deck.q2deck(TESTQ, True)
         a = 0
 
     def testx01a_multiproc_simple(self):
@@ -709,7 +728,7 @@ class TestTrackermain(unittest.TestCase):
         """
         return
         print('\ntest01a_threaded_simple\n', end="")
-        clearstopevents()
+        RESET_STOP_EVENTS()
         reset_queues()
 
         bollst = [False, False, False, False, False]
@@ -771,7 +790,7 @@ class TestTrackermain(unittest.TestCase):
         """
         return
         print('\ntest01b_threaded_simple\n', end="")
-        clearstopevents()
+        RESET_STOP_EVENTS()
         reset_queues()
 
         # trackerinitialized = time.monotonic()

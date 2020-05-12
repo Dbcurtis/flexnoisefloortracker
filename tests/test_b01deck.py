@@ -7,8 +7,19 @@ from multiprocessing import freeze_support
 import unittest
 import context
 from deck import Deck
-from queue import Full as QFull  # , Empty as QEmpty
+# from queue import Full as QFull  # , Empty as QEmpty
+from deck import DeckFullError, OutQFullError
 
+
+# class DeckFullError(Error):
+#"""Raise when the Deck is fulll"""
+
+# def __init__(self, *args):
+#super(DeckFullError, self).__init__(*args)
+
+
+# class OutQFullError(Error):
+#"""Raise when the output Q is full"""
 
 class TestDeck(unittest.TestCase):
     """TestDeck
@@ -47,10 +58,8 @@ class TestDeck(unittest.TestCase):
         """test01_instant()
 
         """
-        #print('Deck: test01_instant -- start')
+
         deck: Deck = Deck(10)  # define z deck of 10
-        #stra = str(deck)
-        #repra = repr(deck)
 
         self.assertEqual('max: 10, len: 0, first: None', str(deck))
         self.assertEqual('Deck= max: 10, len: 0, deque([])', repr(deck))
@@ -79,7 +88,6 @@ class TestDeck(unittest.TestCase):
             self.fail('exception not thrown')
         except IndexError:
             pass
-        #print('Deck: test01_instant -- end')
 
         try:
             aa = deck.pop()
@@ -117,7 +125,7 @@ class TestDeck(unittest.TestCase):
             for i in range(11):
                 deck.append(i)
             self.fail('missed full queue exception on append')
-        except QFull:
+        except DeckFullError:
             self.assertEqual(9, deck.look_right())
 
         deck.clear()
@@ -127,15 +135,15 @@ class TestDeck(unittest.TestCase):
             for i in range(11):
                 deck.push(i)
             self.fail('missed full queue exception on append')
-        except QFull:
+        except DeckFullError:
             self.assertEqual(0, deck.look_right())
             self.assertEqual(9, deck.look_left())
             self.assertEqual(10, len(deck))
 
         #print('Deck: test02_appendPushPop-- end')
 
-    def test02_load_from_Q(self):
-        """test02_load_from_Q()
+    def test03_q2deck(self):
+        """test02_q2deck()
 
         """
         #from queue import Empty as QEmpty, Full as QFull
@@ -143,31 +151,56 @@ class TestDeck(unittest.TestCase):
         CTX = mp.get_context('spawn')
         dataq = CTX.JoinableQueue(maxsize=100)
 
+        #
+        # test that can empty a que into the deck
+        #
         [dataq.put(x) for x in range(100)]
-        deck: Deck = Deck(100)
+        deck: Deck = Deck(101)
         self.assertFalse(deck.look_left())
         self.assertFalse(deck.look_right())
-        deck.load_from_Q(dataq, mark_done=True)
+        deck.q2deck(dataq, mark_done=True)
+        self.assertEqual(100, len(deck))
         self.assertEqual(0, deck.look_left())
         self.assertEqual(99, deck.look_right())
+        self.assertTrue(dataq.empty())
         [self.assertEqual(x, deck.popleft()) for x in range(100)]
-        dataq.close()
-        dataq = CTX.JoinableQueue(maxsize=100)
+        #
+        # test that can load from Q and exactly fill the deck
+        #
+        [dataq.put(x) for x in range(100)]
+        deck: Deck = Deck(100)
+        try:
+            deck.q2deck(dataq, mark_done=True)
+        except Exception as ex:
+            self.fail(f'unexpected exception {ex}')
 
+        self.assertEqual(100, len(deck))
+        self.assertEqual(0, deck.look_left())
+        self.assertEqual(99, deck.look_right())
+        self.assertTrue(dataq.empty())
+        [self.assertEqual(x, deck.popleft()) for x in range(100)]
+
+        # check that the deck can fill from que and raise DeckFullError
         [dataq.put(x) for x in range(100)]
         deck = Deck(50)
-        deck.load_from_Q(dataq, mark_done=True, wait_sec=1.0)
+        try:
+            deck.q2deck(dataq, mark_done=True, wait_sec=1.0)
+            self.fail('DeckFullError not QFull')
+        except DeckFullError as dfe:
+            a = 0
+            pass
+        self.assertEqual(50, len(deck))
         self.assertEqual(0, deck.look_left())
         self.assertEqual(49, deck.look_right())
         self.assertEqual(50, dataq.qsize())
         deck.clear()
-        deck.load_from_Q(dataq, mark_done=True, wait_sec=1.0)
+        deck.q2deck(dataq, mark_done=True, wait_sec=1.0)
         self.assertEqual(50, deck.look_left())
         self.assertEqual(99, deck.look_right())
         self.assertEqual(0, dataq.qsize())
         dataq.close()
 
-    def test03_loadQ(self):
+    def test04_deck2q1andextend(self):
         """test02_loadQ()
 
         """
@@ -184,7 +217,8 @@ class TestDeck(unittest.TestCase):
         try:
             deck.extend([99, 100])
             self.fail('expected exception did not happen')
-        except QFull as ex:
+        except DeckFullError as ex:
+            a = 0
             pass
 
         deck = Deck(15)
@@ -193,24 +227,22 @@ class TestDeck(unittest.TestCase):
             deck.extend([x for x in range(15)])
             self.fail('expected exception did not happen')
 
-        except QFull as ex:
+        except DeckFullError as ex:
             self.assertEqual(15, len(deck))
             self.assertEqual(0, deck.look_left())
             self.assertEqual(9, deck.look_right())
 
         self.assertEqual(0, dataq.qsize())
-        self.assertEqual(15, deck.loadQ(dataq))
+        self.assertEqual(15, deck.deck2q(dataq))
         self.assertEqual(0, len(deck))
         self.assertEqual(15, dataq.qsize())
-        jj: int = 0
 
+        # empty dataq
         try:
             while True:
                 dataq.get(True, 0.001)
                 dataq.task_done()
-                jj += 1
-        except QEmpty as e:
-            a = 0
+        except QEmpty:
             pass
         self.assertEqual(0, dataq.qsize())
 
@@ -218,56 +250,113 @@ class TestDeck(unittest.TestCase):
         deck.extend([x for x in range(25)])
 
         try:
-            deck.loadQ(dataq)
-        except QFull as ex:
-
+            deck.deck2q(dataq)
+            self.fail('expected exception did not happen')
+        except OutQFullError as ex:
             self.assertEqual(5, len(deck))
             self.assertEqual(20, dataq.qsize())
 
-        #aaa.load_from_Q(dataq, True)
-
-        #[dataq.put(x) for x in range(100)]
-        #deck = Deck(50)
-        #deck.load_from_Q(dataq, mark_done=True)
-        #self.assertEqual(0, deck.look_left())
-        #self.assertEqual(49, deck.look_right())
-        #self.assertEqual(50, dataq.qsize())
-        # deck.clear()
-        #deck.load_from_Q(dataq, mark_done=True)
-        #self.assertEqual(50, deck.look_left())
-        #self.assertEqual(99, deck.look_right())
-        #self.assertEqual(0, dataq.qsize())
         dataq.close()
 
-    def test04_GetLoad(self):
+    def test05_q2deckanddeck2q1(self):
         """test02_loadQ()
 
         """
-        #from queue import Empty as QEmpty, Full as QFull
+
         import multiprocessing as mp
         CTX = mp.get_context('spawn')
-        dataqin = CTX.JoinableQueue(maxsize=110)
-        dataqout = CTX.JoinableQueue(maxsize=210)
+        dataqin = CTX.JoinableQueue(maxsize=100)
+        dataqout_large = CTX.JoinableQueue(maxsize=102)
+        dataqout_small = CTX.JoinableQueue(maxsize=10)
 
-        #[dataqin.put(x) for x in range(100)]
-        for i in range(100):
-            dataqin.put(i)
+        [dataqin.put(x) for x in range(25)]
+        # for i in range(100):
+        # dataqin.put(i)
 
-        deck: Deck = Deck(110)
-        self.assertEqual(100, deck.load_from_Q(
-            dataqin, mark_done=False, wait_sec=1.0))
+        deck: Deck = Deck(50)
+        cnt: int = None
+        lstint: List[int] = []
+        try:
+            cnt = deck.q2deck(dataqin, mark_done=True, wait_sec=0.5)
+            self.assertEquals(25, cnt)
+            self.assertEquals(25, len(deck))
+            [dataqin.put(x) for x in range(25, 30)]
+            self.assertEquals(5, dataqin.qsize())
+            cnt = deck.q2deck(dataqin, mark_done=True, wait_sec=0.5)
+            self.assertEquals(5, cnt)
+            self.assertTrue(dataqin.empty())
+            self.assertEquals(30, len(deck))
+            lstint = list(deck.deck)
+            self.assertEquals(30, len(lstint))
+            self.assertEquals(0, lstint[0])
+            self.assertEquals(29, lstint[29])
+
+            [dataqin.put(x) for x in range(30, 100)]
+            cnt = deck.q2deck(dataqin, mark_done=True, wait_sec=0.5)
+            self.fail('did not generate exception')
+
+        except DeckFullError as dfe:
+            self.assertEqual(50, len(deck))
+            self.assertEqual(5, cnt)
+            self.assertEqual('cnt=20', dfe.args[0])
+            self.assertEqual(50, dataqin.qsize())
+
+        lstint = list(deck.deck)
+        for i in range(50):
+            self.assertEqual(i, lstint[i])
+
+        # the deck is full, lets try to add more
+        try:
+            cnt = deck.q2deck(dataqin, mark_done=True, wait_sec=0.5)
+            self.fail('did not generate exception')
+
+        except DeckFullError as dfe:
+            self.assertEqual('cnt=0', dfe.args[0])
 
         def mkstr(a):
             return(str(a))
+        try:
+            cnt = deck.deck2q(dataqout_small, fn=mkstr)
+            self.fail('should have thrown an exception')
+        except OutQFullError as oqfe:
+            self.assertEqual('cnt=10', oqfe.args[0])
 
-        deck.loadQ(dataqout, done_Q=dataqin, fn=mkstr)
+        self.assertEqual(40, len(deck))
+        self.assertEqual(10, dataqout_small.qsize())
+        tempdeck = Deck(20)
+        cnt = tempdeck.q2deck(dataqout_small, mark_done=True)
+        lstint = list(tempdeck.deck)
+        self.assertEqual(0, dataqout_small.qsize())
+        for i in range(10):
+            self.assertEqual(str(i), lstint[i])
+
+        # self.assertEqual(100, deck.q2deck(
+            # dataqin, mark_done=False, wait_sec=1.0))
+
+        #self.assertEqual(100, len(deck))
+        # self.assertTrue(dataqin.empty())
+
+        #deck.deck2q(dataqout, done_Q=dataqin, fn=mkstr)
+        #self.assertEqual(0, len(deck))
+        #self.assertEqual(100, dataqout.qsize())
+
+        #checkdeck = Deck(110)
+        # self.assertEqual(100, checkdeck.q2deck(
+            # dataqout, mark_done=True, wait_sec=1.0))
+        #aa: str = checkdeck.look_left()
+        #self.assertEqual('0', aa)
+        # self.assertTrue(dataqout.empty())
+
+        #deck1: Deck = Deck(110)
+        # cccc = deck1.q2deck(
+            # dataqout, mark_done=True, wait_sec=1.0)
+        #self.assertEqual(100, cccc)
+
+        #self.fail('need to test full queue exception')
+
         dataqin.close()
-
-        deck1: Deck = Deck(110)
-        cccc = deck1.load_from_Q(
-            dataqout, mark_done=True, wait_sec=1.0)
-        self.assertEqual(100, cccc)
-        dataqout.close()
+        dataqout_small.close()
+        dataqout_large.close()
 
 
 if __name__ == '__main__':

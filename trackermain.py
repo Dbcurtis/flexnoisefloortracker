@@ -12,7 +12,7 @@ from typing import Any, Tuple, List, Dict
 from queue import Empty as QEmpty, Full as QFull
 import concurrent.futures
 from concurrent.futures import ALL_COMPLETED, FIRST_EXCEPTION, FIRST_COMPLETED
-#import multiprocessing as mp
+# import multiprocessing as mp
 from queuesandevents import CTX, QUEUES, STOP_EVENTS
 import logging
 import logging.handlers
@@ -68,8 +68,12 @@ class Consolidate:
         pass
 
 
-def _thread_template(args: List[Any]):
-    """_funtem(*args)
+def _myprint(a):
+    print(a)
+
+
+def _thread_template(*args, printfun=_myprint, **kwargs):
+    """_thread_template(*args, printfun=_myprint, **kwargs)
 
     Most of the test thread proxies use this
     *args is (execute, barrier, stop_event, queues,name,interval,doit)
@@ -81,28 +85,56 @@ def _thread_template(args: List[Any]):
     """
 
     # multiple threads call this, so make the thread variables
+    if 7 > len(args):
+        raise ValueError('Wrong number of values in args')
     locald = threading.local()
     locald.name = args[_NAME]
     locald.interval = args[_INTERVAL]
     locald.doit = args[_DOIT]
+    locald.stope = args[_STOPE]
+    locald.barrier = args[_BARRIER]
     # show that the module has been invoked
-    print(
-        f'{locald.name} invoked, th={threading.current_thread().getName()}, t={monotonic()}')
 
-    if args[0]:  # if the module execution is enabled
-        print(f'{locald.name} execution enabled waiting')
-        args[1].wait()
-        print(
-            f'{locald.name} starting, th={threading.current_thread().getName()}, t={monotonic()}')
-        while not args[_STOPE].wait(locald.interval):
-            locald.doit()
+    results: List[int] = []
+    try:
+        printfun(
+            f'{locald.name} invoked, th={threading.current_thread().getName()}, t={monotonic()}')
 
-    else:
-        print(f'{locald.name} execution disabled')
+        if args[_EXECUTE]:  # if the module execution is enabled
 
-    # and show the module is ending
-    print(
-        f'{locald.name} end, th={threading.current_thread().getName()}, t={monotonic()}')
+            printfun(f'{locald.name} execution enabled waiting')
+            locald.barrier.wait()
+            printfun(
+                f'{locald.name} starting, th={threading.current_thread().getName()}, t={monotonic()}')
+            #
+            # the real stuff happens here
+            #
+            if locald.stope.is_set():
+                    notempty = True
+                    while notempty:
+                        temp: int = locald.doit()
+                        results.append(temp)
+                        notempty = temp != 0
+
+                    break
+                else:
+                    Sleep(locald.interval)
+                    # may need to handle the results
+                    try:
+                        results.append(locald.doit())
+                    except QFull as qf:
+                        pass
+
+        else:
+            printfun(f'{locald.name} execution disabled')
+    except Exception as ex:
+        print(f'{ex}, on {locald.name}')
+        raise ex
+
+    finally:
+        # and show the module is ending
+        printfun(
+            f'{locald.name} end, th={threading.current_thread().getName()}, t={monotonic()}')
 
 
 class DBwriter:
@@ -195,7 +227,7 @@ class Aggratator:
             # while not self.stop_event.wait(10):
             while True:
                 try:
-                    deck.load_from_Q(self.dpQ_IN, True)
+                    deck.q2deck(self.dpQ_IN, True)
 
                 except QFull:  # if deck has reached its max
                     break
@@ -225,12 +257,33 @@ class Aggratator:
         return [count]
 
 
+def dataaggrator_dbg(*args, **kwargs):
+    """dataaggrator_dbg
+
+    just passes the entries on the dpQ on to the dbQ
+    """
+
+    name = 'dta_agg_dbg'
+    myargs = list(args)
+    myargs.append(name)
+
+    def doit():
+        deck:Deck = Deck(200)
+        count = _qcpy(deck,args[_QS]['dpQ'], args[_QS]['dbQ'], args)
+        return count
+
+    myargs.append(1.0)
+    myargs.append(doit)
+    _thread_template(*myargs, **kwargs)
+
+
 def dataaggrator(thread_info, aggfn=None, debugfn=None):
     """dataaggrator(thread_info, debugfn=None)
 
     this is the 'dataagragator' thread in futures
 
      thread_info is (execute, barrier, stop_event, queues,),
+     >>>>>>>>>>>>>>>>name should be dta_agg
 
     """
     if debugfn:
@@ -275,6 +328,8 @@ def Get_NF(rawDataQ_OUT):
 
     this thread function is the only one that starts and uses the Flex
 
+    >>>>>>>>>>>>>>>>name should be get_nf
+
     """
     from noisefloor import Noisefloor
     _ui: UserInput = UserInput()
@@ -301,17 +356,9 @@ def Get_NF(rawDataQ_OUT):
             _noisf.close()
         _ui.close()
         sys.exit(str(exc))
-    #_nf = NoiseFloor()
+    # _nf = NoiseFloor()
 
 
-# def load_deque(deqPrams, inQ, markdone):
-    # deck = deqPrams[0]
-    # deck.load_from_Q(inQ, mark_done=markdone)
-    # deqPrams[2][0] = len(deck)
-
-
-# def write_2_q(outQ, data):
-    # outQ.put(data, False)
 def trim_dups(mydeck, boolfn):
     if not mydeck:
         return []
@@ -452,24 +499,24 @@ def dataQ_reader_datagen(*args, **kwargs):
         print('dataQ_reader_datagen started\n', end="")
         # the deque, max size, single element  size inititally 0
         # locald.deqPrams = (Deck(50), 50, [0])
-        indeck = Deck(100)
+        deck = Deck(100)
 
         while True:
             try:  # empty rawDataW into indata
                 # waits for 10sec to try to empty Q
-                indeck.load_from_Q(locald.rawDataQ_IN, mark_done=True)
+                deck.q2deck(locald.rawDataQ_IN, mark_done=True)
 
             except QFull:  # the deck is full
                 print(f'indeck is full {len(indeck)}')
 
             finally:
-                if len(indeck) >= 20:  # deck is 100 so this should work w/o problems
+                if len(deck) >= 20:  # deck is 100 so this should work w/o problems
                     break
 
         templst: List[Any] = []
         try:
             while True:
-                templst.append(indeck.popleft())
+                templst.append(deck.popleft())
         except IndexError:
             pass  # indeck now wmpty
         with open('localweathersqlshort.pickle', 'wb') as fl:
@@ -484,42 +531,77 @@ def dataQ_reader_datagen(*args, **kwargs):
     pass
 
 
+def _qcpy(deckin,qin, qout, args):
+    stop_event = args[_STOPE]
+    count = 0
+    deck = deckin
+    run = True
+
+    while True:
+        try:
+            deck.q2deck(qin, mark_done=False)
+            deck.deck2q(qout, done_Q=qin)
+        except Exception:
+            pass
+
+
+    while run:
+        try:  # empty qin into indata
+            count += deck.q2deck(qin, mark_done=False)
+
+        except QFull:
+            a = 0
+            pass  # deck is full, need to empty some of it
+
+        finally:
+            if len(deck) > 0:
+                deck.deck2q(qout, done_Q=qin)
+
+            # things look done
+            Sleep(1)
+            if stop_event.is_set() and qin.empty():
+                run = False
+
+    return count
+
+
+def Get_NF_dbg(*args, **kwargs):
+    """dataQ_reader_dbg
+
+    just passes the entries on the dataQ on to the dpQ
+    """
+    name = 'get_nf_dbg'
+    myargs = list(args)
+    myargs.append(name)
+
+    def doit():
+        dq = myargs[_QS]['dataQ']
+        dq.put('entry from Get_NF_dbg')
+        return 1
+
+    myargs.append(1.0)
+    myargs.append(doit)
+    _thread_template(*myargs, **kwargs)
+
+
 def dataQ_reader_dbg(*args, **kwargs):
     """dataQ_reader_dbg
 
     just passes the entries on the dataQ on to the dpQ
     """
-    if not args[0]:  # if disabled, just exit to kill the thread
-        return
-    locald = threading.local()
-    locald.rawDataQ_IN = locald.ti_dict['queues']['dataQ']
-    locald.dpQ_OUT = locald.ti_dict['queues']['dpQ']
-    locald.stop_event = locald.ti_dict['stop_event']
-    locald.count = 0
-    print('dataQ_reader_dbg invoked\n', end="")
-    locald.ti_dict['barrier'].wait()
-    print('dataQ_reader_dbg started\n', end="")
-    locald.indeck = Deck(200)
+    name = 'dq_reader_dbg'
+    myargs = list(args)
+    myargs.append(name)
 
-    while True:
-        try:  # empty rawDataW into indata
-            locald.indeck.load_from_Q(
-                locald.rawDataQ_IN, mark_done=False)
+    def doit():
+        deck:Deck = Deck(200)
+        count = _qcpy(deck,args[_QS]['dataQ'], args[_QS]['dpQ'], args)
+        return count
 
-        except QFull:
-            pass
+    myargs.append(1.0)
+    myargs.append(doit)
+    _thread_template(*myargs, **kwargs)
 
-        finally:
-            if len(locald.indeck) > 0:
-                locald.indeck.loadQ(locald.dpQ_OUT)
-
-        # things look done
-        if not locald.stop_event.wait(5.0):  # check this
-            if locald.rawDataQ_IN.empty() and len(locald.deqPrams[0]) == 0:
-                break
-
-    print('dataQ_reader_dbg ended\n', end="")
-    return locald.count
 
 
 def dataQ_reader(*args, **kwargs):
@@ -530,6 +612,8 @@ def dataQ_reader(*args, **kwargs):
      *args is (execute, barrier, stop_event, queues,),
      'fn' in kwargs is the function to be applied to the input data and defaults to writing data
      to the outQ
+
+     >>>>>>> name should be dq_reader
 
     """
     if not args[0]:  # if disabled, just exit to kill the thread
@@ -566,7 +650,7 @@ def dataQ_reader(*args, **kwargs):
     while True:
 
         try:  # empty rawDataW into indata
-            locald.indeck.load_from_Q(
+            locald.indeck.q2deck(
                 locald.rawDataQ_IN, mark_done=False)
 
         except QFull:
@@ -641,6 +725,26 @@ def writesql():
     pass
 
 
+def dbQ_writer_dbg(*args, **kwargs):
+    """dataQ_reader_dbg
+
+    just passes the entries on the dbQ on to the debugResultQ in kwargs.
+    """
+
+    name = 'dbQ_writer_dbg'
+    myargs = list(args)
+    myargs.append(name)
+    debq = kwargs['debugResultQ']
+
+    def doit():
+        deck:Deck = Deck(200)
+        count = _qcpy(deck,args[_QS]['dbQ'], debq, args)
+        return count
+    myargs.append(1.0)
+    myargs.append(doit)
+    _thread_template(*myargs, **kwargs)
+
+
 def dbQ_writer(thread_info, debugfn=None):
     """dbQ_writer(thread_info, debugfn=None)
 
@@ -651,6 +755,8 @@ def dbQ_writer(thread_info, debugfn=None):
     stop_event is set if we are in the process of shutting down
     queues is a dict of joinablequeues one of which must be 'dbQ'
     debugfn is a function that will be invoked (used for debugging) to process each entry in the 'dbQ'
+    >>>>>>>>>>>>>name should be dbQ_writer
+
 
     """
 
@@ -717,22 +823,22 @@ def timed_work(*args, **kwargs):  # thread_info, delayseconds, fu):
     """
 
     locald = threading.local()
-    ti_dict: Dict[str, Any] = {}
-    ti_dict['execute'] = args[0]
-    ti_dict['barrier'] = args[1]
-    ti_dict['stop_event'] = args[2]
-    ti_dict['queues'] = args[3]
+    # ti_dict: Dict[str, Any] = {}
+    # ti_dict['execute'] = args[_EXECUTE]
+    # ti_dict['barrier'] = args[1]
+    # ti_dict['stop_event'] = args[2]
+    # ti_dict['queues'] = args[3]
 
     print(
-        f'timed work invoked as {threading.currentThread().getName()}, thread: {threading.current_thread().getName()}')
-    if ti_dict['execute']:
+        f'timed work invoked on thread: {threading.current_thread().getName()}')
+    if args[_EXECUTE]:
         # locald = threading.local()
         locald.thread = threading.current_thread()
         locald.tname = locald.thread.getName()
-        locald.barrier = ti_dict['barrier']
-        locald.execute = ti_dict['execute']
-        locald.raw_data_Q = ti_dict['queues']['dataQ']
-        locald.stop_event = ti_dict['stop_event']
+        locald.barrier = args[_BARRIER]
+        locald.execute = args[_EXECUTE]
+        locald.raw_data_Q = args[_QS]['dataQ']
+        locald.stop_event = args[_STOPE]
         locald.delayseconds = kwargs['delay']
         try:
             locald.fu = kwargs['timed_func']
@@ -761,7 +867,7 @@ def timed_work(*args, **kwargs):  # thread_info, delayseconds, fu):
                 _waittime = locald.seq.get_nxt_wait()
                 # print(_waittime)
                 if _waittime > 1.0:
-                    #print('sleep delay')
+                    # print('sleep delay')
                     Sleep(1.0)
                 elif _waittime <= 0.0009:
                     continue
@@ -778,8 +884,10 @@ def shutdown(futures, queues, stopevents):
 
     """
     # stop the data generating processes
+    for k, v in futures.items():
+        print(f'{k}:{v.done()}')
     stopevents['acquireData'].set()
-    stopevents['trans'].set()
+
     validkeys = list(futures.keys())
 
     # isdone = True
@@ -798,6 +906,9 @@ def shutdown(futures, queues, stopevents):
     # wait until the dataQ fileed by the data generating processes empty
     while not queues['dataQ'].empty():
         Sleep(0.001)
+
+    for k, v in futures.items():
+        print(f'{k}:{v.done()}')
 
     # the dataQ is empty now ok to stop the datareader
     stopevents['trans'].set()
@@ -925,7 +1036,7 @@ def datagen3(hours: float = 0.5):
                 aa = 0
 
             [tempdec.append(f.running()) for f in futures.values()]
-            tempdec.loadQ(dq)
+            tempdec.deck2q(dq)
             dataQDeque: Deck = Deck(10000)
             print('main waiting for start')
             for _ in Range(200):
@@ -936,7 +1047,7 @@ def datagen3(hours: float = 0.5):
             print('main continuing')
             for _ in range(2 * 3600):
                 Sleep(0.5)
-                dataQDeque.load_from_Q(
+                dataQDeque.q2deck(
                     queues['dataQ'], mark_done=True, wait_sec=0.1)
                 if _ % 120 == 0:
                     print(f'{str(Dtc.now())} q:{len(dataQDeque)}')
@@ -945,7 +1056,7 @@ def datagen3(hours: float = 0.5):
             for _ in range(200):
                 Sleep(0.001)
 
-            dataQDeque.load_from_Q(  # pick up anything left over.
+            dataQDeque.q2deck(  # pick up anything left over.
                 queues['dataQ'], mark_done=True, wait_sec=0.1)
 
             shutdown(futures, queues, STOP_EVENTS)
@@ -1013,7 +1124,7 @@ def datagen2(hours: float = 0.5):
                 # Sleep(0.001)
 
             [tempdec.append(f.running()) for f in futures.values()]
-            tempdec.loadQ(dq)
+            tempdec.deck2q(dq)
 
             # barrier.wait()  # start them all working
             for _ in range(400):
@@ -1023,7 +1134,7 @@ def datagen2(hours: float = 0.5):
                 Sleep(0.001)
 
             dataQDeque: Deck = Deck(100)
-            dataQDeque.load_from_Q(
+            dataQDeque.q2deck(
                 queues['dataQ'], mark_done=True, wait_sec=0.1)
 
             shutdown(futures, queues, STOP_EVENTS)
@@ -1086,12 +1197,12 @@ def datagen1(hours: float = 0.5):
             # Sleep(0.001)
 
             [tempdec.append(f.running()) for f in futures.values()]
-            tempdec.loadQ(dq)
+            tempdec.deck2q(dq)
 
             # barrier.wait()  # start them all working
             trackerstarted: float = monotonic()
             trackerschedend: float = trackerstarted + timetup[2]
-            #monotonic() < trackerschedend
+            # monotonic() < trackerschedend
             # dataQ_reader_datagen will end when done
             tfut = futures['transfer']
             while monotonic() < trackerTimeout:

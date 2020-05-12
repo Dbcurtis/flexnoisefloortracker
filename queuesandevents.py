@@ -28,6 +28,11 @@ STOP_EVENTS = {
 }
 
 
+def RESET_STOP_EVENTS():
+    for v in STOP_EVENTS.values():
+        v.clear()
+
+
 def RESET_QS():
     """RESET_QS()
 
