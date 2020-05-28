@@ -83,6 +83,7 @@ class Noisefloor:
             self._ui.open(detect_br)
             self.flex.open(detect_br)
             self.initial_state = self.flex.save_current_state()
+            self.flex.do_cmd_list(INITIALZE_FLEX)
             self.is_open = True
 
         except Exception as sex:

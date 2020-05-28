@@ -1,6 +1,19 @@
 #!/usr/bin/env python3
 
-"""defines some semi globals"""
+"""defines some semi globals
+
+
+Operation/dataflow
+processes stopped by the acquireData event feed the dataQ
+
+dataQ is read by thread stopped by trans event, minimal processing performed and data is writen to dpQ
+
+dpQ is read by thread stopped by agra which generates the sql code that is written to dbQ
+
+dbQ is read by thread stopped by dbwrite which performs the sql operations
+
+
+"""
 from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set
 import multiprocessing as mp
 from queue import Empty as QEmpty, Full as QFull
@@ -12,10 +25,10 @@ CTX = mp.get_context('spawn')  # threading context
 QUEUES = {
     # from data acquisition threads, received by the aggragator thread
     'dataQ': CTX.JoinableQueue(maxsize=100),
-    # database commands generateed (usually) ty the aggrator thread
-    'dbQ': CTX.JoinableQueue(maxsize=100),
     # written to by the aggrator thread, read by the data processor which generates sql commands to dbq
-    'dpQ': CTX.JoinableQueue(maxsize=100)
+    'dpQ': CTX.JoinableQueue(maxsize=100),
+    # database commands generateed (usually) by the aggrator thread
+    'dbQ': CTX.JoinableQueue(maxsize=100),
 
 }
 
@@ -23,8 +36,8 @@ QUEUES = {
 STOP_EVENTS = {
     'acquireData': CTX.Event(),
     'trans': CTX.Event(),
-    'dbwrite': CTX.Event(),
     'agra': CTX.Event(),
+    'dbwrite': CTX.Event(),
 }
 
 
@@ -45,3 +58,12 @@ def RESET_QS():
                 _.task_done()
         except QEmpty:
             continue
+
+
+POSSIBLE_F_KEYS: List[str] = [
+    'weather',
+    'noise',
+    'transfer',
+    'dataagragator',
+    'dbwriter'
+]

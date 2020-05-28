@@ -24,14 +24,14 @@ class Sequencer:
 
     Sets up a 20 repratition delayseconds apart  The repetition stays at 20
     resolution is about .5 second (not checked, but guessed)
-    the first time is delayseconds past the time the object is instantiated
+    the first time is 10 seconds past the instantiation time, and delayseconds between each following time
     """
 
     def __init__(self, delayseconds: float):
         self.delayseconds: float = delayseconds
-        _nowis: float = monotonic()
+        _nowis: float = monotonic() + 10.0
         self._to_do_sched: Deque[float] = deque(
-            [_nowis + t * delayseconds for t in range(1, 21)])  # specifies the first 20 reps
+            [_nowis + t * delayseconds for t in range(0, 20)])  # specifies the first 20 reps
         self.skipped: int = 0
 
     def do_it_now(self) -> bool:

@@ -67,11 +67,11 @@ class TestSequencer(unittest.TestCase):
 
         endtime = monotonic()
         toloop = endtime - starttime
-        self.assertAlmostEqual(5.0, round(toloop, 0))
+        self.assertAlmostEqual(10.0, round(toloop, 0))
         currentlastsched = sequ._to_do_sched[-1]
         delay1 = currentlastsched - initiallastsched
         self.assertAlmostEqual(5.0, delay1)
-        self.assertEqual(20, cnt)
+        self.assertEqual(40, cnt)
         sched: List[float] = list(sequ._to_do_sched)
         ll: List[float] = []
         for i in range(1, len(sched)):
@@ -80,11 +80,11 @@ class TestSequencer(unittest.TestCase):
         self.assertEqual(5.0, mean(ll))
 
         sequ = Sequencer(1)  # init for 1 sec delay
-        Sleep(10.5)
+        Sleep(20.5)
         self.assertEqual(20, len(sequ._to_do_sched))
         self.assertTrue(sequ.do_it_now())
         self.assertEqual(20, len(sequ._to_do_sched))
-        self.assertEqual(10, sequ.skipped)
+        self.assertEqual(11, sequ.skipped)
 
         sequ = Sequencer(5.0)  # init for 5 sec delay
         waittime: float = sequ.get_nxt_wait()

@@ -13,7 +13,6 @@ from collections import deque
 from multiprocessing import freeze_support
 from queue import Empty as QEmpty, Full as QFull
 
-
 LOGGER = logging.getLogger(__name__)
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/deck'
@@ -190,6 +189,8 @@ class Deck:
         """
         count: int = None
         with self.tlock:
+            # if True:
+            #print('testing true needs to be deleated')
             if self.qlen == 0:
                 count = 0
             else:
@@ -207,7 +208,7 @@ class Deck:
 
         """
 
-        count: int = None
+        count: int = 0
         v = None
         while True:
             try:
@@ -216,8 +217,6 @@ class Deck:
                 if not done_Q is None:
                     done_Q.task_done()
 
-                if count is None:
-                    count = 0
                 count += 1
             except QFull:
                 self._push(v)
