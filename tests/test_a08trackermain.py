@@ -24,6 +24,7 @@ import context
 from queuesandevents import RESET_QS as reset_queues
 from queuesandevents import RESET_STOP_EVENTS
 from queuesandevents import QUEUES, CTX, STOP_EVENTS
+from queuesandevents import QUEUE_KEYS as QK
 import trackermain
 from deck import Deck
 
@@ -1018,7 +1019,7 @@ class TestTrackermain(unittest.TestCase):
 
             # gets weather data
             futures['weather'] = tpex.submit(
-                trackermain.timed_work, argdic['twargs'])
+                trackermain.timed_work, argdic['twargs'], printfn=myprint)
 
             # gets banddata data
             futures['noise'] = tpex.submit(
@@ -1027,11 +1028,11 @@ class TestTrackermain(unittest.TestCase):
             if False:
                 # reads the dataQ and sends to the data processing queue dpq
                 futures['transfer'] = tpex.submit(
-                    trackermain.dataQ_reader_dbg, argdic['dqrargs'])
+                    trackermain.dataQ_reader_dbg, argdic['dqrargs'], printfn=myprint)
 
                 # looks at the data and generates the approprate sql to send to dbwriter
                 futures['dataagragator'] = tpex.submit(
-                    trackermain.dataaggrator_dbg, argdic['daargs'])
+                    trackermain.dataaggrator_dbg, argdic['daargs'], printfn=myprint)
 
                 # reads the database Q and writes it to the database
                 futures['dbwriter'] = tpex.submit(
@@ -1111,7 +1112,7 @@ class TestTrackermain(unittest.TestCase):
 
             # gets weather data
             futures['weather'] = tpex.submit(
-                trackermain.timed_work, argdic['twargs'])
+                trackermain.timed_work, argdic['twargs'], printfn=myprint)
 
             # gets banddata data
             futures['noise'] = tpex.submit(
@@ -1119,11 +1120,11 @@ class TestTrackermain(unittest.TestCase):
 
             # reads the dataQ and sends to the data processing queue dpq
             futures['transfer'] = tpex.submit(
-                trackermain.dataQ_reader_dbg, argdic['dqrargs'])
+                trackermain.dataQ_reader_dbg, argdic['dqrargs'], printfn=myprint)
 
             # looks at the data and generates the approprate sql to send to dbwriter
             futures['dataagragator'] = tpex.submit(
-                trackermain.dataaggrator_dbg, argdic['daargs'])
+                trackermain.dataaggrator_dbg, argdic['daargs'], printfn=myprint)
 
             # reads the database Q and writes it to the database
             futures['dbwriter'] = tpex.submit(
@@ -1207,7 +1208,7 @@ class TestTrackermain(unittest.TestCase):
 
             # gets weather data
             futures['weather'] = tpex.submit(
-                trackermain.timed_work, argdic['twargs'])
+                trackermain.timed_work, argdic['twargs'], printfn=myprint)
 
             # gets banddata data
             futures['noise'] = tpex.submit(
@@ -1215,11 +1216,11 @@ class TestTrackermain(unittest.TestCase):
 
             # reads the dataQ and sends to the data processing queue dpq
             futures['transfer'] = tpex.submit(
-                trackermain.dataQ_reader_dbg, argdic['dqrargs'])
+                trackermain.dataQ_reader_dbg, argdic['dqrargs'], printfn=myprint)
 
             # looks at the data and generates the approprate sql to send to dbwriter
             futures['dataagragator'] = tpex.submit(
-                trackermain.dataaggrator_dbg, argdic['daargs'])
+                trackermain.dataaggrator_dbg, argdic['daargs'], printfn=myprint)
 
             # reads the database Q and writes it to the database
             futures['dbwriter'] = tpex.submit(
@@ -1267,7 +1268,7 @@ class TestTrackermain(unittest.TestCase):
 
             # gets weather data
             futures['weather'] = tpex.submit(
-                trackermain.timed_work, argdic['twargs'])
+                trackermain.timed_work, argdic['twargs'], printfn=myprint)
 
             # gets banddata data
             futures['noise'] = tpex.submit(
@@ -1275,11 +1276,11 @@ class TestTrackermain(unittest.TestCase):
 
             # reads the dataQ and sends to the data processing queue dpq
             futures['transfer'] = tpex.submit(
-                trackermain.dataQ_reader_dbg, argdic['dqrargs'])
+                trackermain.dataQ_reader_dbg, argdic['dqrargs'], printfn=myprint)
 
             # looks at the data and generates the approprate sql to send to dbwriter
             futures['dataagragator'] = tpex.submit(
-                trackermain.dataaggrator_dbg, argdic['daargs'])
+                trackermain.dataaggrator_dbg, argdic['daargs'], printfn=myprint)
 
             # reads the database Q and writes it to the database
             futures['dbwriter'] = tpex.submit(
@@ -1297,381 +1298,381 @@ class TestTrackermain(unittest.TestCase):
         deck.q2deck(TESTQ, True)
         self.assertTrue(runtime - 1 <= len(deck) <= runtime + 1)
 
-    def testx01a_multiproc_simple(self):
-        """test01a_threaded_simple()
-
-        test threads started but quick exit as no function is enabled, and that basic queue
-        operations work as expected
-
-        """
-        return
-        print('\ntest01a_threaded_simple\n', end="")
-        RESET_STOP_EVENTS()
-        reset_queues()
-
-        bollst = [False, False, False, False, False]
-        bc = sum([1 for _ in bollst if _]) + 1
-
-        barrier = ctx.Barrier(bc)
-
-        while (True):
-            futures = {}
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
-
-                futures = startThreads(
-                    tpex, bollst, barrier, stopevents, queues)
-                time.sleep(0.00001)
-                barrier.wait(timeout=10)
-                time.sleep(0.00001)
-                print(
-                    f'test01a_instat continuing at {str(monotonic())}\n', end="")
-                # trackerstarted = time.monotonic()
-
-                dpQ_OUT = queues['dpQ']
-                dpQ_IN = queues['dpQ']
-
-                # put 5 items on the out queue
-                [dpQ_OUT.put(_) for _ in range(5)]
-                # wait a second with 4 chances to do a thread switch
-                [time.sleep(0.25) for _ in range(4)]
-
-                dpqouts = dpQ_OUT.qsize()
-                dpqins = dpQ_IN.qsize()
-                self.assertEqual(5, dpqouts)
-                self.assertEqual(dpqins, dpqouts)
-
-                # check all threads are done
-                [self.assertTrue(_.done()) for _ in futures.values()]
-                try:
-                    while True:
-                        dpQ_IN.get_nowait()
-                        dpQ_IN.task_done()
-                except QEmpty:
-                    pass
-                dpqouts = dpQ_OUT.qsize()
-                dpqins = dpQ_IN.qsize()
-                self.assertEqual(0, dpqouts)
-                self.assertEqual(dpqins, dpqouts)
-
-                pass  # exit out of tpex
-            break  # break out of while
-        trackermain.shutdown(futures, queues, stopevents)
-        barrier.reset()
-        #print('test01a_threaded_simple -- end\n', end="")
-
-    def testx01b_threaded_simple(self):
-        """test01b_threaded_simple()
-
-        Checks to see if the dataQ, timed_work, barrier, and stopevent works plus fundimental timed_work operation
-        using only get_lw as the function. No transfer to another queue
-
-        """
-        return
-        print('\ntest01b_threaded_simple\n', end="")
-        RESET_STOP_EVENTS()
-        reset_queues()
-
-        # trackerinitialized = time.monotonic()
-        trackerstarted = None
-        bollst = [True, False, False, False, False]
-        bc = sum([1 for _ in bollst if _]) + 1
-
-        barrier = ctx.Barrier(bc)
-        while (True):
-            futures = {}
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
-
-                futures = startThreads(
-                    tpex, bollst, barrier, stopevents, queues)
-                barrier.wait(timeout=10)
-                time.sleep(0.00001)
-                print(
-                    f'test01b_instat continuing at {str(time.monotonic())}\n', end="")
-                trackerstarted = time.monotonic()
-                marktime(dly=2.5, cnt=6)
-                stopevents['acquireData'].set()
-
-                while not futures.get('weather').done():
-                    time.sleep(0.005)
-
-                res = futures.get('weather').result()
-                elapsedtime = time.monotonic() - trackerstarted
-                self.assertAlmostEqual(15.04, elapsedtime, places=1)
-                # print(elapsedtime)
-                self.assertEqual(3, len(res))
-                q = queues['dataQ']
-                q.put(-1)
-                theq = []
-                while True:
-                    try:
-                        theq.append(q.get(True, 0.10))
-                        q.task_done()
-                    except QEmpty:
-                        break
-
-                self.assertEqual(
-                    [0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, -1], theq)
-            break
-        trackermain.shutdown(futures, queues, stopevents)
-        barrier.reset()
-        print('test01b_threaded_simple -- end\n', end="")
-
-    def testx01c_threaded_simple(self):
-        """test01c_threaded_simple()
-
-        Checks to see if the dataQ, timed_work, barrier, and stopevent works plus fundimental timed_work operation
-        using get_NF and get_LW as the functions. Starting both dataacquisition threads
-
-        """
-        return
-        print('test0001c_threaded_simple\n', end="")
-        clearstopevents()
-        reset_queues()
-
-        # trackerinitialized = time.monotonic()
-        trackerstarted = None
-        bollst = [True, True, False, False, False]
-        bc = sum([1 for _ in bollst if _]) + 1
-
-        barrier = ctx.Barrier(bc)
-        while (True):
-            futures = {}
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
-
-                futures = startThreads(
-                    tpex, bollst, barrier, stopevents, queues)
-                barrier.wait(timeout=10)
-                time.sleep(0.00001)
-                print(
-                    f'test01c_instat continuing at {str(time.monotonic())}\n', end="")
-                trackerstarted = time.monotonic()
-
-                marktime(dly=2.5, cnt=6)
-
-                # stops both weather and noise
-                stopevents['acquireData'].set()
-                time.sleep(0.0001)
-
-                while not (futures.get('weather').done() and futures.get('noise').done()):
-                    time.sleep(0.005)
-
-                resw = futures.get('weather').result()
-                resn = futures.get('noise').result()
-
-                elapsedtime = time.monotonic() - trackerstarted
-                self.assertAlmostEqual(15.04, elapsedtime, places=1)
-                # print(elapsedtime)
-
-                q = queues['dataQ']
-                q.put(-1)
-                theq = []
-                for _ in range(5):
-                    while True:
-                        try:
-                            theq.append(q.get(True, 0.10))
-                            q.task_done()
-                        except QEmpty:
-                            break
-                    time.sleep(0.10)
-
-                # print(theq)
-                self.assertEqual(31, len(theq))
-                self.assertEqual(6, len([x for x in theq if x == 0]))
-                self.assertEqual(
-                    6, len([x for x in theq if x == 1 or x == 10]))
-                self.assertEqual(
-                    6, len([x for x in theq if x == 2 or x == 20]))
-                self.assertEqual(
-                    6, len([x for x in theq if x == 3 or x == 30]))
-                self.assertEqual(
-                    6, len([x for x in theq if x == 4 or x == 40]))
-
-                self.assertEqual(3, len(resw))
-                self.assertEqual(3, len(resn))
-            break
-        trackermain.shutdown(futures, queues, stopevents)
-        barrier.reset()
-        print('test01c_threaded_simple -- end\n', end="")
-
-    def testx01d_threaded_simple(self):
-        """test01d_threaded_simple()
-
-        Checks to see if the dataQ, timed_work, barrier, and stopevent works plus fundimental timed_work operation
-        using get_NF, get_LW, and transfer as the functions. Starting both dataacquisition threads
-
-        """
-        return
-        print('test01d_threaded_simple\n', end="")
-        clearstopevents()
-        reset_queues()
-
-        # trackerinitialized = time.monotonic()
-        trackerstarted = None
-        bollst = [True, True, True, False, False]
-        bc = sum([1 for _ in bollst if _]) + 1
-
-        barrier = ctx.Barrier(bc)
-        while (True):
-            futures = {}
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
-
-                futures = startThreads(
-                    tpex, bollst, barrier, stopevents, queues)
-                barrier.wait(timeout=10)
-                time.sleep(0.00001)
-                print(
-                    f'\ntest01d_instat continuing at {str(time.monotonic())}')
-                trackerstarted = time.monotonic()
-                marktime(dly=2.5, cnt=6)
-
-                # stops both weather and noise
-                stopevents['acquireData'].set()
-                time.sleep(0.0001)
-
-                while not (futures.get('weather').done() and futures.get('noise').done()):
-                    time.sleep(0.005)
-
-                q = queues['dataQ']  # add the last entry to the data q
-                q.put(-1)
-                stopevents['trans'].set()
-                time.sleep(0.00001)
-                while not futures.get('transfer').done():
-                    time.sleep(0.005)
-
-                elapsedtime = time.monotonic() - trackerstarted
-                self.assertAlmostEqual(25.05, elapsedtime, places=0)
-                resw = futures.get('weather').result()
-                resn = futures.get('noise').result()
-                resr = futures.get('transfer').result()
-                self.assertEqual(31, resr)
-
-                # print(elapsedtime)
-                self.assertEqual(3, len(resw))
-                self.assertEqual(3, len(resn))
-
-                q = queues['dpQ']
-                theq = []
-                while True:
-                    try:
-                        theq.append(q.get(True, 0.00010))
-                        q.task_done()
-                    except QEmpty:
-                        break
-
-                self.assertTrue(31 == len(theq) or 36 == len(theq))
-                self.assertEqual(6, len([x for x in theq if x == 0]))
-                self.assertEqual(
-                    6, len([x for x in theq if x == 1 or x == 10]))
-                self.assertEqual(
-                    6, len([x for x in theq if x == 2 or x == 20]))
-                self.assertEqual(
-                    6, len([x for x in theq if x == 3 or x == 30]))
-                self.assertEqual(
-                    6, len([x for x in theq if x == 4 or x == 40]))
-                self.assertEqual(
-                    1, len([x for x in theq if x == -1]))
-
-            break
-        trackermain.shutdown(futures, queues, stopevents)
-        barrier.reset()
-        print('test01d_threaded_simple -- end\n', end="")
-
-    def testx01e_threaded_simple(self):
-        """test01e_threaded_simple()
-
-        Checks to see if the dataQ, timed_work, barrier, and stopevent works plus fundimental timed_work operation
-        using get_NF, get_LW, transfer, and dataagragator as the functions. Starting both dataacquisition threads
-
-
-        """
-        return
-        print('test01e_threaded_simple\n', end='')
-        clearstopevents()
-        reset_queues()
-
-        trackerstarted = None
-        bollst = [True, True, True, True, False]
-        bc = sum([1 for _ in bollst if _]) + 1
-
-        barrier = CTX.Barrier(bc)
-        while (True):
-            futures = {}
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
-
-                futures = startThreads(
-                    tpex, bollst, barrier, stopevents, queues)
-                barrier.wait(timeout=100)
-                time.sleep(0.00001)
-                print(
-                    f'test01e_instat continuing at {str(time.monotonic())}\n', end='')
-                trackerstarted = time.monotonic()
-                marktime(dly=2.5, cnt=6)
-
-                # stops both weather and noise
-                stopevents['acquireData'].set()
-                for _ in range(10):
-                    time.sleep(0.005)
-
-                while not (futures.get('weather').done() and futures.get('noise').done()):
-                    time.sleep(0.005)
-
-                stopevents['trans'].set()
-                time.sleep(0.00001)
-                while not futures.get('transfer').done():
-                    time.sleep(0.005)
-
-                # add the last entry to the data processing q
-                q = queues['dpQ']
-                q.put(-1)
-                for _ in range(6):
-                    time.sleep(0.00001)
-                stopevents['agra'].set()
-                time.sleep(0.00001)
-
-                while not futures.get('dataagragator').done():
-                    time.sleep(0.005)
-
-                elapsedtime = time.monotonic() - trackerstarted
-                # okt = 20.0 < elapsedtime < 25.0
-                # self.assertTrue(okt)
-                resw = futures.get('weather').result()
-                resn = futures.get('noise').result()
-                resr = futures.get('transfer').result()
-                resa = futures.get('dataagragator').result()
-                # TODO has a timedependency in this test it sometimes fails
-                self.assertEqual(30, resr)
-
-                # print(elapsedtime)
-                self.assertEqual(3, len(resw))
-                # self.assertEqual(4, len(resn))
-
-                q = queues['dbQ']
-
-                theq = []
-                while True:
-                    try:
-                        theq.append(q.get(True, 0.00010))
-                        q.task_done()
-                    except QEmpty:
-                        break
-
-                self.assertEqual(31, len(theq))
-                self.assertEqual(6, len([x for x in theq if x == 0]))
-                self.assertEqual(
-                    6, len([x for x in theq if x == 10 or x == 100]))
-                self.assertEqual(
-                    6, len([x for x in theq if x == 20 or x == 200]))
-                self.assertEqual(
-                    6, len([x for x in theq if x == 30 or x == 300]))
-                self.assertEqual(
-                    6, len([x for x in theq if x == 40 or x == 400]))
-                self.assertEqual(
-                    1, len([x for x in theq if x == -10]))
-
-            break
-        trackermain.shutdown(futures, queues, stopevents)
-        barrier.reset()
-        print('test01e_threaded_simple -- end\n', end='')
+    #def testx01a_multiproc_simple(self):
+        #"""test01a_threaded_simple()
+
+        #test threads started but quick exit as no function is enabled, and that basic queue
+        #operations work as expected
+
+        #"""
+        #return
+        #print('\ntest01a_threaded_simple\n', end="")
+        #RESET_STOP_EVENTS()
+        #reset_queues()
+
+        #bollst = [False, False, False, False, False]
+        #bc = sum([1 for _ in bollst if _]) + 1
+
+        #barrier = ctx.Barrier(bc)
+
+        #while (True):
+            #futures = {}
+            #with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
+
+                #futures = startThreads(
+                    #tpex, bollst, barrier, stopevents, queues)
+                #time.sleep(0.00001)
+                #barrier.wait(timeout=10)
+                #time.sleep(0.00001)
+                #myprint(
+                    #f'test01a_instat continuing at {str(monotonic())}\n', end="")
+                ## trackerstarted = time.monotonic()
+
+                #dpQ_OUT = queues['dpQ']
+                #dpQ_IN = queues['dpQ']
+
+                ## put 5 items on the out queue
+                #[dpQ_OUT.put(_) for _ in range(5)]
+                ## wait a second with 4 chances to do a thread switch
+                #[time.sleep(0.25) for _ in range(4)]
+
+                #dpqouts = dpQ_OUT.qsize()
+                #dpqins = dpQ_IN.qsize()
+                #self.assertEqual(5, dpqouts)
+                #self.assertEqual(dpqins, dpqouts)
+
+                ## check all threads are done
+                #[self.assertTrue(_.done()) for _ in futures.values()]
+                #try:
+                    #while True:
+                        #dpQ_IN.get_nowait()
+                        #dpQ_IN.task_done()
+                #except QEmpty:
+                    #pass
+                #dpqouts = dpQ_OUT.qsize()
+                #dpqins = dpQ_IN.qsize()
+                #self.assertEqual(0, dpqouts)
+                #self.assertEqual(dpqins, dpqouts)
+
+                #pass  # exit out of tpex
+            #break  # break out of while
+        #trackermain.shutdown(futures, queues, stopevents)
+        #barrier.reset()
+        ##print('test01a_threaded_simple -- end\n', end="")
+
+    #def testx01b_threaded_simple(self):
+        #"""test01b_threaded_simple()
+
+        #Checks to see if the dataQ, timed_work, barrier, and stopevent works plus fundimental timed_work operation
+        #using only get_lw as the function. No transfer to another queue
+
+        #"""
+        #return
+        #myprint('\ntest01b_threaded_simple\n', end="")
+        #RESET_STOP_EVENTS()
+        #reset_queues()
+
+        ## trackerinitialized = time.monotonic()
+        #trackerstarted = None
+        #bollst = [True, False, False, False, False]
+        #bc = sum([1 for _ in bollst if _]) + 1
+
+        #barrier = ctx.Barrier(bc)
+        #while (True):
+            #futures = {}
+            #with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
+
+                #futures = startThreads(
+                    #tpex, bollst, barrier, stopevents, queues)
+                #barrier.wait(timeout=10)
+                #time.sleep(0.00001)
+                #print(
+                    #f'test01b_instat continuing at {str(time.monotonic())}\n', end="")
+                #trackerstarted = time.monotonic()
+                #marktime(dly=2.5, cnt=6)
+                #stopevents['acquireData'].set()
+
+                #while not futures.get('weather').done():
+                    #time.sleep(0.005)
+
+                #res = futures.get('weather').result()
+                #elapsedtime = time.monotonic() - trackerstarted
+                #self.assertAlmostEqual(15.04, elapsedtime, places=1)
+                ## print(elapsedtime)
+                #self.assertEqual(3, len(res))
+                #q = queues['dataQ']
+                #q.put(-1)
+                #theq = []
+                #while True:
+                    #try:
+                        #theq.append(q.get(True, 0.10))
+                        #q.task_done()
+                    #except QEmpty:
+                        #break
+
+                #self.assertEqual(
+                    #[0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, -1], theq)
+            #break
+        #trackermain.shutdown(futures, queues, stopevents)
+        #barrier.reset()
+        #myprint('test01b_threaded_simple -- end\n', end="")
+
+    #def testx01c_threaded_simple(self):
+        #"""test01c_threaded_simple()
+
+        #Checks to see if the dataQ, timed_work, barrier, and stopevent works plus fundimental timed_work operation
+        #using get_NF and get_LW as the functions. Starting both dataacquisition threads
+
+        #"""
+        #return
+        #print('test0001c_threaded_simple\n', end="")
+        #clearstopevents()
+        #reset_queues()
+
+        ## trackerinitialized = time.monotonic()
+        #trackerstarted = None
+        #bollst = [True, True, False, False, False]
+        #bc = sum([1 for _ in bollst if _]) + 1
+
+        #barrier = ctx.Barrier(bc)
+        #while (True):
+            #futures = {}
+            #with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
+
+                #futures = startThreads(
+                    #tpex, bollst, barrier, stopevents, queues)
+                #barrier.wait(timeout=10)
+                #time.sleep(0.00001)
+                #print(
+                    #f'test01c_instat continuing at {str(time.monotonic())}\n', end="")
+                #trackerstarted = time.monotonic()
+
+                #marktime(dly=2.5, cnt=6)
+
+                ## stops both weather and noise
+                #stopevents['acquireData'].set()
+                #time.sleep(0.0001)
+
+                #while not (futures.get('weather').done() and futures.get('noise').done()):
+                    #time.sleep(0.005)
+
+                #resw = futures.get('weather').result()
+                #resn = futures.get('noise').result()
+
+                #elapsedtime = time.monotonic() - trackerstarted
+                #self.assertAlmostEqual(15.04, elapsedtime, places=1)
+                ## print(elapsedtime)
+
+                #q = queues['dataQ']
+                #q.put(-1)
+                #theq = []
+                #for _ in range(5):
+                    #while True:
+                        #try:
+                            #theq.append(q.get(True, 0.10))
+                            #q.task_done()
+                        #except QEmpty:
+                            #break
+                    #time.sleep(0.10)
+
+                ## print(theq)
+                #self.assertEqual(31, len(theq))
+                #self.assertEqual(6, len([x for x in theq if x == 0]))
+                #self.assertEqual(
+                    #6, len([x for x in theq if x == 1 or x == 10]))
+                #self.assertEqual(
+                    #6, len([x for x in theq if x == 2 or x == 20]))
+                #self.assertEqual(
+                    #6, len([x for x in theq if x == 3 or x == 30]))
+                #self.assertEqual(
+                    #6, len([x for x in theq if x == 4 or x == 40]))
+
+                #self.assertEqual(3, len(resw))
+                #self.assertEqual(3, len(resn))
+            #break
+        #trackermain.shutdown(futures, queues, stopevents)
+        #barrier.reset()
+        #print('test01c_threaded_simple -- end\n', end="")
+
+    #def testx01d_threaded_simple(self):
+        #"""test01d_threaded_simple()
+
+        #Checks to see if the dataQ, timed_work, barrier, and stopevent works plus fundimental timed_work operation
+        #using get_NF, get_LW, and transfer as the functions. Starting both dataacquisition threads
+
+        #"""
+        #return
+        #print('test01d_threaded_simple\n', end="")
+        #clearstopevents()
+        #reset_queues()
+
+        ## trackerinitialized = time.monotonic()
+        #trackerstarted = None
+        #bollst = [True, True, True, False, False]
+        #bc = sum([1 for _ in bollst if _]) + 1
+
+        #barrier = ctx.Barrier(bc)
+        #while (True):
+            #futures = {}
+            #with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
+
+                #futures = startThreads(
+                    #tpex, bollst, barrier, stopevents, queues)
+                #barrier.wait(timeout=10)
+                #time.sleep(0.00001)
+                #print(
+                    #f'\ntest01d_instat continuing at {str(time.monotonic())}')
+                #trackerstarted = time.monotonic()
+                #marktime(dly=2.5, cnt=6)
+
+                ## stops both weather and noise
+                #stopevents['acquireData'].set()
+                #time.sleep(0.0001)
+
+                #while not (futures.get('weather').done() and futures.get('noise').done()):
+                    #time.sleep(0.005)
+
+                #q = queues['dataQ']  # add the last entry to the data q
+                #q.put(-1)
+                #stopevents['trans'].set()
+                #time.sleep(0.00001)
+                #while not futures.get('transfer').done():
+                    #time.sleep(0.005)
+
+                #elapsedtime = time.monotonic() - trackerstarted
+                #self.assertAlmostEqual(25.05, elapsedtime, places=0)
+                #resw = futures.get('weather').result()
+                #resn = futures.get('noise').result()
+                #resr = futures.get('transfer').result()
+                #self.assertEqual(31, resr)
+
+                ## print(elapsedtime)
+                #self.assertEqual(3, len(resw))
+                #self.assertEqual(3, len(resn))
+
+                #q = queues['dpQ']
+                #theq = []
+                #while True:
+                    #try:
+                        #theq.append(q.get(True, 0.00010))
+                        #q.task_done()
+                    #except QEmpty:
+                        #break
+
+                #self.assertTrue(31 == len(theq) or 36 == len(theq))
+                #self.assertEqual(6, len([x for x in theq if x == 0]))
+                #self.assertEqual(
+                    #6, len([x for x in theq if x == 1 or x == 10]))
+                #self.assertEqual(
+                    #6, len([x for x in theq if x == 2 or x == 20]))
+                #self.assertEqual(
+                    #6, len([x for x in theq if x == 3 or x == 30]))
+                #self.assertEqual(
+                    #6, len([x for x in theq if x == 4 or x == 40]))
+                #self.assertEqual(
+                    #1, len([x for x in theq if x == -1]))
+
+            #break
+        #trackermain.shutdown(futures, queues, stopevents)
+        #barrier.reset()
+        #print('test01d_threaded_simple -- end\n', end="")
+
+    #def testx01e_threaded_simple(self):
+        #"""test01e_threaded_simple()
+
+        #Checks to see if the dataQ, timed_work, barrier, and stopevent works plus fundimental timed_work operation
+        #using get_NF, get_LW, transfer, and dataagragator as the functions. Starting both dataacquisition threads
+
+
+        #"""
+        #return
+        #print('test01e_threaded_simple\n', end='')
+        #clearstopevents()
+        #reset_queues()
+
+        #trackerstarted = None
+        #bollst = [True, True, True, True, False]
+        #bc = sum([1 for _ in bollst if _]) + 1
+
+        #barrier = CTX.Barrier(bc)
+        #while (True):
+            #futures = {}
+            #with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
+
+                #futures = startThreads(
+                    #tpex, bollst, barrier, stopevents, queues)
+                #barrier.wait(timeout=100)
+                #time.sleep(0.00001)
+                #print(
+                    #f'test01e_instat continuing at {str(time.monotonic())}\n', end='')
+                #trackerstarted = time.monotonic()
+                #marktime(dly=2.5, cnt=6)
+
+                ## stops both weather and noise
+                #stopevents['acquireData'].set()
+                #for _ in range(10):
+                    #time.sleep(0.005)
+
+                #while not (futures.get('weather').done() and futures.get('noise').done()):
+                    #time.sleep(0.005)
+
+                #stopevents['trans'].set()
+                #time.sleep(0.00001)
+                #while not futures.get('transfer').done():
+                    #time.sleep(0.005)
+
+                ## add the last entry to the data processing q
+                #q = queues['dpQ']
+                #q.put(-1)
+                #for _ in range(6):
+                    #time.sleep(0.00001)
+                #stopevents['agra'].set()
+                #time.sleep(0.00001)
+
+                #while not futures.get('dataagragator').done():
+                    #time.sleep(0.005)
+
+                #elapsedtime = time.monotonic() - trackerstarted
+                ## okt = 20.0 < elapsedtime < 25.0
+                ## self.assertTrue(okt)
+                #resw = futures.get('weather').result()
+                #resn = futures.get('noise').result()
+                #resr = futures.get('transfer').result()
+                #resa = futures.get('dataagragator').result()
+                ## TODO has a timedependency in this test it sometimes fails
+                #self.assertEqual(30, resr)
+
+                ## print(elapsedtime)
+                #self.assertEqual(3, len(resw))
+                ## self.assertEqual(4, len(resn))
+
+                #q = queues['dbQ']
+
+                #theq = []
+                #while True:
+                    #try:
+                        #theq.append(q.get(True, 0.00010))
+                        #q.task_done()
+                    #except QEmpty:
+                        #break
+
+                #self.assertEqual(31, len(theq))
+                #self.assertEqual(6, len([x for x in theq if x == 0]))
+                #self.assertEqual(
+                    #6, len([x for x in theq if x == 10 or x == 100]))
+                #self.assertEqual(
+                    #6, len([x for x in theq if x == 20 or x == 200]))
+                #self.assertEqual(
+                    #6, len([x for x in theq if x == 30 or x == 300]))
+                #self.assertEqual(
+                    #6, len([x for x in theq if x == 40 or x == 400]))
+                #self.assertEqual(
+                    #1, len([x for x in theq if x == -10]))
+
+            #break
+        #trackermain.shutdown(futures, queues, stopevents)
+        #barrier.reset()
+        #print('test01e_threaded_simple -- end\n', end='')
 
     def testA005_queue_overflow(self):
         """testA005_queue_overflow()

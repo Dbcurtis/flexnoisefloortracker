@@ -34,8 +34,8 @@ LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/qdatainfo'
 
 
-class NFQ():
-    pass
+# class NFQ():
+# pass
 
 
 class Qdatainfo:

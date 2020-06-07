@@ -7,7 +7,7 @@ import sys
 import unittest
 # import jsonpickle
 import pickle
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple, Callable
 from queue import Empty as QEmpty, Full as QFull
 import concurrent.futures
 from concurrent.futures import ALL_COMPLETED, FIRST_EXCEPTION, FIRST_COMPLETED
@@ -17,7 +17,7 @@ from time import monotonic
 
 from nfexceptions import StopEventException
 import trackermain
-from trackermain import Threadargs, genargs, _thread_template, breakwait
+from trackermain import Threadargs, genargs, _thread_template, runthreads
 from noisefloor import NFResult, Noisefloor
 from smeter import SMeter
 from smeteravg import SMeterAvg
@@ -28,8 +28,14 @@ import postproc
 from queuesandevents import QUEUES
 from queuesandevents import RESET_QS
 from queuesandevents import CTX
+
 from queuesandevents import STOP_EVENTS
 from queuesandevents import RESET_STOP_EVENTS
+from queuesandevents import POSSIBLE_F_TKEYS as FK
+from queuesandevents import STOP_EVENT_KEYS as SEK
+from queuesandevents import QUEUE_KEYS as QK
+from queuesandevents import Enables as ENABLES
+from queuesandevents import ARG_KEYS as AK
 
 
 TESTQ = CTX.JoinableQueue(maxsize=10000)
@@ -37,11 +43,12 @@ TESTOUTQ = CTX.JoinableQueue(maxsize=300)
 
 
 def myprint(*arg):
-    print(arg)
-
-
-def bwdone(f):
+    # print(arg)
     pass
+
+
+# def bwdone(f):
+    # pass
 
 
 def cleartestq():
@@ -111,8 +118,9 @@ class Testnoisefloor(unittest.TestCase):
 
     def test_A02Noisefloor_inst(self):
 
-        dataq = QUEUES['dataQ']
-        stope = STOP_EVENTS['acquireData']
+        dataq = QUEUES[QK.dQ]
+        #stope = STOP_EVENTS['acquireData']
+        stope = STOP_EVENTS[SEK.ad]
 
         # , testdata='noisefloordata.pickle')
         nf: Noisefloor = Noisefloor(self.flex, dataq, stope)
@@ -153,10 +161,11 @@ class Testnoisefloor(unittest.TestCase):
         # must release the flex and ui setup in the per test setup for this test
         self.flex.close()
 
-        from queuesandevents import QUEUES, STOP_EVENTS
+        #from queuesandevents import QUEUES, STOP_EVENTS
         from qdatainfo import NFQ
 
         barrier: CTX.Barrier = CTX.Barrier(0)
+
         # timesdic = {'tf': 15, 'nf': 4, 'dqr': 5, 'da': 6, 'db': 7}
 
         def tf(arg: Threadargs):  # the program periodically executed by the timer thread
@@ -184,7 +193,7 @@ class Testnoisefloor(unittest.TestCase):
                     UI.request(port='com4')
                     flexr: Flex = Flex(UI)
                     nf: Noisefloor = Noisefloor(
-                        flexr, arg.qs['dataQ'], arg.stope, run_till_stopped=True)
+                        flexr, arg.qs[QK.dQ], arg.stope, run_till_stopped=True)
                     nf.open()
                     nf.doit(loops=0, runtime=0,
                             interval=100, dups=True)
@@ -214,7 +223,7 @@ class Testnoisefloor(unittest.TestCase):
             # run it
             return _thread_template(mma, printfun=myprint, **kwargs)
 
-        def da(arg: Threadargs, **kwargs):
+        def daf(arg: Threadargs, **kwargs):
             """
             noisefloor proxy
             arg is named tuple Threadargs
@@ -230,7 +239,7 @@ class Testnoisefloor(unittest.TestCase):
             # run it
             return _thread_template(mma, printfun=myprint, **kwargs)
 
-        def db(arg: Threadargs, **kwargs):
+        def dbf(arg: Threadargs, **kwargs):
             """
             noisefloor proxy
             arg is named tuple Threadargs
@@ -246,44 +255,35 @@ class Testnoisefloor(unittest.TestCase):
             # run it
             return _thread_template(mma, printfun=myprint, **kwargs)
 
-        def runthreads(argdicin: Dict[str, Threadargs]) -> Dict[str, Any]:
-            futures: Dict[str, Any] = {}
-            futures['weather'] = tpex.submit(
-                trackermain.timed_work, argdicin['twargs'], printfn=print)
+        # def runthreads(calls: Tuple[Callable, ...], argdicin: Dict[str, Threadargs], tpex) -> Dict[str, Any]:
+            #futures: Dict[str, Any] = {}
+            # futures[FK.w] = tpex.submit(
+            # calls.w, argdicin[AK.w], printfn=myprint)
 
             # gets banddata data
-            futures['noise'] = tpex.submit(nf, argdicin['nfargs'])
+            #futures[FK.n] = tpex.submit(calls.n, argdicin[AK.n])
 
             # reads the dataQ and sends to the data processing queue dpq
-            futures['transfer'] = tpex.submit(dqr, argdicin['dqrargs'])
+            #futures[FK.t] = tpex.submit(calls.t, argdicin[AK.t])
 
             # looks at the data and generates the approprate sql to send to dbwriter
-            futures['dataagragator'] = tpex.submit(da, argdicin['daargs'])
+            #futures[FK.da] = tpex.submit(calls.da, argdicin[AK.da])
 
             # reads the database Q and writes it to the database
-            futures['dbwriter'] = tpex.submit(db, argdicin['dbargs'])
+            #futures[FK.db] = tpex.submit(calls.db, argdicin[AK.db])
 
-            _ = tpex.submit(breakwait, barrier)  # break the barrier
-            _.add_done_callback(bwdone)
-            return futures
+            # _ = tpex.submit(breakwait, barrier)  # break the barrier
+            # _.add_done_callback(bwdone)
+            # return futures
 
         # turn off all selected thread routines
-        #bollst: Tuple[bool] = (False, False, False, False, False,)
-        # bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
-        #barrier: CTX.Barrier = CTX.Barrier(bc)
-        #futures_empty: Dict[str, Any] = {}
-        # self.assertTrue(trackermain.shutdown(  # check shutdown ok if futures is empty
-            # futures_empty, QUEUES, STOP_EVENTS, time_out=1) is None)
-
-        #argdic = genargs(barrier, bollst)
-
-        #waitresults: Tuple[Set, Set] = None
-        # turn off all selected thread routines
-        bollst: Tuple[bool] = (False, False, False, False, False,)
-        #
+        bollst: Tuple[bool, ...] = ENABLES(
+            w=False, n=False, t=False, da=False, db=False,)
+        """
         # Check empty submit works with tracker.shutdown
-        #
-
+        """
+        calls: Tuple[Callable, ...] = ENABLES(w=trackermain.timed_work,
+                                              n=nf, t=dqr, da=daf, db=dbf)
         # no threads running
         futures: Dict[str, Any] = {}
         waitresults: Tuple[Set, Set] = trackermain.shutdown(
@@ -293,36 +293,41 @@ class Testnoisefloor(unittest.TestCase):
         """
         # Check submit and shutdown works with all threads disabled
         """
-        argdic = genargs(barrier, bollst)
-        tpex = None
+        argdic: Dict[int, Threadargs] = genargs(barrier, bollst)
+        #tpex = None
         """
-        This did not work when placed in a with construct
+        This did not work when placed in a with construct, and it stops the diagnostic from completing!
         No idea why not
         """
-        if True:
-            tpex = concurrent.futures.ThreadPoolExecutor(
-                max_workers=10, thread_name_prefix='dbc-')
-            futures: Dict[str, Any] = runthreads(argdic)
-            for _ in range(1):
-                Sleep(1)  # wait for a while to let the threads work
-            waitresults = trackermain.shutdown(
-                futures, QUEUES, STOP_EVENTS, time_out=1)
-            a = 0
-            tpex.shutdown(wait=False)  # wait = True cause hang
+        if False:
+            if True:
+                tpex = concurrent.futures.ThreadPoolExecutor(
+                    max_workers=10, thread_name_prefix='dbc-')
+                futures: Dict[str, Any] = runthreads(
+                    barrier, calls, argdic, tpex)
+                for _ in range(1):
+                    Sleep(1)  # wait for a while to let the threads work
+                waitresults = trackermain.shutdown(
+                    futures, QUEUES, STOP_EVENTS, time_out=1)
+                a = 0
+                # wait = True cause hang, false doesn't let the diagnostic end
+                tpex.shutdown(wait=True)
 
-        # all 5 threads ran to completion
-        self.assertEqual(5, len(waitresults.done))
-        self.assertEqual(0, len(waitresults.not_done))
+            # all 5 threads ran to completion
+            self.assertEqual(5, len(waitresults.done))
+            self.assertEqual(0, len(waitresults.not_done))
 
         cleartestq()
-        bollst: Tuple[bool] = (False, False, False, False, False)
+        bollst: Tuple[bool, ...] = ENABLES(
+            w=False, n=False, t=False, da=False, db=False,)
+
         bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
-        barrier: CTX.Barrier = CTX.Barrier(bc)
+        barrier = CTX.Barrier(bc)
         myprint('starting')
 
-        argdic = genargs(barrier, bollst)
+        argdic: Dict[int, Threadargs] = genargs(barrier, bollst)
         # mods for test
-        argdic['twargs'] = argdic['twargs']._replace(
+        argdic[AK.w] = argdic[AK.w]._replace(
             name='timed_work', interval=10.5, doit=tf)
 
         """
@@ -332,7 +337,8 @@ class Testnoisefloor(unittest.TestCase):
         # mythread = threading.currentThread()
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
-            futures: Dict[str, Any] = runthreads(argdic)
+            futures: Dict[str, Any] = runthreads(
+                barrier, calls, argdic, tpex)
             for _ in range(1):
                 Sleep(1)
             waitresults = trackermain.shutdown(futures, QUEUES, STOP_EVENTS)
@@ -346,7 +352,7 @@ class Testnoisefloor(unittest.TestCase):
             self.assertTrue(rrr in ['[]', 'None', 'deque([], maxlen=10)'])
 
         # turn on noisefloor thread
-        bollst = (False, True, False, False, False)
+        bollst: Tuple[bool, ...] = ENABLES(False, True, False, False, False)
         # count them for barrier the plus 1 is for starting thread
         bc = sum([1 for _ in bollst if _]) + 1
         barrier = CTX.Barrier(bc)
@@ -354,26 +360,27 @@ class Testnoisefloor(unittest.TestCase):
         cleartestq()
         RESET_STOP_EVENTS()
 
-        argdic = genargs(barrier, bollst)
+        argdic: Dict[int, Threadargs] = genargs(barrier, bollst)
         # mods for test
-        argdic['twargs'] = argdic['twargs']._replace(
+        argdic[AK.w] = argdic[AK.w]._replace(
             interval=1, doit=tf)
-        argdic['nfargs'] = argdic['nfargs']._replace(
+        argdic[AK.n] = argdic[AK.n]._replace(
             interval=None)
-        argdic['dqrargs'] = argdic['dqrargs']._replace(
+        argdic[AK.t] = argdic[AK.t]._replace(
             interval=1)
-        argdic['daargs'] = argdic['daargs']._replace(
+        argdic[AK.da] = argdic[AK.da]._replace(
             interval=1)
-        argdic['dbargs'] = argdic['dbargs']._replace(
+        argdic[AK.db] = argdic[AK.db]._replace(
             interval=1)
         """
         Try running the noise floor for real on a thread
         check that shutdown will actually stop it
         """
         start = monotonic()
-
+        futures: Dict[str, Any] = None
         with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
-            futures: Dict[str, Any] = runthreads(argdic)
+            futures: Dict[str, Any] = runthreads(
+                barrier, calls, argdic, tpex)
             for _ in range(runtime):  # wait for a while to let the threads work
                 Sleep(1)
             waitresults = trackermain.shutdown(
@@ -381,16 +388,17 @@ class Testnoisefloor(unittest.TestCase):
 
         end = monotonic()
         elapsed = end - start
-        print(
+        myprint(
             f'elapsed: {elapsed}, runtime set to: {runtime}, 120 sec timeout delay')
         # took the expected one reading
-        self.assertEqual(1, QUEUES['dataQ'].qsize())
-        nfqdta: NFQ = QUEUES['dataQ'].get_nowait()
+        self.assertEqual(1, QUEUES[QK.dQ].qsize())
+        nfqdta: NFQ = QUEUES[QK.dQ].get_nowait()
         nfr: NFResult = nfqdta.get()
         self.assertTrue(nfr._started and nfr._ended)
         self.assertEqual(4, len(nfr.readings))  # got all 4 bands
 
-        bollst = (False, True, False, False, False)
+        bollst: Tuple[bool, ...] = ENABLES(
+            w=False, n=True, t=False, da=False, db=False)
         # count them for barrier the plus 1 is for starting thread
         bc = sum([1 for _ in bollst if _]) + 1
         barrier = CTX.Barrier(bc)
@@ -398,17 +406,17 @@ class Testnoisefloor(unittest.TestCase):
         cleartestq()
         RESET_STOP_EVENTS()
 
-        argdic = genargs(barrier, bollst)
+        argdic: Dict[int, Threadargs] = genargs(barrier, bollst)
         # mods for test
-        argdic['twargs'] = argdic['twargs']._replace(
+        argdic[AK.w] = argdic[AK.w]._replace(
             interval=1, doit=tf)
-        argdic['nfargs'] = argdic['nfargs']._replace(
+        argdic[AK.n] = argdic[AK.n]._replace(
             interval=None)
-        argdic['dqrargs'] = argdic['dqrargs']._replace(
+        argdic[AK.t] = argdic[AK.t]._replace(
             interval=1)
-        argdic['daargs'] = argdic['daargs']._replace(
+        argdic[AK.da] = argdic[AK.da]._replace(
             interval=1)
-        argdic['dbargs'] = argdic['dbargs']._replace(
+        argdic[AK.db] = argdic[AK.db]._replace(
             interval=1)
 
         """
@@ -419,18 +427,19 @@ class Testnoisefloor(unittest.TestCase):
 
         start = monotonic()
         with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
-            futures: Dict[str, Any] = runthreads(argdic)
+            futures: Dict[str, Any] = runthreads(
+                barrier, calls, argdic, tpex)
             for _ in range(int(runtime / 3)):  # wait for a while to let the threads work
                 Sleep(1)
-            STOP_EVENTS['acquireData'].set()  # stop the thejoin
+            STOP_EVENTS[SEK.da].set()  # stop the the data acquisition
             waitresults = trackermain.shutdown(
                 futures, QUEUES, STOP_EVENTS, time_out=120)  # wait max 60 for the threads to stop
 
         end = monotonic()
         elapsed = end - start
         # aborted before it could complete a cycle
-        self.assertEqual(0, QUEUES['dataQ'].qsize())
-        print(
+        self.assertEqual(0, QUEUES[QK.dQ].qsize())
+        myprint(
             f'elapsed: {elapsed}, runtime set to: {int(runtime/3)}, 120 sec timeout delay')
         a = 0
 

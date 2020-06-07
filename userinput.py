@@ -89,7 +89,7 @@ class UserInput:
         self.inputfn = ''
         if port:
             self.comm_port = port
-            print('Using serial port: {}'.format(self.comm_port))
+            # print(f'Using serial port: {self.comm_port)}')
             return
 
         while 1:

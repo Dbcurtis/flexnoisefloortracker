@@ -17,24 +17,21 @@ from time import sleep as Sleep
 from time import monotonic
 from queue import Empty as QEmpty
 import multiprocessing as mp
-from queuesandevents import CTX, QUEUES, STOP_EVENTS
 
+from nfexceptions import StopEventException
+from queuesandevents import CTX, QUEUES, STOP_EVENTS
 from nfresult import NFResult
 from userinput import UserInput
 from bandreadings import Bandreadings
 from flex import Flex
 from postproc import BANDS, BandPrams, INITIALZE_FLEX
 from qdatainfo import NFQ
-#from trackermain import QUEUES, STOP_EVENTS, CTX
 
 
 LOGGER = logging.getLogger(__name__)
 
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/noiseFloor'
-
-# CTX = mp.get_context('spawn')  # threading context
-#print('CTX should not be defined here ******************************')
 
 
 class Noisefloor:
@@ -43,16 +40,17 @@ class Noisefloor:
     """
 
     # , testdata=None):
-    def __init__(self, flex: Flex, out_queue: CTX.JoinableQueue, stop_event: CTX.Event):
+    def __init__(self, flex: Flex, out_queue: CTX.JoinableQueue, stop_event: CTX.Event, run_till_stopped=False):
         self.flex: Flex = flex
         self._ui: UserInput = flex._ui
         self.out_queue: CTX.JoinableQueue = out_queue
         self.stop_event: CTX.Event = stop_event
         self._last_band_readings: NFResult = None
+        self._run_till_stopped = run_till_stopped
 
         self.end_time = None
-        self.initial_state = None
-        self.is_open = False
+        self.initial_state: List[str] = None
+        self.is_open: bool = False
 
     def __str__(self):
         return '[ {}, {}]'.format('junk0', 'junk1')
@@ -76,15 +74,19 @@ class Noisefloor:
         communication with the controller
 
         """
+        if self.stop_event.is_set():
+            raise StopEventException('on open')
         if (self.is_open):
             return False
         try:
-
             self._ui.open(detect_br)
             self.flex.open(detect_br)
             self.initial_state = self.flex.save_current_state()
             self.flex.do_cmd_list(INITIALZE_FLEX)
-            self.is_open = True
+            self.is_open: bool = True
+
+        except StopEventException as see:
+            raise see
 
         except Exception as sex:
             if self.initial_state:
@@ -108,7 +110,6 @@ class Noisefloor:
             self.flex.restore_state(self.initial_state)
         self.flex.close()
         self.is_open = False
-        # self.dbase.close()
         return True
 
     # noisefloordata: Sequence[Bandreadings]):
@@ -118,12 +119,10 @@ class Noisefloor:
         Sends the band data to the data queue in a NFQ wrapper
         """
 
-        print('- ', end='')
+        #print('- ', end='')
         _nfq = NFQ(nfr)
         self.out_queue.put(_nfq)
-        for _ in range(10):
-            Sleep(0.00001)
-        print(f'queued {self.out_queue.qsize()}')
+        #print(f'queued {self.out_queue.qsize()}')
 
     def _oneloopallbands(self) -> NFResult:
         """_oneloopallbands()
@@ -139,16 +138,26 @@ class Noisefloor:
         try:
 
             for bid in activeBands:
+                if self.stop_event.is_set():
+                    raise StopEventException('stop event _oneloopallbands')
                 band_reading: Bandreadings = Bandreadings(bid, self.flex)
-                band_reading.doit()
+                try:
+                    band_reading.doit()
+                except ZeroDivisionError as zde:
+                    a = 0
+                    pass
                 band_reading.flexradio = None  # make safe for pickleing
                 results.append(band_reading.band_signal_strength)
+
+        except StopEventException as see:
+            raise see
         except Exception as ex:
             print(f'exception1 in _oneloopallbands {str(ex)}')
             raise ex
 
         try:
-            nfresult.end(results)
+            if nfresult:
+                nfresult.end(results)
         except Exception as ex:
             print(f'exception2 in _oneloopallbands {str(ex)}')
             raise ex
@@ -163,13 +172,14 @@ class Noisefloor:
         nfresult: NFResult = None
 
         if not testdata:
-            while True:
-                try:
-                    nfresult = self._oneloopallbands()
-                    break
-                except Exception as ve:  # ValueError as ve:
-                    print(f'value error in _oneloopallbands: {ve}')
-                    continue
+            try:
+
+                nfresult = self._oneloopallbands()
+
+            except StopEventException as see:
+                raise see
+            except Exception as ve:  # ValueError as ve:
+                print(f'value error in _oneloopallbands: {ve}')
 
         else:
             nfresult = testdata
@@ -182,10 +192,8 @@ class Noisefloor:
             self._last_band_readings = nfresult
             self._recordprocdata(nfresult)
 
-    def doit(self, runtime=10, interval="30", loops=0, dups: bool = False, testdatafile: str = None):
-        """doit runtime=10, interval"""
-        from qdatainfo import NFQ
-        """doit(runtime="10hr", interval="30", loops=0)
+    def doit(self, runtime=10, interval=5 * 60, loops=0, dups: bool = False, testdatafile: str = None):
+        """doit(runtime="10hr", interval=5*60, loops=0)
 
         gets the noise from all measured bands.
         runtime is the time extent the measurements will be taken if loops is 0
@@ -194,6 +202,8 @@ class Noisefloor:
         if both loops and runtime are 0, will run until self.stop_event is set
 
         """
+        from qdatainfo import NFQ
+
         class IntervalAdj:
             def __init__(self, interval: float):
                 self.inter: float = interval
@@ -225,9 +235,10 @@ class Noisefloor:
                         return timeleft
 
         def _do_intervals(intadj):
-            first: bool = False
+            first: bool = True
             if self.stop_event.is_set():
-                return
+                raise StopEventException('Stop Event _do_intervals')
+
             realint: float = intadj.getinterval()
             if not first:
                 self.stop_event.wait(realint)
@@ -237,7 +248,6 @@ class Noisefloor:
             intadj.start()
             self.oneloop_all_bands(dups=_allow_dups)
             intadj.end()
-            Sleep(0.001)
 
         # initdata = self.initialize_flex() #if you need to look at the results
         testdl: List[NFQ] = None
@@ -249,29 +259,14 @@ class Noisefloor:
                 testdlin = pickle.load(jsi)
             testdl = testdlin[0: loops]
 
-        if self.stop_event.is_set():
-            return
         try:
-
-            # self.flex.do_cmd_list(INITIALZE_FLEX)
-            # _DT.open()
-            # first: bool = True
-            # interval_adj: float = 0.0
-            if loops == 0 and int(runtime) == 0:
+            if self._run_till_stopped:
+                loops == 0
                 intadj: IntervalAdj = IntervalAdj(interval)
-                while not self.stop_event.is_set():
+                while True:
+                    if self.stop_event.is_set():
+                        raise StopEventException('doit 1')
                     _do_intervals(intadj)
-                    # if self.stop_event.is_set():
-                    # return
-                    # realint: float = intadj.getinterval()
-                    # if not first:
-                    # self.stop_event.wait(realint)
-                    # else:
-                    #first = False
-
-                    # intadj.start()
-                    # self.oneloop_all_bands(dups=_allow_dups)
-                    # intadj.end()
 
             elif loops == 0:
                 start_time = datetime.datetime.now()
@@ -285,19 +280,9 @@ class Noisefloor:
                                 testdata=dta, dups=_allow_dups)
                             Sleep(1)
                     else:
-                        # intadj: IntervalAdj = IntervalAdj(interval)
+                        if self.stop_event.is_set():
+                            raise StopEventException('doit 2')
                         _do_intervals(intadj)
-                        # if self.stop_event.is_set():
-                        # return
-                        # realint: float = intadj.getinterval()
-                        # if not first:
-                        # self.stop_event.wait(realint)
-                        # else:
-                        #first = False
-
-                        # intadj.start()
-                        # self.oneloop_all_bands(dups=_allow_dups)
-                        # intadj.end()
 
             else:
                 if testdl:
@@ -308,18 +293,12 @@ class Noisefloor:
                 else:
                     intadj: IntervalAdj = IntervalAdj(interval)
                     for _ in range(loops):
+                        if self.stop_event.is_set():
+                            raise StopEventException('doit 3')
                         _do_intervals(intadj)
-                        # if self.stop_event.is_set():
-                        # return
-                        # realint: float = intadj.getinterval()
-                        # if not first:
-                        # self.stop_event.wait(realint)
-                        # else:
-                        #first = False
 
-                        # intadj.start()
-                        # self.oneloop_all_bands(dups=_allow_dups)
-                        # intadj.end()
+        except StopEventException:
+            self.close()
 
         except Exception as ex:
             print(f'exception in doit {ex}')
@@ -353,7 +332,10 @@ def main(stop_events: Mapping[str, CTX.Event], queues: Mapping[str, CTX.Joinable
         # loops must be less than 100 as that is the queue size and I am not emptying it here
         NOISE.doit(loops=90, interval=90, dups=True)
         # NOISE.doit(runtime=1, interval=60)
-        stop_event.set()
+        try:
+            stop_event.set()
+        except StopEventException:
+            pass
 
         indata: List[NFQ] = []
         try:

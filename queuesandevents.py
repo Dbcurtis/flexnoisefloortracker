@@ -17,27 +17,41 @@ dbQ is read by thread stopped by dbwrite which performs the sql operations
 from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set
 import multiprocessing as mp
 from queue import Empty as QEmpty, Full as QFull
+from collections import deque, namedtuple
 
 
 CTX = mp.get_context('spawn')  # threading context
+#BARRIER: CTX.Barrier = CTX.Barrier(1)
+# BARRIER.reset()
+
+Queuekeys = namedtuple('Queuekeys', ['dQ', 'dpQ', 'dbQ'])
+QUEUE_KEYS = Queuekeys('dataQ', 'dpQ', 'dbQ')
 
 # QUEUES: Dict(str, CTX.JoinableQueue) = {
 QUEUES = {
     # from data acquisition threads, received by the aggragator thread
-    'dataQ': CTX.JoinableQueue(maxsize=100),
+    QUEUE_KEYS.dQ: CTX.JoinableQueue(maxsize=100),
     # written to by the aggrator thread, read by the data processor which generates sql commands to dbq
-    'dpQ': CTX.JoinableQueue(maxsize=100),
+    QUEUE_KEYS.dpQ: CTX.JoinableQueue(maxsize=100),
     # database commands generateed (usually) by the aggrator thread
-    'dbQ': CTX.JoinableQueue(maxsize=100),
+    QUEUE_KEYS.dbQ: CTX.JoinableQueue(maxsize=100),
 
 }
 
-# STOP_EVENTS: Dict(str,) = {
+
+Stopeventkeys = namedtuple('Stopeventkeys', ['ad', 't', 'da', 'db'])
+
+STOP_EVENT_KEYS = Stopeventkeys(
+    'acquireData',
+    'trans',
+    'agra',
+    'dbwrite')
+
 STOP_EVENTS = {
-    'acquireData': CTX.Event(),
-    'trans': CTX.Event(),
-    'agra': CTX.Event(),
-    'dbwrite': CTX.Event(),
+    STOP_EVENT_KEYS.ad: CTX.Event(),
+    STOP_EVENT_KEYS.t: CTX.Event(),
+    STOP_EVENT_KEYS.da: CTX.Event(),
+    STOP_EVENT_KEYS.db: CTX.Event(),
 }
 
 
@@ -67,3 +81,21 @@ POSSIBLE_F_KEYS: List[str] = [
     'dataagragator',
     'dbwriter'
 ]
+Futurekeys = namedtuple('Futurekeys', [
+    'w',
+    'n',
+    't',
+    'da',
+    'db'])
+
+POSSIBLE_F_TKEYS = Futurekeys('weather',
+                              'noise',
+                              'transfer',
+                              'dataagragator',
+                              'dbwriter')
+
+Enables = namedtuple('Enables', Futurekeys._fields)
+
+Argkeys = namedtuple('Argkeys', Futurekeys._fields)
+ARG_KEYS = Argkeys(0, 1, 2, 3, 4)
+

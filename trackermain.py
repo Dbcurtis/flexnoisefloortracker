@@ -13,11 +13,10 @@ from queue import Empty as QEmpty, Full as QFull
 import concurrent.futures
 from concurrent.futures import ALL_COMPLETED, FIRST_EXCEPTION, FIRST_COMPLETED
 # import multiprocessing as mp
-from queuesandevents import CTX, QUEUES, STOP_EVENTS
+
 import logging
 import logging.handlers
 import pickle
-
 from time import sleep as Sleep
 from time import monotonic
 from datetime import datetime as Dtc
@@ -25,6 +24,15 @@ from datetime import timezone
 from collections import deque, namedtuple
 import threading
 
+
+from queuesandevents import CTX, QUEUES, STOP_EVENTS
+from queuesandevents import POSSIBLE_F_TKEYS as FK
+from queuesandevents import STOP_EVENT_KEYS as SEK
+from queuesandevents import QUEUE_KEYS as QK
+from queuesandevents import Enables as ENABLES
+from queuesandevents import ARG_KEYS as AK
+
+from nfexceptions import StopEventException
 from sequencer import Sequencer
 from deck import DeckFullError, OutQFullError
 from deck import Deck
@@ -67,10 +75,6 @@ class Consolidate:
         pass
 
 
-def breakwait(barrier):
-    barrier.wait()
-
-
 def _myprint(a):
     # print(a)
     pass
@@ -88,7 +92,11 @@ def _thread_template(arg: Threadargs, printfun=_myprint, **kwargs) -> List[int]:
     shows that the proxie has been invoked or not, and ended.
 
     If the proxie is enabled, shows that, waits for the barrier, and then executes doit
-    repeatedly at interval timeing, untill the stop_event is set
+    repeatedly at interval timeing, until the stop_event is set
+
+
+    If the interval timeing is 0 or None, doit gets called once and exits when the stop event is set
+    and is responsible for any clean up (like waiting for queues to empty if needed)
 
     """
 
@@ -97,7 +105,7 @@ def _thread_template(arg: Threadargs, printfun=_myprint, **kwargs) -> List[int]:
     TL.ttarg: Threadargs = arg
     TL.returnval = None
 
-    TL.results: List[int] = []
+    TL.results: List[Any] = []
     try:
         printfun(
             f'{TL.ttarg.name} invoked, th={threading.current_thread().getName()}, t={monotonic()}')
@@ -109,28 +117,50 @@ def _thread_template(arg: Threadargs, printfun=_myprint, **kwargs) -> List[int]:
             TL.ttarg.barrier.wait()
             printfun(
                 f'{TL.ttarg.name} starting, th={threading.current_thread().getName()}, t={monotonic()}')
+            if TL.ttarg.interval is None:
+                doit_result = TL.ttarg.doit()
+                return
+            elif TL.ttarg.interval == 0:
+                doit_result = TL.ttarg.doit()
+                TL.results.append(doit_result)
+                return
+
             #
             # the real stuff happens here
             #
-            if TL.ttarg.stope.is_set():
-                notempty = True
-                while notempty:
-                    temp: int = TL.ttarg.doit()
-                    TL.results.append(temp)
-                    notempty = temp != 0
+            while True:  # doing intervals
+                if TL.ttarg.stope.is_set():  # need to clean up
 
-                return  # will invoke finally
-            else:
-                while not TL.ttarg.stope.is_set():
+                    return
+                else:  # normal operation
+                    doitresult = TL.ttarg.doit()  # call it get the return
+
+                    TL.results.append(doitresult)
+                    Sleep(TL.ttarg.interval)    # and wait
+
+            # if TL.ttarg.stope.is_set():
+                ##notempty = True
+                # while notempty:  # repeats calls to doit() until nothing is returned
+                    # doit can run for a long time, if doit retuns None or 0, doit is done
+                    ##temp: int = TL.ttarg.doit()
+                    # if temp is None:
+                    # return
+                    # if temp is not none, addeded to the results and called again.
+                    # TL.results.append(temp)
+                    ##notempty = temp != 0
+
+                # return  # will invoke finally
+            # else:
+                # while not TL.ttarg.stope.is_set():
 
                     # may need to handle the results
-                    try:
-                        TL.results.append(TL.ttarg.doit())
-                        Sleep(TL.ttarg.interval)
-                    except QFull as qf:
-                        pass
+                    # try:
+                    # TL.results.append(TL.ttarg.doit())
+                    # Sleep(TL.ttarg.interval)
+                    # except QFull as qf:
+                    # pass
 
-                Sleep(TL.ttarg.interval)
+                # Sleep(TL.ttarg.interval)
 
         else:
             printfun(f'{TL.ttarg.name} execution disabled')
@@ -152,7 +182,7 @@ class DBwriter:
     """
 
     def __init__(self, thread_info):
-        self.dpQ_IN: CTX.JoinableQueue = thread_info[3]['dbQ']
+        self.dpQ_IN: CTX.JoinableQueue = thread_info[3][QK.dbQ]
         self.execute: bool = thread_info[0]
         self.barrier: CTX.Barrier = thread_info[1]
         self.stop_event: CTX.Event = thread_info[2]
@@ -212,8 +242,8 @@ class Aggratator:
 
     def __init__(self, arg: Threadargs, aggfn=jjj):
         self.arg = arg
-        self.dpQ_IN: CTX.JoinableQueue = arg.qs['dpQ']
-        self.dbQ_OUT: CTX.JoinableQueue = arg.qs['dbQ']
+        self.dpQ_IN: CTX.JoinableQueue = arg.qs[QK.dpQ]
+        self.dbQ_OUT: CTX.JoinableQueue = arg.qs[QK.dbQ]
 
         self.stop_event: CTX.Event = thread_info[2]
         self.consolidate = Consolidate()
@@ -276,7 +306,7 @@ def dataaggrator_dbg(arg: Threadargs, **kwargs) -> List[Tuple[int, int]]:
     def doita() -> Tuple[int, int]:
 
         count: Tuple[int, int] = _qcpy(
-            deck, mma.qs['dpQ'], mma.qs['dbQ'], mma)
+            deck, mma.qs[QK.dpQ], mma.qs[QK.dbQ], mma)
         return count
 
     mma = arg._replace(
@@ -302,7 +332,7 @@ def dataaggrator(arg: Threadargs, aggfn=None, debugfn=None, **kwargs):
         return ag.run()
 
 
-def genargs(barrier, bollst) -> Dict[str, Threadargs]:
+def genargs(barrier: CTX.Barrier, bollst: Tuple[bool, ...]) -> Dict[int, Threadargs]:
     """genargs(barrier,bollst)
     returns a dict of str and Threadards
 
@@ -310,34 +340,34 @@ def genargs(barrier, bollst) -> Dict[str, Threadargs]:
     They can be modified after being generated
 
     """
-    result: Dict(str, Threadargs) = {}
-    twargs: Threadargs = Threadargs(
-        bollst[0], barrier, STOP_EVENTS['acquireData'], QUEUES, name='timed_work', interval=None, doit=None)
+    result: Dict(int, Threadargs) = {}
+    result[AK.w] = Threadargs(
+        bollst.w, barrier, STOP_EVENTS[SEK.ad], QUEUES, name='timed_work', interval=None, doit=None)
 
-    nfargs: Threadargs = Threadargs(
-        bollst[1], barrier, STOP_EVENTS['acquireData'], QUEUES, name='nf', interval=None, doit=None)
+    result[AK.n] = Threadargs(
+        bollst.n, barrier, STOP_EVENTS[SEK.ad], QUEUES, name='nf', interval=None, doit=None)
 
-    dqrargs: Threadargs = Threadargs(
-        bollst[2], barrier, STOP_EVENTS['trans'], QUEUES, name='dqr', interval=None, doit=None)
+    result[AK.t] = Threadargs(
+        bollst.t, barrier, STOP_EVENTS[SEK.t], QUEUES, name='dqr', interval=None, doit=None)
 
-    daargs: Threadargs = Threadargs(
-        bollst[3], barrier, STOP_EVENTS['agra'], QUEUES, name='da', interval=None, doit=None)
+    result[AK.da] = Threadargs(
+        bollst.da, barrier, STOP_EVENTS[SEK.da], QUEUES, name='da', interval=None, doit=None)
 
-    dbargs: Threadargs = Threadargs(
-        bollst[4], barrier, STOP_EVENTS['dbwrite'], QUEUES, name='db', interval=None, doit=None)
+    result[AK.db] = Threadargs(
+        bollst.db, barrier, STOP_EVENTS[SEK.db], QUEUES, name='db', interval=None, doit=None)
 
-    result['twargs'] = twargs
-    result['dqrargs'] = dqrargs
-    result['daargs'] = daargs
-    result['nfargs'] = nfargs
-    result['dbargs'] = dbargs
+    #result[AK.w] = twargs
+    #result[AK.n] = nfargs
+    #result[AK.t] = dqrargs
+    #result[AK.da] = daargs
+    #result[AK.db] = dbargs
 
     return result
 
 
 def Get_LW_dbg(arg: Threadargs, **kwargs):
     #arg: Threadargs = argin.replace(name='Get_LW_dbg')
-    que = arg.qs['dataQ']
+    que = arg.qs[QK.dQ]
     data = f'{arg.name + "_Get_LW_dbg"} th={threading.current_thread().getName()}, t={monotonic()}'
     que.put_nowait(data)
 
@@ -355,7 +385,7 @@ def Get_LW(arg: Threadargs, **kwargs):
     parital_sql: str = _lw.gen_sql()
     pkg: LWQ = LWQ(parital_sql)
     try:
-        arg.qs['dataQ'].put(pkg)
+        arg.qs[QK.dQ].put(pkg)
     except QFull:
         print("dataq full for local weather--- skipped")
         raise
@@ -363,40 +393,40 @@ def Get_LW(arg: Threadargs, **kwargs):
     # rawDataQ_OUT.put(_lw)
 
 
-def Get_NF(rawDataQ_OUT):
-    """Get_NF(rawDataQ_OUT)
+# def Get_NF(rawDataQ_OUT):
+    # """Get_NF(rawDataQ_OUT)
 
-    this thread function is the only one that starts and uses the Flex
+    # this thread function is the only one that starts and uses the Flex
 
-    >>>>>>>>>>>>>>>>name should be get_nf
+    # >>>>>>>>>>>>>>>>name should be get_nf
 
-    """
-    from noisefloor import Noisefloor
-    _ui: UserInput = UserInput()
-    _noisf = None
-    try:
-        _ui.request(port='com4')
-        _ui.open()
-        print("Requested Port can be opened")
-        FLEX = Flex(_ui)
-        _noisf = Noisefloor(FLEX, rawDataQ_OUT)
-        _noisf.open()
+    # """
+    #from noisefloor import Noisefloor
+    #_ui: UserInput = UserInput()
+    #_noisf = None
+    # try:
+        # _ui.request(port='com4')
+        # _ui.open()
+        #print("Requested Port can be opened")
+        #FLEX = Flex(_ui)
+        #_noisf = Noisefloor(FLEX, rawDataQ_OUT)
+        # _noisf.open()
         # 10 loops with a 30 second delay between each
-        _noisf.doit(loops=10, interval=30)
-        _noisf.close()
+        #_noisf.doit(loops=10, interval=30)
+        # _noisf.close()
 
-    except(Exception, KeyboardInterrupt) as exc:
-        if _noisf:
-            _noisf.close()
-        _ui.close()
-        sys.exit(str(exc))
+    # except(Exception, KeyboardInterrupt) as exc:
+        # if _noisf:
+        # _noisf.close()
+        # _ui.close()
+        # sys.exit(str(exc))
 
-    finally:
-        if _noisf:
-            _noisf.close()
-        _ui.close()
-        sys.exit(str(exc))
-    # _nf = NoiseFloor()
+    # finally:
+        # if _noisf:
+        # _noisf.close()
+        # _ui.close()
+        # sys.exit(str(exc))
+    ## _nf = NoiseFloor()
 
 
 def trim_dups(mydeck, boolfn):
@@ -409,7 +439,7 @@ def trim_dups(mydeck, boolfn):
 
 
 def get_noise1(arg: Threadargs, **kwargs):
-    """get_noise1(arg, **kwargs)
+    """get_noise1(arg:Threadargs, **kwargs)
     arg    Threadargs', ['execute', 'barrier', 'stope',
                                        'qs', 'name', 'interval', 'doit'])
 
@@ -417,37 +447,39 @@ def get_noise1(arg: Threadargs, **kwargs):
     from flex import Flex
     from postproc import BANDS, BandPrams, INITIALZE_FLEX
     from noisefloor import Noisefloor
-    # name = "get_noise"
-    # myargs = list(args)
-    # myargs.append(name)
-    # myargs.append(None)
 
     def doita():
+        initial_state = None
         UI: UserInput = UserInput()
         nf: Noisefloor = None
-        UI.request(port='com4')
-        flexr: Flex = Flex(UI)
-        initial_state = flexr.save_current_state()
-        flexr.do_cmd_list(INITIALZE_FLEX)
+
         try:
+
+            UI.request(port='com4')
+            flexr: Flex = Flex(UI)
+            initial_state = flexr.save_current_state()
+            flexr.do_cmd_list(INITIALZE_FLEX)
             if not flexr.open():
                 raise (RuntimeError('Flex not connected to serial serial port'))
             # flex: Flex, out_queue: CTX.JoinableQueue, stop_event: CTX.Event
-            nf = Noisefloor(flexr, arg.qs['dataQ'], arg.stope)
+            nf = Noisefloor(
+                flexr, arg.qs[QK.dQ], arg.stope, run_till_stopped=True)
             nf.open()
-            nf.doit(loops=0, interval=arg.interval, runtime=0, dups=True)
+            nf.doit(loops=0, interval=5 * 60, runtime=0, dups=True)
+        except StopEventException as see:
+            nf.close()
+            raise see
 
         finally:
-            print('restore flex prior state')
+            #print('restore flex prior state')
             flexr.restore_state(initial_state)
 
             if nf:
-                nf.close()
+                nf.close()  # also closes flex and ui
             UI.close()
 
     mma: Threadargs = arg._replace(name='get_noise1', doit=doita)
-    _thread_template(mma, **kwargs)
-    a = 0
+    return _thread_template(mma, **kwargs)
 
 
 def get_noise(arg: Threadargs, **kwargs):
@@ -477,7 +509,7 @@ def get_noise(arg: Threadargs, **kwargs):
             if not flexr.open():
                 raise (RuntimeError('Flex not connected to serial serial port'))
 
-            nf = Noisefloor(flexr, arg.qs['dataQ'], arg.stope)
+            nf = Noisefloor(flexr, arg.qs[QK.dQ], arg.stope)
             nf.open()
             nf.doit(loops=0, interval=90, runtime=0, dups=True)
 
@@ -554,7 +586,7 @@ def dataQ_reader_datagen(*args, **kwargs):
 
     if ti_dict['execute']:  # execute:
 
-        TL.rawDataQ_IN = ti_dict['queues']['dataQ']
+        TL.rawDataQ_IN = ti_dict['queues'][QK.dQ]
 
         TL.count = 0
         # ti_dict['barrier'].wait()  # wait for the barrier
@@ -669,7 +701,7 @@ def Get_NF_dbg(arg: Threadargs, **kwargs) -> List[int]:
 
     def doita() -> int:
         data: str = f'{mma.name} th={threading.current_thread().getName()}, t={monotonic()}'
-        dq = mma.qs['dataQ']
+        dq = mma.qs[QK.dQ]
         dq.put(data)
         return 1
 
@@ -691,7 +723,7 @@ def dataQ_reader_dbg(arg: Threadargs, **kwargs) -> List[Tuple[int, int]]:
 
         """
         count: Tuple[int, int] = _qcpy(
-            deck, mma.qs['dataQ'], mma.qs['dpQ'], mma)
+            deck, mma.qs[QK.dQ], mma.qs[QK.dpQ], mma)
         return count
 
     mma = arg._replace(doit=doita, name='dataQ_reader_dbg')
@@ -721,7 +753,7 @@ def dataQ_reader(arg: Threadargs, **kwargs):
     def doita():
         # (deckin, qin, qout, args, markdone=True, **kwargs) -> Tuple[int, int]:
 
-        _qcpy(deck, mma.qs['dataQ'], mma.qs['dpQ'], arg)
+        _qcpy(deck, mma.qs[QK.dQ], mma.qs[QK.dpQ], arg)
         return 0
 
     # update the interval and function
@@ -747,8 +779,8 @@ def dataQ_reader(arg: Threadargs, **kwargs):
 
     import localweather
 
-    TL.rawDataQ_IN = TL.dqrarg.qs['dataQ']
-    TL.dpQ_OUT = TL.dqrarg.qs['dpQ']
+    TL.rawDataQ_IN = TL.dqrarg.qs[QK.dQ]
+    TL.dpQ_OUT = TL.dqrarg.qs[QK.dpQ]
     # TL.stop_event = TL.dqrarg.stope
     TL.count = 0
     TL.dqrarg.barrier.wait()
@@ -849,7 +881,7 @@ def dbQ_writer_dbg(arg: Threadargs, **kwargs) -> List[Tuple[int, int]]:
 
     def doita() -> Tuple[int, int]:
 
-        count: Tuple[int, int] = _qcpy(deck, mma.qs['dbQ'], debq, mma)
+        count: Tuple[int, int] = _qcpy(deck, mma.qs[QK.dbQ], debq, mma)
         return count
 
     mma = arg._replace(
@@ -884,7 +916,7 @@ def dbQ_writer(thread_info, debugfn=None):
         if debugfn:
             doit = debugfn
 
-        dbQIN = thread_info[3]['dbQ']
+        dbQIN = thread_info[3][QK.dbQ]
         print('dbQ_writer waiting\n', end='')
         thread_info[1].wait()
         print('dbQ_writer started\n', end='')
@@ -928,7 +960,6 @@ def timed_work(arg: Threadargs, **kwargs):  # thread_info, delayseconds, fu):
 
     # locald = TML
     TL.twarg: Threadargs = arg
-
     TL.returnval = None
 
     def nullprint(arg):
@@ -988,17 +1019,18 @@ def shutdown(futures: Dict[str, Any], queues, stopevents, time_out=30) -> Tuple[
     returns wait results
 
     """
-    from queuesandevents import POSSIBLE_F_KEYS
+
     # contains the keys for the defined importaint threads
+
     fkeys_inorder: List[str] = [
-        k for k in POSSIBLE_F_KEYS if k in futures.keys()]
+        k for k in list(FK) if k in futures.keys() and futures[k]]
     if not fkeys_inorder:
         return None
 
     class DataaccShutdown:
         def __init__(self):
-            self.w_is_shutdown = not 'weather' in fkeys_inorder
-            self.n_is_shutdown = not 'noise' in fkeys_inorder
+            self.w_is_shutdown = not FK.w in fkeys_inorder
+            self.n_is_shutdown = not FK.n in fkeys_inorder
             self.disabled = self.w_is_shutdown and self.n_is_shutdown  # this object is invalid
             pass
 
@@ -1014,11 +1046,11 @@ def shutdown(futures: Dict[str, Any], queues, stopevents, time_out=30) -> Tuple[
             if not self.disabled \
                and self.n_is_shutdown \
                and self.w_is_shutdown \
-               and 'transfer' in fkeys_inorder:
+               and SEK.t in fkeys_inorder:
                 # just keeping the stop events status consistent
-                STOP_EVENTS['acquireData'].set()
+                STOP_EVENTS[SEK.ad].set()
                 # print('stop trans')
-                STOP_EVENTS['trans'].set()
+                STOP_EVENTS[SEK.t].set()
 
             pass
 
@@ -1033,26 +1065,26 @@ def shutdown(futures: Dict[str, Any], queues, stopevents, time_out=30) -> Tuple[
     def transfer_shutdown(f):
         # print('stop agra')
         # just keeping the stop events status consistent
-        STOP_EVENTS['trans'].set()
-        STOP_EVENTS['agra'].set()
+        STOP_EVENTS[SEK.t].set()
+        STOP_EVENTS[SEK.da].set()
 
     def agra_shutdown(f):
         # print('stop dbwrite')
         # just keeping the stop events status consistent
-        STOP_EVENTS['agra'].set()
-        STOP_EVENTS['dbwrite'].set()
+        STOP_EVENTS[SEK.da].set()
+        STOP_EVENTS[SEK.db].set()
 
     def dbwrite_shutdown(f):
         # just keeping the stop events status consistent
-        STOP_EVENTS['dbwrite'].set()
+        STOP_EVENTS[SEK.db].set()
         pass
 
     shutdowns: Dict[str, Callable] = {
-        'weather': weather_shutdown,
-        'noise': noise_shutdown,
-        'transfer': transfer_shutdown,
-        'dataagragator': agra_shutdown,
-        'dbwriter': dbwrite_shutdown
+        FK.w: weather_shutdown,
+        FK.n: noise_shutdown,
+        FK.t: transfer_shutdown,
+        FK.da: agra_shutdown,
+        FK.db: dbwrite_shutdown
     }
 
     alldone: bool = True
@@ -1061,10 +1093,11 @@ def shutdown(futures: Dict[str, Any], queues, stopevents, time_out=30) -> Tuple[
 
     if not alldone:
         for k in fkeys_inorder:
-            if futures[k].running() or (futures[k].done() and futures[k].result is not None):
+            # and futures[k].result is not None):
+            if futures[k].running() or (futures[k].done()):
                 futures[k].add_done_callback(shutdowns[k])
 
-        stopevents['acquireData'].set()
+        stopevents[SEK.ad].set()
 
     waitresults: Tuple[Set, Set] = None
     for _ in range(time_out):
@@ -1088,10 +1121,11 @@ def main(hours: float = 0.5):
     timetup: Tuple[float, ...] = (hours, 60 * hours, 3600 * hours,)
 
     # enable all the threads
-    bollst: List[bool] = [True, True, True, True, True]
+    bollst: List[bool, ...] = ENABLES(
+        w=True, n=True, t=True, da=True, db=True)
     bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
 
-    barrier: CTX.Barrier = CTX.Barrier(bc)
+    #barrier: CTX.Barrier = CTX.Barrier(bc)
 
     trackerinitialized: float = monotonic()  # returns seconds
     trackerTimeout: float = trackerinitialized + timetup[2]
@@ -1124,11 +1158,11 @@ def main(hours: float = 0.5):
             def bwdone(f):
                 print('breakwait done')
 
-            futures['weather'] = tpex.submit(timed_work, twargs)
-            futures['noise'] = tpex.submit(get_noise, nfargs)
-            futures['transfer'] = tpex.submit(dataQ_reader, dqrargs)
-            futures['dataaggrator'] = tpex.submit(dataaggrator, daargs)
-            futures['dbwriter'] = tpex.submit(dbQ_writer, dbargs)
+            futures[FK.w] = tpex.submit(timed_work, twargs)
+            futures[FK.n] = tpex.submit(get_noise1, nfargs)
+            futures[FK.t] = tpex.submit(dataQ_reader, dqrargs)
+            futures[FK.da] = tpex.submit(dataaggrator, daargs)
+            futures[FK.db] = tpex.submit(dbQ_writer, dbargs)
 
         for _ in range(10):  # let things start and reach the waiting state
             Sleep(0.001)
@@ -1155,11 +1189,12 @@ def datagen3(hours: float = 0.5):
     # sys.setswitchinterval(3)
 
     queues = QUEUES
-    dq = queues['dataQ']
+    dq = queues[QK.dQ]
     timetup: Tuple[float, ...] = (hours, 60 * hours, 3600 * hours,)
 
     # turn on selected threads
-    bollst: Tuple[bool] = (True, True, True, False, False)
+    bollst: Tuple[bool, ...] = ENABLES(
+        w=True, n=True, t=True, da=False, db=False)
     bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
 
     barrier: CTX.Barrier = CTX.Barrier(bc)
@@ -1193,11 +1228,11 @@ def datagen3(hours: float = 0.5):
                 def bwdone(f):
                     print('breakwait done')
 
-                futures['weather'] = tpex.submit(timed_work, twargs)
-                # futures['noise'] = tpex.submit(get_noise, nfargs)
-                # futures['transfer'] = tpex.submit(dataQ_reader, dqrargs)
-                # futures['dataaggrator'] = tpex.submit(dataaggrator, daargs)
-                # futures['dbwriter'] = tpex.submit(dbQ_writer, dbargs)
+                futures[FK.w] = tpex.submit(timed_work, twargs)
+                # futures[FK.n] = tpex.submit(get_noise, nfargs)
+                # futures[FK.t] = tpex.submit(dataQ_reader, dqrargs)
+                # futures[FK.da] = tpex.submit(dataaggrator, daargs)
+                # futures[FK.db]= tpex.submit(dbQ_writer, dbargs)
 
                 # futures = {
                 # gets weather data
@@ -1221,7 +1256,7 @@ def datagen3(hours: float = 0.5):
             tempdec.deck2q(dq)
             dataQDeque: Deck = Deck(10000)
             print('main waiting for start')
-            for _ in Range(200):
+            for _ in range(200):
                 ss = [(k, v) for k, v in futures.items()]
                 Sleep(1)
 
@@ -1231,7 +1266,7 @@ def datagen3(hours: float = 0.5):
             for _ in range(2 * 3600):
                 Sleep(0.5)
                 dataQDeque.q2deck(
-                    queues['dataQ'], mark_done=True, wait_sec=0.1)
+                    queues[QK.dQ], mark_done=True, wait_sec=0.1)
                 if _ % 120 == 0:
                     print(f'{str(Dtc.now())} q:{len(dataQDeque)}')
 
@@ -1240,7 +1275,7 @@ def datagen3(hours: float = 0.5):
                 Sleep(0.001)
 
             dataQDeque.q2deck(  # pick up anything left over.
-                queues['dataQ'], mark_done=True, wait_sec=0.1)
+                queues[QK.dQ], mark_done=True, wait_sec=0.1)
 
             shutdown(futures, queues, STOP_EVENTS)
             break  # break out of tpex
@@ -1265,11 +1300,11 @@ def datagen2(hours: float = 0.5):
     """
 
     queues = QUEUES
-    dq = queues['dataQ']
+    dq = queues[QK.dQ]
     timetup: Tuple[float, ...] = (hours, 60 * hours, 3600 * hours,)
 
     # turn on selected threads
-    bollst: Tuple[bool] = (True, False, False, False, False)
+    bollst: Tuple[bool, ...] = ENABLES(True, False, False, False, False)
     bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
 
     barrier: CTX.Barrier = CTX.Barrier(bc)
@@ -1287,28 +1322,28 @@ def datagen2(hours: float = 0.5):
 
                 futures = {}
                 twargs: Threadargs = Threadargs(
-                    bollst[0], barrier, STOP_EVENTS['acquireData'], queues, name='timed_work', interval=60 * 10.5, doit=Get_LW)
+                    bollst.w, barrier, STOP_EVENTS[SEK.ad], queues, name='timed_work', interval=60 * 10.5, doit=Get_LW)
 
                 nfargs: Threadargs = Threadargs(
-                    bollst[1], barrier, STOP_EVENTS['acquireData'], queues, name='nf', interval=None, doit=None)
+                    bollst.n, barrier, STOP_EVENTS[SEK.ad], queues, name='nf', interval=None, doit=None)
 
                 dqrargs: Threadargs = Threadargs(
-                    bollst[2], barrier, STOP_EVENTS['trans'], queues, name='dqr', interval=None, doit=None)
+                    bollst.t, barrier, STOP_EVENTS[SEK.t], queues, name='dqr', interval=None, doit=None)
 
                 daargs: Threadargs = Threadargs(
-                    bollst[3], barrier, STOP_EVENTS['agra'], queues, name='da', interval=None, doit=None)
+                    bollst.da, barrier, STOP_EVENTS[SEK.da], queues, name='da', interval=None, doit=None)
 
                 dbargs: Threadargs = Threadargs(
-                    bollst[4], barrier, STOP_EVENTS['dbwrite'], queues, name='db', interval=None, doit=None)
+                    bollst.db, barrier, STOP_EVENTS[SEK.db], queues, name='db', interval=None, doit=None)
 
                 def bwdone(f):
                     print('breakwait done')
 
-                futures['weather'] = tpex.submit(timed_work, twargs)
-                # futures['noise'] = tpex.submit(get_noise, nfargs)
-                # futures['transfer'] = tpex.submit(dataQ_reader, dqrargs)
-                # futures['dataaggrator'] = tpex.submit(dataaggrator, daargs)
-                # futures['dbwriter'] = tpex.submit(dbQ_writer, dbargs)
+                futures[FK.w] = tpex.submit(timed_work, twargs)
+                # futures[FK.n] = tpex.submit(get_noise, nfargs)
+                # futures[FK.t] = tpex.submit(dataQ_reader, dqrargs)
+                # futures[FK.da] = tpex.submit(dataaggrator, daargs)
+                # futures[FK.db] = tpex.submit(dbQ_writer, dbargs)
             except Exception as e:
                 aa = 0
 
@@ -1323,13 +1358,13 @@ def datagen2(hours: float = 0.5):
             _.add_done_callback(bwdone)
             for _ in range(400):
                 Sleep(0.5)
-            STOP_EVENTS['acquireData'].set()
+            STOP_EVENTS[SEK.ad].set()
             for _ in range(200):
                 Sleep(0.001)
 
             dataQDeque: Deck = Deck(100)
             dataQDeque.q2deck(
-                queues['dataQ'], mark_done=True, wait_sec=0.1)
+                queues[QK.dQ], mark_done=True, wait_sec=0.1)
 
             shutdown(futures, queues, STOP_EVENTS)
             break  # break out of tpex
@@ -1347,102 +1382,118 @@ def datagen2(hours: float = 0.5):
     return
 
 
+def myprint(*arg):
+    # print(arg)
+    pass
+
+
+def runthreads(barrier: CTX.Barrier, calls: Tuple[Callable, ...], argdicin: Dict[str, Threadargs], tpex) -> Dict[str, Any]:
+
+    def bwdone(f):
+        pass
+
+    def breakwait(barrier):
+        barrier.wait()
+
+    futures: Dict[str, Any] = {}
+    futures[FK.w] = tpex.submit(
+        calls.w, argdicin[AK.w], printfn=myprint) if calls.w else None
+
+    # gets banddata data
+    futures[FK.n] = tpex.submit(calls.n, argdicin[AK.n]) if calls.n else None
+
+    # reads the dataQ and sends to the data processing queue dpq
+    futures[FK.t] = tpex.submit(calls.t, argdicin[AK.t]) if calls.t else None
+
+    # looks at the data and generates the approprate sql to send to dbwriter
+    futures[FK.da] = tpex.submit(
+        calls.da, argdicin[AK.da]) if calls.da else None
+
+    # reads the database Q and writes it to the database
+    futures[FK.db] = tpex.submit(
+        calls.db, argdicin[AK.db]) if calls.db else None
+
+    _ = tpex.submit(breakwait, barrier)  # break the barrier
+    _.add_done_callback(bwdone)
+    return futures
+
+
 def datagen1(hours: float = 0.5):
     """datagen1(hours=0.5)
-    runs the weather task for
+    runs the weather task and the noise task for 30 min capturing filling the dataQ,
+
+    generates a list of the stuff in the queue and pickles it to a file
+
     """
 
-    queues = QUEUES
-    timetup: Tuple[float, ...] = (hours, 60 * hours, 3600 * hours,)
+    #queues = QUEUES
+    #timetup: Tuple[float, ...] = (hours, 60 * hours, 3600 * hours,)
 
-    # turn on selected threads
-    bollst: Tuple[bool] = (False, False, True, False, False)
-    # bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
+    # enable selected threads
 
-    barrier: CTX.Barrier = CTX.Barrier(bc)
+    bollst: Tuple[bool, ...] = ENABLES(
+        w=True, n=True, t=False, da=False, db=False)
+    bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
 
-    trackerinitialized: float = monotonic()  # returns seconds
-    trackerTimeout: float = trackerinitialized + timetup[2]
+    barrier = CTX.Barrier(bc)
+    calls: Tuple[Callable, ...] = ENABLES(w=timed_work,
+                                          n=get_noise1, t=None, da=None, db=None)
 
-    trackerstarted = None
-    tempdec: Deck = Deck(30)
+    # trackerinitialized: float = monotonic()  # returns seconds
+    #trackerTimeout: float = trackerinitialized + timetup[2]
 
-    while (True):
-        futures: Dict[str, Any] = {}
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
+    #trackerstarted = None
 
-            # futures = {
-            # gets weather data
-            # 'weather': tpex.submit(timed_work, bollst[0], barrier, STOP_EVENTS['acquireData'], queues, delay=60 * 10.5, timed_func=Get_LW),
-            # gets banddata data
-            # 'noise': tpex.submit(timed_work, bollst[1], barrier, STOP_EVENTS['acquireData'], 60, Get_NF, queues),
-            # 'noise': tpex.submit(get_noise, bollst[1], barrier, STOP_EVENTS['acquireData'], queues),
-            # reads the dataQ and sends to the data processing queue dpq
-            # fn is wrong
-            # 'transfer': tpex.submit(dataQ_reader_datagen, bollst[2], barrier, STOP_EVENTS['trans'], queues, fn=None),
-            # looks at the data and generates the approprate sql to send to dbwriter
-            # 'dataagragator': tpex.submit(dataaggrator, bollst[3], barrier, STOP_EVENTS['agra'], queues),
-            # reads the database Q and writes it to the database
-            # 'dbwriter': tpex.submit(dbQ_writer, bollst[4], barrier, STOP_EVENTS['dbwrite'], queues),
+    argdic: Dict[int, Threadargs] = genargs(barrier, bollst)
+    # mods for test
+    argdic[AK.w] = argdic[AK.w]._replace(
+        name='timed_work', interval=60 * 5.5, doit=Get_LW)
+    argdic[AK.n] = argdic[AK.n]._replace(
+        interval=None)
+    argdic[AK.t] = argdic[AK.t]._replace(
+        interval=1)
+    argdic[AK.da] = argdic[AK.da]._replace(
+        interval=1)
+    argdic[AK.db] = argdic[AK.db]._replace(
+        interval=1)
 
-            # }
-            futures = {}
-            twargs: Threadargs = Threadargs(
-                bollst[0], barrier, STOP_EVENTS['acquireData'], queues, name='timed_work', interval=60 * 10.5, doit=Get_LW)
+    futures: Dict[str, Any] = {}
+    waitresults: Tuple[Set, Set] = None
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
+        futures = runthreads(barrier, calls, argdic, tpex)
+        for _ in range(60):  # wait for a while to let the threads work
+            Sleep(5)
+            print('.', end='')
+        STOP_EVENTS[SEK.da].set()  # stop the the data acquisition
+        waitresults = shutdown(
+            futures, QUEUES, STOP_EVENTS, time_out=120)  # wait max 60 for the threads to stop
+        aa = 0
 
-            nfargs: Threadargs = Threadargs(
-                bollst[1], barrier, STOP_EVENTS['acquireData'], queues, name='nf', interval=None, doit=None)
-
-            dqrargs: Threadargs = Threadargs(
-                bollst[2], barrier, STOP_EVENTS['trans'], queues, name='dqr', interval=None, doit=None)
-
-            daargs: Threadargs = Threadargs(
-                bollst[3], barrier, STOP_EVENTS['agra'], queues, name='da', interval=None, doit=None)
-
-            dbargs: Threadargs = Threadargs(
-                bollst[4], barrier, STOP_EVENTS['dbwrite'], queues, name='db', interval=None, doit=None)
-
-            def bwdone(f):
-                print('breakwait done')
-
-            futures['weather'] = tpex.submit(timed_work, twargs)
-            # futures['noise'] = tpex.submit(get_noise, nfargs)
-            futures['transfer'] = tpex.submit(dataQ_reader, dqrargs)
-            # futures['dataaggrator'] = tpex.submit(dataaggrator, daargs)
-            # futures['dbwriter'] = tpex.submit(dbQ_writer, dbargs)
-
-            # for _ in range(10):  # let things start and reach the waiting state
-            # Sleep(0.001)
-
-            [tempdec.append(f.running()) for f in futures.values()]
-            tempdec.deck2q(dq)
-
-            # barrier.wait()  # start them all working
-            _ = tpex.submit(breakwait, barrier)
-            _.add_done_callback(bwdone)
-            trackerstarted: float = monotonic()
-            trackerschedend: float = trackerstarted + timetup[2]
-            # monotonic() < trackerschedend
-            # dataQ_reader_datagen will end when done
-            tfut = futures['transfer']
-            while monotonic() < trackerTimeout:
-                Sleep(10)
-                if tfut.done():
-                    break
-            shutdown(futures, queues, STOP_EVENTS)
-            break  # break out of tpex
-        a = 0
-        break  # break out of while loop
-
+    deck = Deck(1000)
+    deck.q2deck(QUEUES[QK.dQ], mark_done=True)
     aa: List[Any] = []
-    with open('localweathersqlshort.pickle', 'rb') as fl:
+    bb: List[Any] = []
+    try:
+        while True:
+            aa.append(deck.popleft())
+    except:
+        pass
+
+    with open('dadata30min.pickle', 'wb') as fl:
         try:
-            aa = pickle.load(fl)
+            pickle.dump(aa, fl)
         except Exception as ex:
             a = 0
 
-    a = 0
+    with open('dadata30min.pickle', 'rb') as f2:
+        try:
+            bb = pickle.load(fl)
+        except Exception as ex:
+            a = 0
 
+    for a, b in zip(aa, bb):
+        if not a == b:
+            print(f'a:{a}, b:{b}')
     return
 
 
