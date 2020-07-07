@@ -15,40 +15,34 @@ dbQ is read by thread stopped by dbwrite which performs the sql operations
 
 """
 ##from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set
-from typing import List, Dict, Set
+from typing import List, Dict
 import multiprocessing as mp
-from queue import Empty as QEmpty, Full as QFull
-from collections import deque, namedtuple
-
+from queue import Empty as QEmpty  # , Full as QFull
+from collections import namedtuple
 
 CTX = mp.get_context('spawn')  # threading context
-#BARRIER: CTX.Barrier = CTX.Barrier(1)
-# BARRIER.reset()
 
+_DEFALT_Q_SIZE: int = 100
 Queuekeys = namedtuple('Queuekeys', ['dQ', 'dpQ', 'dbQ'])
 QUEUE_KEYS = Queuekeys('dataQ', 'dpQ', 'dbQ')
 
-# QUEUES: Dict(str, CTX.JoinableQueue) = {
-QUEUES = {
+QUEUES: Dict[QUEUE_KEYS, CTX.JoinableQueue] = {
     # from data acquisition threads, received by the aggragator thread
-    QUEUE_KEYS.dQ: CTX.JoinableQueue(maxsize=100),
+    QUEUE_KEYS.dQ: CTX.JoinableQueue(maxsize=_DEFALT_Q_SIZE),
     # written to by the aggrator thread, read by the data processor which generates sql commands to dbq
-    QUEUE_KEYS.dpQ: CTX.JoinableQueue(maxsize=100),
+    QUEUE_KEYS.dpQ: CTX.JoinableQueue(maxsize=_DEFALT_Q_SIZE),
     # database commands generateed (usually) by the aggrator thread
-    QUEUE_KEYS.dbQ: CTX.JoinableQueue(maxsize=100),
-
+    QUEUE_KEYS.dbQ: CTX.JoinableQueue(maxsize=_DEFALT_Q_SIZE),
 }
 
-
 Stopeventkeys = namedtuple('Stopeventkeys', ['ad', 't', 'da', 'db'])
-
 STOP_EVENT_KEYS = Stopeventkeys(
     'acquireData',
     'transfer',
     'dataagragator',
     'dbwriter')
 
-STOP_EVENTS = {
+STOP_EVENTS: Dict[STOP_EVENT_KEYS, mp.Event] = {
     STOP_EVENT_KEYS.ad: CTX.Event(),
     STOP_EVENT_KEYS.t: CTX.Event(),
     STOP_EVENT_KEYS.da: CTX.Event(),
@@ -99,4 +93,3 @@ Enables = namedtuple('Enables', Futurekeys._fields)
 
 Argkeys = namedtuple('Argkeys', Futurekeys._fields)
 ARG_KEYS = Argkeys(0, 1, 2, 3, 4)
-
