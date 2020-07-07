@@ -21,6 +21,16 @@ from deck import DeckFullError, OutQFullError
 # class OutQFullError(Error):
 #"""Raise when the output Q is full"""
 
+def emptyQ(q):
+
+    try:
+        while True:
+            a = q.get_nowait()
+            q.task_done()
+    except:
+        pass
+
+
 class TestDeck(unittest.TestCase):
     """TestDeck
 
@@ -198,6 +208,9 @@ class TestDeck(unittest.TestCase):
         self.assertEqual(50, deck.look_left())
         self.assertEqual(99, deck.look_right())
         self.assertEqual(0, dataq.qsize())
+
+        emptyQ(dataq)
+
         dataq.close()
 
     def test04_deck2q1andextend(self):
@@ -256,9 +269,25 @@ class TestDeck(unittest.TestCase):
             self.assertEqual(5, len(deck))
             self.assertEqual(20, dataq.qsize())
 
+        # try:
+            # while True:
+            #aa = dataq.get_nowait()
+            # dataq.task_done()
+        # except Exception:
+            # pass
+
+        emptyQ(dataq)
         dataq.close()
 
-    def test05_q2deckanddeck2q1(self):
+    def test05_deck2lst(self):
+        deck: Deck = Deck(50)
+        for _ in range(50):
+            deck.append(_)
+        result: List[int] = deck.deck2lst()
+        for _ in range(50):
+            self.assertEqual(_, result[_])
+
+    def test06_q2deckanddeck2q1(self):
         """test02_loadQ()
 
         """
@@ -278,18 +307,18 @@ class TestDeck(unittest.TestCase):
         lstint: List[int] = []
         try:
             cnt = deck.q2deck(dataqin, mark_done=True, wait_sec=0.5)
-            self.assertEquals(25, cnt)
-            self.assertEquals(25, len(deck))
+            self.assertEqual(25, cnt)
+            self.assertEqual(25, len(deck))
             [dataqin.put(x) for x in range(25, 30)]
-            self.assertEquals(5, dataqin.qsize())
+            self.assertEqual(5, dataqin.qsize())
             cnt = deck.q2deck(dataqin, mark_done=True, wait_sec=0.5)
-            self.assertEquals(5, cnt)
+            self.assertEqual(5, cnt)
             self.assertTrue(dataqin.empty())
-            self.assertEquals(30, len(deck))
+            self.assertEqual(30, len(deck))
             lstint = list(deck.deck)
-            self.assertEquals(30, len(lstint))
-            self.assertEquals(0, lstint[0])
-            self.assertEquals(29, lstint[29])
+            self.assertEqual(30, len(lstint))
+            self.assertEqual(0, lstint[0])
+            self.assertEqual(29, lstint[29])
 
             [dataqin.put(x) for x in range(30, 100)]
             cnt = deck.q2deck(dataqin, mark_done=True, wait_sec=0.5)
@@ -353,6 +382,10 @@ class TestDeck(unittest.TestCase):
         #self.assertEqual(100, cccc)
 
         #self.fail('need to test full queue exception')
+
+        emptyQ(dataqin)
+        emptyQ(dataqout_small)
+        emptyQ(dataqout_large)
 
         dataqin.close()
         dataqout_small.close()

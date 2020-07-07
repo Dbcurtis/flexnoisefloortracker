@@ -21,6 +21,7 @@ from time import sleep as Sleep
 import dbtools
 import timestampaux
 from medfordor import Medford_or_Info as MI
+from queuesandevents import QUEUE_KEYS as QK
 
 
 LOGGER = logging.getLogger(__name__)
@@ -404,7 +405,7 @@ def main():
     from trackermain import CTX, QUEUES
     from qdatainfo import LWQ
 
-    que = QUEUES['dataQ']
+    que = QUEUES[QK.dQ]
 
     saved: List[LocalWeather] = []
     numreadings = 10

@@ -14,7 +14,8 @@ dbQ is read by thread stopped by dbwrite which performs the sql operations
 
 
 """
-from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set
+##from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set
+from typing import List, Dict, Set
 import multiprocessing as mp
 from queue import Empty as QEmpty, Full as QFull
 from collections import deque, namedtuple
@@ -43,9 +44,9 @@ Stopeventkeys = namedtuple('Stopeventkeys', ['ad', 't', 'da', 'db'])
 
 STOP_EVENT_KEYS = Stopeventkeys(
     'acquireData',
-    'trans',
-    'agra',
-    'dbwrite')
+    'transfer',
+    'dataagragator',
+    'dbwriter')
 
 STOP_EVENTS = {
     STOP_EVENT_KEYS.ad: CTX.Event(),

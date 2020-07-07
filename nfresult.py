@@ -49,19 +49,17 @@ class NFResult:
 
     def __str__(self):
         if self._started and self._ended:
-            stdevlst = [
-                (
-                    r.band,
-                    r.signal_st.get('sl'),
-                    r.signal_st.get('stddv'),)
-                for r in self.readings
-            ]
-            readings: str = f'NoiseFloor reading\n{self.starttime}\n'
-            for _ in stdevlst:
-                readings += f'    b:{_[0]}, {_[1]}, {_[2] :.2f}\n'
+            readinginfo = []
+            readinginfo = [(r.band,
+                            r.signal_st.get('sl'),
+                            r.signal_st.get('stddv')) for r in self.readings if r is not None]
+            readinglst: [str] = [f'NoiseFloor reading', f'{self.starttime}']
+            for _ in readinginfo:
+                readinglst.append(f'    b:{_[0]}, {_[1]}, {_[2] :.2f}')
 
-            readings += f'{self.endtime}\n'
-            return readings
+            readinglst.append(f'{self.endtime}')
+            result = '\n'.join(readinglst)
+            return result
 
         if self._started:
             return f'band readings started at {self.starttime}'
@@ -72,9 +70,11 @@ class NFResult:
         if self._started and self._ended:
             lines: List[str] = []
             for r in self.readings:
+                if r is None:
+                    continue
                 reads: List[str] = [
                     f'b:{r.band}, {r.signal_st.get("sl")},',
-                    f'stddv:{r.signal_st["stddv"] :.3f}, adBm: {r.dBm["adBm"] :.3f}, mdBm: {r.dBm["adBm"] :.3f} '
+                    f'stddv:{r.signal_st["stddv"] :.3f}, adBm: {r.dBm["adBm"] :.3f}, mdBm: {r.dBm["adBm"] :.3f}'
                 ]
                 lines.append(' '.join(reads))
             out: str = '\n'.join(lines)
@@ -92,34 +92,41 @@ class NFResult:
         Equality does not compare the date/time values, only the
         condition of started and ended and the band, sl, and stddv
         """
-        if self._ended ^ other._ended or len(self.readings) != len(other.readings):
+        if self is other:
+            return True
+
+        if (not (isinstance(self, NFResult) and isinstance(other, NFResult))) or len(self.readings) != len(other.readings) or self._ended ^ other._ended:
+            return False
+        if (len(self.readings) + len(other.readings) == 0):
+            return True
+
+        sreadings = [(
+            r.band,
+            r.signal_st.get('sl'),
+            r.signal_st.get('stddv'),
+        )
+            for r in self.readings if r is not None and isinstance(r, SMeterAvg)]
+        oreadings = [(
+            r.band,
+            r.signal_st.get('sl'),
+            r.signal_st.get('stddv'),
+        )
+            for r in other.readings if r is not None and isinstance(r, SMeterAvg)]
+
+        if len(oreadings) != len(sreadings):
             return False
 
-        one2one = zip(
-            [(
-                r.band,
-                r.signal_st.get('sl'),
-                r.signal_st.get('stddv'),
-            )
-                for r in self.readings],
-            [(
-                r.band,
-                r.signal_st.get('sl'),
-                r.signal_st.get('stddv'),
-            )
-                for r in other.readings]
-        )
-
-        result = True
-
+        one2one = zip(sreadings, oreadings)
+        result: bool = True
         for s, o in one2one:
             result = result and s[0] == o[0] and s[1] == o[1]
             dif = s[2] - o[2]
-            if dif < 0.0:
-                dif = o[2] - s[2]
+            # if dif < 0.0:
+            #dif = o[2] - s[2]
+            dif = dif if dif >= 0 else -dif
             result = result and dif < 0.3
-            # if not result:
-            # return result
+            if not result:
+                break
         return result
 
     def __ne__(self, other):

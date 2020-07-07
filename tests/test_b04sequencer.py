@@ -71,7 +71,7 @@ class TestSequencer(unittest.TestCase):
         currentlastsched = sequ._to_do_sched[-1]
         delay1 = currentlastsched - initiallastsched
         self.assertAlmostEqual(5.0, delay1)
-        self.assertEqual(40, cnt)
+        self.assertTrue(38 < cnt < 41)
         sched: List[float] = list(sequ._to_do_sched)
         ll: List[float] = []
         for i in range(1, len(sched)):
@@ -90,7 +90,8 @@ class TestSequencer(unittest.TestCase):
         waittime: float = sequ.get_nxt_wait()
         Sleep(waittime - 0.5)
         waittime = sequ.get_nxt_wait()
-        self.assertAlmostEqual(0.5, waittime)
+        self.assertAlmostEqual(0.5, waittime, places=1)
+        a = 0
 
 
 if __name__ == '__main__':

@@ -4,9 +4,11 @@ Test file for need
 """
 
 # import datetime
-from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque
+##from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque
+from typing import Any, Tuple, List, Dict, Set
 
-import statistics
+
+##import statistics
 import threading
 from concurrent.futures import ALL_COMPLETED, FIRST_EXCEPTION, FIRST_COMPLETED
 from time import monotonic
@@ -19,12 +21,20 @@ import multiprocessing as mp
 import unittest
 from multiprocessing import freeze_support
 from typing import Any, List, Dict, Tuple
+import pickle
+from statistics import fmean
 
 import context
+import qdatainfo
+from trackermain import SepDataTup
 from queuesandevents import RESET_QS as reset_queues
 from queuesandevents import RESET_STOP_EVENTS
 from queuesandevents import QUEUES, CTX, STOP_EVENTS
 from queuesandevents import QUEUE_KEYS as QK
+from queuesandevents import Enables as ENABLES
+from queuesandevents import ARG_KEYS
+from queuesandevents import POSSIBLE_F_TKEYS as FK
+from queuesandevents import STOP_EVENT_KEYS as SEK
 import trackermain
 from deck import Deck
 
@@ -179,11 +189,11 @@ def startThreads(tpex, bollst, barrier, stopevents, queues):
     """
 
     threadinfo = {
-        'weather': (bollst[0], barrier, stopevents['acquireData'], queues,),
-        'noise': (bollst[1], barrier, stopevents['acquireData'], queues,),
-        'transfer': (bollst[2], barrier, stopevents['trans'], queues,),
-        'dataagragator': (bollst[3], barrier, stopevents['agra'], queues,),
-        'dbwriter': (bollst[4], barrier, stopevents['dbwrite'], queues,),
+        'weather': (bollst.w, barrier, stopevents['acquireData'], queues,),
+        'noise': (bollst.n, barrier, stopevents['acquireData'], queues,),
+        'transfer': (bollst.t, barrier, stopevents['trans'], queues,),
+        'dataagragator': (bollst.da, barrier, stopevents['agra'], queues,),
+        'dbwriter': (bollst.db, barrier, stopevents['dbwrite'], queues,),
     }
 
     futures = {
@@ -311,9 +321,9 @@ class TestTrackermain(unittest.TestCase):
         """
         clearstopevents()
         # reset queues
-        QUEUES['dataQ'] = CTX.JoinableQueue(maxsize=100)
-        QUEUES['dpQ'] = CTX.JoinableQueue(maxsize=100)
-        QUEUES['dbQ'] = CTX.JoinableQueue(maxsize=100)
+        QUEUES[QK.dQ] = CTX.JoinableQueue(maxsize=100)
+        QUEUES[QK.dpQ] = CTX.JoinableQueue(maxsize=100)
+        QUEUES[QK.dbQ] = CTX.JoinableQueue(maxsize=100)
 
     def tearDown(self):
         """tearDown()
@@ -336,7 +346,84 @@ class TestTrackermain(unittest.TestCase):
         """
         pass
 
-    def testA000_qcpy(self):
+    def testA000_dataQpickleread(self):
+        import pickle
+        queddata:List[Any]
+
+        with open('dadata3hr.pickle', 'rb') as f2:  #should contain duplicate records
+            try:
+                queddata = pickle.load(f2)
+            except Exception as ex:
+                a = 0
+        self.assertEqual(112, len(queddata))
+        lwqlst:list[LWQ] = [e for e in queddata if repr(e).startswith('LWQ')]
+        nfqlst:list[NFQ] = [e for e in queddata if repr(e).startswith('NFQ')]
+
+        def kk(a1,a0) -> float:
+            t1 = a1.utctime
+            ts1 = a1.utctime.timestamp()
+            t0=a0.utctime
+            ts0=a0.utctime.timestamp()
+            return ts1-ts0
+
+        nfqtimedifs = [kk(nfqlst[i],nfqlst[i-1])  for i in range(1,len(nfqlst))]
+        lwqtimedifs = [kk(lwqlst[i],lwqlst[i-1])  for i in range(1,len(lwqlst))]
+        from statistics import mean, median, stdev
+
+        # mean and med for dadata3hr.pickle is about 180 st <0.05
+        self.assertAlmostEqual(180.00, mean(nfqtimedifs),delta=0.1)
+        self.assertAlmostEqual(180.00,median(nfqtimedifs),delta=0.1)
+        self.assertAlmostEqual(0.01,stdev(nfqtimedifs),delta=0.005)
+
+        # mean and med for dadata3hr.pickle is about 210 st <0.05
+        self.assertAlmostEqual(209.99, mean(lwqtimedifs),delta=0.1)
+        self.assertAlmostEqual(209.99,median(lwqtimedifs),delta=0.1)
+        self.assertAlmostEqual(0.021,stdev(lwqtimedifs),delta = 0.03)
+        lw0=lwqlst[0].get()
+        expected = 'INSERT INTO weather SET Sunset = 1591735638000000, Sunrise = 1591680884000000, RecDT = 1591745819000000, Humidity = 56.0, TempF = 62.04, WindS = 1.1, WindD = 170, WindG = 0.0'
+        self.assertEqual(expected, str(lw0))
+        nf0=nfqlst[0].get()
+        expected = 'NoiseFloor reading\nJun 09 2020 23:40:01\n    b:40, S6, 1.35\n    b:30, S5, 0.42\nJun 09 2020 23:41:05'
+        self.assertEqual(expected, str(nf0))
+        expected = 'NFResult: st:Jun 09 2020 23:40:01, et:Jun 09 2020 23:41:05\nb:40, S6, stddv:1.351, adBm: -86.464, mdBm: -86.464\nb:30, S5, stddv:0.415, adBm: -94.048, mdBm: -94.048'
+        self.assertEqual(expected, repr(nf0))
+        nfqtstlst = []
+
+        #_last_band_readings=nfqlst[0]
+        #_last_w_readings = lwqlst[0]
+        nfqtstlst=nfqlst[0:1]
+        lwqtstlst=lwqlst[0:1]
+
+
+        #def removedups(nfresult):
+            #if (not _last_band_readings) or nfresult != _last_band_readings:  # remove close readings
+                        #_last_band_readings = nfresult
+                        #nfqtstlst.append(nfresult)
+
+        #self.assertFalse( nfqlst[0].get().__eq__( nfqlst[1].get()))
+        #self.assertFalse(nfqlst[0].get() ==  nfqlst[1].get())
+        #self.assertTrue( nfqlst[0].get().__ne__( nfqlst[1].get()))
+        #self.assertTrue(nfqlst[0].get() !=  nfqlst[1].get())
+        self.assertEqual(60,len(nfqlst))
+        for i in range(1,len(nfqlst)):
+            if nfqlst[i-1].get()!=nfqlst[i].get():
+                nfqtstlst.append(nfqlst[i])
+        self.assertEqual(29,len(nfqtstlst))
+
+
+        self.assertEqual(52,len(lwqlst))
+        for i in range(1,len(lwqlst)):
+            if lwqlst[i-1].get()!=lwqlst[i].get():
+                #print(lwqlst[i].get())
+                lwqtstlst.append(lwqlst[i])
+
+        self.assertEqual(18,len(lwqtstlst))
+
+
+
+
+
+    def testA001_qcpy(self):
 
         INQ = CTX.JoinableQueue(maxsize=100)
         OUTQ = CTX.JoinableQueue(maxsize=100)
@@ -352,7 +439,7 @@ class TestTrackermain(unittest.TestCase):
 
         #args = (True, None, STOP_EVENTS['agra'], QUEUES, 'testqcpy', 0.5,)
         arg = Threadargs(
-            True, None, STOP_EVENTS['agra'], QUEUES, 'testqcpy', 0.5, doit=None)
+            True, None, STOP_EVENTS[SEK.da], QUEUES, 'testqcpy', 0.5, doit=None)
         counts = _qcpy(deck, INQ, OUTQ, arg, loops=2)
         self.assertEqual((0, 0,), counts)
 
@@ -414,7 +501,7 @@ class TestTrackermain(unittest.TestCase):
             """tf()
 
             """
-            que = arg.qs['dataQ']
+            que = arg.qs[QK.dQ]
             data = f'tf th={threading.current_thread().getName()}, t={monotonic()}'
             que.put_nowait(data)
 
@@ -425,7 +512,7 @@ class TestTrackermain(unittest.TestCase):
             """
             def doita():  # the program to be run by _thread_template the return 0 says that no work need be done when stopping
                 data: str = f'{mma.name} th={threading.current_thread().getName()}, t={monotonic()}'
-                q = arg.qs['dataQ']
+                q = arg.qs[QK.dQ]
                 aa = q.put_nowait(data)
                 return 1
 
@@ -446,7 +533,7 @@ class TestTrackermain(unittest.TestCase):
                 # (deckin, qin, qout, args, markdone=True, **kwargs) -> Tuple[int, int]:
 
                 aa: Tuple[int, int] = trackermain._qcpy(
-                    deck, mma.qs['dataQ'], mma.qs['dpQ'], arg)
+                    deck, mma.qs[QK.dQ], mma.qs[QK.dpQ], arg)
                 return aa
 
             # update the interval and function
@@ -464,7 +551,7 @@ class TestTrackermain(unittest.TestCase):
 
             def doita():
                 aa: Tuple[int, int] = trackermain._qcpy(
-                    deck, mma.qs['dpQ'], mma.qs['dbQ'], arg)
+                    deck, mma.qs[QK.dpQ], mma.qs[QK.dbQ], arg)
                 return aa
 
             # update the interval and function
@@ -482,7 +569,7 @@ class TestTrackermain(unittest.TestCase):
 
             def doita():
                 aa: Tuple[int, int] = trackermain._qcpy(
-                    deck, mma.qs['dbQ'], TESTOUTQ, arg)
+                    deck, mma.qs[QK.dbQ], TESTOUTQ, arg)
                 return aa
 
             # update the interval and function
@@ -492,7 +579,9 @@ class TestTrackermain(unittest.TestCase):
             return _thread_template(mma, printfun=myprint, **kwargs)
 
         # turn on all threads
-        bollst = (True, True, True, True, True)
+        bollst: Tuple[bool, ...] = ENABLES(
+            w=True, n=True, t=True, da=True, db=True,)
+        # bollst = (True, True, True, True, True)
         # count them for barrier the plus 1 is for this thread
         bc = sum([1 for _ in bollst if _]) + 1
         barrier = CTX.Barrier(bc)
@@ -510,34 +599,34 @@ class TestTrackermain(unittest.TestCase):
             argdic = genargs(barrier, bollst)
 
             # mods for test
-            argdic['twargs'] = argdic['twargs']._replace(
+            argdic[ARG_KEYS.w] = argdic[ARG_KEYS.w]._replace(
                 interval=5, doit=tf)
-            argdic['nfargs'] = argdic['nfargs']._replace(
+            argdic[ARG_KEYS.n] = argdic[ARG_KEYS.n]._replace(
                 interval=4)
-            argdic['dqrargs'] = argdic['dqrargs']._replace(
+            argdic[ARG_KEYS.t] = argdic[ARG_KEYS.t]._replace(
                 interval=timesdic['dqr'])
-            argdic['daargs'] = argdic['daargs']._replace(
+            argdic[ARG_KEYS.da] = argdic[ARG_KEYS.da]._replace(
                 interval=timesdic['da'])
-            argdic['dbargs'] = argdic['dbargs']._replace(
+            argdic[ARG_KEYS.db] = argdic[ARG_KEYS.db]._replace(
                 interval=timesdic['db'])
 
             futures = {}
 
             # gets weather data
-            futures['weather'] = tpex.submit(
-                trackermain.timed_work, argdic['twargs'], printfn=myprint)
+            futures[FK.w] = tpex.submit(
+                trackermain.timed_work, argdic[ARG_KEYS.w], printfn=myprint)
 
             # gets banddata data
-            futures['noise'] = tpex.submit(nf, argdic['nfargs'])
+            futures[FK.n] = tpex.submit(nf, argdic[ARG_KEYS.n])
 
             # reads the dataQ and sends to the data processing queue dpq
-            futures['transfer'] = tpex.submit(dqr, argdic['dqrargs'])
+            futures[FK.t] = tpex.submit(dqr, argdic[ARG_KEYS.t])
 
             # looks at the data and generates the approprate sql to send to dbwriter
-            futures['dataagragator'] = tpex.submit(da, argdic['daargs'])
+            futures[FK.da] = tpex.submit(da, argdic[ARG_KEYS.da])
 
             # reads the database Q and writes it to the database
-            futures['dbwriter'] = tpex.submit(db, argdic['dbargs'])
+            futures[FK.db] = tpex.submit(db, argdic[ARG_KEYS.db])
 
             _ = tpex.submit(breakwait, barrier)
             _.add_done_callback(bwdone)
@@ -735,27 +824,29 @@ class TestTrackermain(unittest.TestCase):
 
         def runthreads(argdicin: Dict[str, Threadargs]) -> Dict[str, Any]:
             futures: Dict[str, Any] = {}
-            futures['weather'] = tpex.submit(
-                trackermain.timed_work, argdicin['twargs'], printfn=myprint)
+            futures[FK.w] = tpex.submit(
+                trackermain.timed_work, argdicin[ARG_KEYS.w], printfn=myprint)
 
             # gets banddata data
-            futures['noise'] = tpex.submit(nf, argdicin['nfargs'])
+            futures[FK.n] = tpex.submit(nf, argdicin[ARG_KEYS.n])
 
             # reads the dataQ and sends to the data processing queue dpq
-            futures['transfer'] = tpex.submit(dqr, argdicin['dqrargs'])
+            futures[FK.t] = tpex.submit(dqr, argdicin[ARG_KEYS.t])
 
             # looks at the data and generates the approprate sql to send to dbwriter
-            futures['dataagragator'] = tpex.submit(da, argdicin['daargs'])
+            futures[FK.da] = tpex.submit(da, argdicin[ARG_KEYS.da])
 
             # reads the database Q and writes it to the database
-            futures['dbwriter'] = tpex.submit(db, argdicin['dbargs'])
+            futures[FK.db] = tpex.submit(db, argdicin[ARG_KEYS.db])
 
             _ = tpex.submit(breakwait, barrier)
             _.add_done_callback(bwdone)
             return futures
 
         # turn off all selected threads so they just start and execute
-        bollst: Tuple[bool] = (False, False, False, False, False,)
+        #bollst: Tuple[bool] = (False, False, False, False, False,)
+        bollst: Tuple[bool, ...] = ENABLES(
+            w=False, n=False, t=False, da=False, db=False,)
         bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
         barrier: CTX.Barrier = CTX.Barrier(bc)
         futures_empty: Dict[str, Any] = {}
@@ -792,14 +883,16 @@ class TestTrackermain(unittest.TestCase):
         self.assertEqual(0, len(waitresults.not_done))
 
         cleartestq()
-        bollst: Tuple[bool] = (False, False, False, False, False)
+        #bollst: Tuple[bool] = (False, False, False, False, False)
+        bollst: Tuple[bool, ...] = ENABLES(
+            w=False, n=False, t=False, da=False, db=False,)
         bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
         barrier: CTX.Barrier = CTX.Barrier(bc)
         myprint('starting')
 
         argdic = genargs(barrier, bollst)
         # mods for test
-        argdic['twargs'] = argdic['twargs']._replace(
+        argdic[ARG_KEYS.w] = argdic[ARG_KEYS.w]._replace(
             name='timed_work', interval=10.5, doit=tf)
 
         """
@@ -858,7 +951,9 @@ class TestTrackermain(unittest.TestCase):
             # '\nend of subtest 1 ---------------------------------------------------2\n')
 
         # turn on all threads
-        bollst = (True, True, True, True, True)
+        #bollst = (True, True, True, True, True)
+        bollst: Tuple[bool, ...] = ENABLES(
+            w=True, n=True, t=True, da=True, db=True,)
         # count them for barrier the plus 1 is for this thread
         bc = sum([1 for _ in bollst if _]) + 1
         barrier = CTX.Barrier(bc)
@@ -868,15 +963,15 @@ class TestTrackermain(unittest.TestCase):
 
         argdic = genargs(barrier, bollst)
         # mods for test
-        argdic['twargs'] = argdic['twargs']._replace(
+        argdic[ARG_KEYS.w] = argdic[ARG_KEYS.w]._replace(
             interval=timesdic['tf'], doit=tf)
-        argdic['nfargs'] = argdic['nfargs']._replace(
+        argdic[ARG_KEYS.n] = argdic[ARG_KEYS.n]._replace(
             interval=timesdic['nf'])
-        argdic['dqrargs'] = argdic['dqrargs']._replace(
+        argdic[ARG_KEYS.t] = argdic[ARG_KEYS.t]._replace(
             interval=timesdic['dqr'])
-        argdic['daargs'] = argdic['daargs']._replace(
+        argdic[ARG_KEYS.da] = argdic[ARG_KEYS.da]._replace(
             interval=timesdic['da'])
-        argdic['dbargs'] = argdic['dbargs']._replace(
+        argdic[ARG_KEYS.db] = argdic[ARG_KEYS.db]._replace(
             interval=timesdic['db'])
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
@@ -992,11 +1087,13 @@ class TestTrackermain(unittest.TestCase):
         cleartestq()
         RESET_STOP_EVENTS()
         # turn on all threads
-        bollst: Tuple[bool] = (True, True, False, False, False)
+        bollst: Tuple[bool, ...] = ENABLES(
+            w=True, n=True, t=True, da=True, db=True,)
+        #bollst: Tuple[bool] = (True, True, False, False, False)
         # count them for barrier the plus 1 is for this thread
         bc: int = sum([1 for _ in bollst if _]) + 1
         barrier = CTX.Barrier(bc)
-        runtime = 30  # 180
+        runtime = 1200
         shutdown_result: Tuple[Set, Set] = None
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
@@ -1004,72 +1101,73 @@ class TestTrackermain(unittest.TestCase):
             argdic = genargs(barrier, bollst)
 
             # mods for test
-            argdic['twargs'] = argdic['twargs']._replace(
+            argdic[ARG_KEYS.w] = argdic[ARG_KEYS.w]._replace(
                 interval=120, doit=trackermain.Get_LW)
-            argdic['nfargs'] = argdic['nfargs']._replace(
+            argdic[ARG_KEYS.n] = argdic[ARG_KEYS.n]._replace(
                 interval=90)
-            argdic['dqrargs'] = argdic['dqrargs']._replace(
+            argdic[ARG_KEYS.t] = argdic[ARG_KEYS.t]._replace(
                 interval=1)
-            argdic['daargs'] = argdic['daargs']._replace(
+            argdic[ARG_KEYS.da] = argdic[ARG_KEYS.da]._replace(
                 interval=1)
-            argdic['dbargs'] = argdic['dbargs']._replace(
+            argdic[ARG_KEYS.db] = argdic[ARG_KEYS.db]._replace(
                 interval=1)
 
             futures = {}
 
             # gets weather data
-            futures['weather'] = tpex.submit(
-                trackermain.timed_work, argdic['twargs'], printfn=myprint)
+            futures[FK.w] = tpex.submit(
+                trackermain.timed_work, argdic[ARG_KEYS.w], printfn=myprint)
 
             # gets banddata data
-            futures['noise'] = tpex.submit(
-                trackermain.get_noise1, argdic['nfargs'])
+            futures[FK.n] = tpex.submit(
+                trackermain.get_noise1, argdic[ARG_KEYS.n])
 
-            if False:
-                # reads the dataQ and sends to the data processing queue dpq
-                futures['transfer'] = tpex.submit(
-                    trackermain.dataQ_reader_dbg, argdic['dqrargs'], printfn=myprint)
 
-                # looks at the data and generates the approprate sql to send to dbwriter
-                futures['dataagragator'] = tpex.submit(
-                    trackermain.dataaggrator_dbg, argdic['daargs'], printfn=myprint)
+            # reads the dataQ and sends to the data processing queue dpq
+            futures[FK.t] = tpex.submit(
+                trackermain.dataQ_reader_dbg, argdic[ARG_KEYS.t], printfn=myprint)
 
-                # reads the database Q and writes it to the database
-                futures['dbwriter'] = tpex.submit(
-                    trackermain.dbQ_writer_dbg, argdic['dbargs'], debugResultQ=TESTQ)
 
-            _ = tpex.submit(trackermain.breakwait, barrier)
+            # looks at the data and generates the approprate sql to send to dbwriter
+            futures[FK.da] = tpex.submit(
+                trackermain.dataaggrator_dbg, argdic[ARG_KEYS.da], printfn=myprint)
 
-            for _ in range(runtime):
-                Sleep(1)
+            # reads the database Q and writes it to the database
+            futures[FK.db] = tpex.submit(
+                trackermain.dbQ_writer_dbg, argdic[ARG_KEYS.db], debugResultQ=TESTQ)
 
-            # Sleep(runtime)
+            _ = tpex.submit(trackermain._breakwait, barrier)
+
+            rt = int(runtime/2)
+            for _ in range(rt):
+                Sleep(2)
+
             shutdown_result = trackermain.shutdown(
                 futures, QUEUES, STOP_EVENTS)
 
         deck: Deck = Deck(400)
-        deck.q2deck(QUEUES['dataQ'], True)
-        decklst = []
-        try:
-            while True:
-                decklst.append(deck.popleft())
-        except:
-            pass
+        deck.q2deck(TESTQ, True)
+        decklst = deck.deck2lst()
+        sepstup:SepDataTup = trackermain.seperate_data(decklst)
+        self.assertEqual(4,len(sepstup.str))
+        self.assertTrue(6<=len(sepstup.nfq)<=8)
+        self.assertTrue(10<=len(sepstup.lwq)<=12)
+        self.assertFalse(sepstup.other)
 
         #self.assertEqual(12, len(decklst))
 
-        jjj: Dict[str, List[Any]] = {}
-        for k in decklst:
-            kk = k.split(None, 1)
-            try:
-                jjj[kk[0]].append(kk[1])
-            except:
-                jjj[kk[0]] = []
-                jjj[kk[0]].append(kk[1])
+        #jjj: Dict[str, List[Any]] = {}
+        #for k in decklst:
+            #kk = k.split(None, 1)
+            #try:
+                #jjj[kk[0]].append(kk[1])
+            #except:
+                #jjj[kk[0]] = []
+                #jjj[kk[0]].append(kk[1])
 
-        self.assertEqual(2, len(jjj.keys()))
-        nfr = jjj['Get_NF_dbg']
-        lwr = jjj['timed_work_Get_LW_dbg']
+        #self.assertEqual(2, len(jjj.keys()))
+        #nfr = jjj['Get_NF_dbg']
+        #lwr = jjj['timed_work_Get_LW_dbg']
         print('may want to check out the times on these lists')
 # ---------------------------------
 
@@ -1085,7 +1183,9 @@ class TestTrackermain(unittest.TestCase):
         cleartestq()
         RESET_STOP_EVENTS()
         # turn on all threads
-        bollst: Tuple[bool] = (True, True, True, True, True)
+        #bollst: Tuple[bool] = (True, True, True, True, True)
+        bollst: Tuple[bool, ...] = ENABLES(
+            w=True, n=True, t=True, da=True, db=True,)
         # count them for barrier the plus 1 is for this thread
         bc: int = sum([1 for _ in bollst if _]) + 1
         barrier = CTX.Barrier(bc)
@@ -1097,40 +1197,40 @@ class TestTrackermain(unittest.TestCase):
             argdic = genargs(barrier, bollst)
 
             # mods for test
-            argdic['twargs'] = argdic['twargs']._replace(
+            argdic[ARG_KEYS.w] = argdic[ARG_KEYS.w]._replace(
                 interval=3, doit=trackermain.Get_LW_dbg)
-            argdic['nfargs'] = argdic['nfargs']._replace(
+            argdic[ARG_KEYS.n] = argdic[ARG_KEYS.n]._replace(
                 interval=2)
-            argdic['dqrargs'] = argdic['dqrargs']._replace(
+            argdic[ARG_KEYS.t] = argdic[ARG_KEYS.t]._replace(
                 interval=1)
-            argdic['daargs'] = argdic['daargs']._replace(
+            argdic[ARG_KEYS.da] = argdic[ARG_KEYS.da]._replace(
                 interval=1)
-            argdic['dbargs'] = argdic['dbargs']._replace(
+            argdic[ARG_KEYS.db] = argdic[ARG_KEYS.db]._replace(
                 interval=1)
 
             futures = {}
 
             # gets weather data
-            futures['weather'] = tpex.submit(
-                trackermain.timed_work, argdic['twargs'], printfn=myprint)
+            futures[FK.w] = tpex.submit(
+                trackermain.timed_work, argdic[ARG_KEYS.w], printfn=myprint)
 
             # gets banddata data
-            futures['noise'] = tpex.submit(
-                trackermain.Get_NF_dbg, argdic['nfargs'])
+            futures[FK.n] = tpex.submit(
+                trackermain.Get_NF_dbg, argdic[ARG_KEYS.n])
 
             # reads the dataQ and sends to the data processing queue dpq
-            futures['transfer'] = tpex.submit(
-                trackermain.dataQ_reader_dbg, argdic['dqrargs'], printfn=myprint)
+            futures[FK.t] = tpex.submit(
+                trackermain.dataQ_reader_dbg, argdic[ARG_KEYS.t], printfn=myprint)
 
             # looks at the data and generates the approprate sql to send to dbwriter
-            futures['dataagragator'] = tpex.submit(
-                trackermain.dataaggrator_dbg, argdic['daargs'], printfn=myprint)
+            futures[FK.da] = tpex.submit(
+                trackermain.dataaggrator_dbg, argdic[ARG_KEYS.da], printfn=myprint)
 
             # reads the database Q and writes it to the database
-            futures['dbwriter'] = tpex.submit(
-                trackermain.dbQ_writer_dbg, argdic['dbargs'], debugResultQ=TESTQ)
+            futures[FK.db] = tpex.submit(
+                trackermain.dbQ_writer_dbg, argdic[ARG_KEYS.db], debugResultQ=TESTQ)
 
-            _ = tpex.submit(trackermain.breakwait, barrier)
+            _ = tpex.submit(trackermain._breakwait, barrier)
 
             # for _ in range(runtime):
             #QUEUES['dataQ'].put(f'tick: {monotonic()}')
@@ -1139,16 +1239,12 @@ class TestTrackermain(unittest.TestCase):
             Sleep(runtime)
             shutdown_result = trackermain.shutdown(
                 futures, QUEUES, STOP_EVENTS)
+            #print(shutdown_result.not_done)
 
         deck: Deck = Deck(400)
         deck.q2deck(TESTQ, True)
-        decklst = []
-        try:
-            while True:
-                decklst.append(deck.popleft())
-        except:
-            pass
-
+        _ = deck.deck2lst()
+        decklst = [x for x in _ if not x.startswith('timed_work ')]
         self.assertEqual(10, len(decklst))
 
         jjj: Dict[str, List[Any]] = {}
@@ -1163,7 +1259,26 @@ class TestTrackermain(unittest.TestCase):
         self.assertEqual(2, len(jjj.keys()))
         nfr = jjj['Get_NF_dbg']
         lwr = jjj['timed_work_Get_LW_dbg']
-        print('may want to check out the times on these lists')
+        def _gettimes(a:str)->float:
+            aa = a.split('t=',2)
+            return (float(aa[1]))
+
+        nfrt:List[float] = [_gettimes(x) for x in nfr]
+        lwrt:List[float]= [_gettimes(x) for x in lwr]
+        lwrtPDifs:List[float] = []
+        for i in range(1,len(lwrt)):
+            lwrtPDifs.append(lwrt[i]-lwrt[i-1])
+
+        nfrtPDifs:List[float] = []
+        for i in range(1,len(nfrt)):
+            nfrtPDifs.append(nfrt[i]-nfrt[i-1])
+        nfrm:float= fmean(nfrtPDifs)
+        print(lwrtPDifs[0],nfrm)
+        self.assertTrue(2.6<= lwrtPDifs[0]<=3.1)
+        self.assertTrue(1.8<=nfrm<=2.1)
+        a=0
+
+
 
     def testB005_basic_thread_operation(self):
         """
@@ -1174,7 +1289,9 @@ class TestTrackermain(unittest.TestCase):
         barrier: CTX.Barrier = None
         futures: Dict[str, Any] = {}
         # turn on all threads except the radio thread
-        bollst: Tuple[bool] = (False, False, False, False, False)
+        #bollst: Tuple[bool] = (False, False, False, False, False)
+        bollst: Tuple[bool, ...] = ENABLES(
+            w=False, n=False, t=False, da=False, db=False,)
         # count them for barrier the plus 1 is for this thread
         bc: int = sum([1 for _ in bollst if _]) + 1
         barrier = CTX.Barrier(bc)
@@ -1193,110 +1310,116 @@ class TestTrackermain(unittest.TestCase):
             argdic = genargs(barrier, bollst)
 
             # mods for test
-            argdic['twargs'] = argdic['twargs']._replace(
+            argdic[ARG_KEYS.w] = argdic[ARG_KEYS.w]._replace(
                 interval=6, doit=trackermain.Get_LW_dbg)
-            argdic['nfargs'] = argdic['nfargs']._replace(
+            argdic[ARG_KEYS.n] = argdic[ARG_KEYS.n]._replace(
                 interval=1)
-            argdic['dqrargs'] = argdic['dqrargs']._replace(
+            argdic[ARG_KEYS.t] = argdic[ARG_KEYS.t]._replace(
                 interval=1)
-            argdic['daargs'] = argdic['daargs']._replace(
+            argdic[ARG_KEYS.da] = argdic[ARG_KEYS.da]._replace(
                 interval=1)
-            argdic['dbargs'] = argdic['dbargs']._replace(
+            argdic[ARG_KEYS.db] = argdic[ARG_KEYS.db]._replace(
                 interval=1)
 
             futures = {}
 
             # gets weather data
-            futures['weather'] = tpex.submit(
-                trackermain.timed_work, argdic['twargs'], printfn=myprint)
+            futures[FK.w] = tpex.submit(
+                trackermain.timed_work, argdic[ARG_KEYS.w])
 
             # gets banddata data
-            futures['noise'] = tpex.submit(
-                trackermain.Get_NF_dbg, argdic['nfargs'])
+            futures[FK.n] = tpex.submit(
+                trackermain.Get_NF_dbg, argdic[ARG_KEYS.n])
 
             # reads the dataQ and sends to the data processing queue dpq
-            futures['transfer'] = tpex.submit(
-                trackermain.dataQ_reader_dbg, argdic['dqrargs'], printfn=myprint)
+            futures[FK.t] = tpex.submit(
+                trackermain.dataQ_reader_dbg, argdic[ARG_KEYS.t])
 
             # looks at the data and generates the approprate sql to send to dbwriter
-            futures['dataagragator'] = tpex.submit(
-                trackermain.dataaggrator_dbg, argdic['daargs'], printfn=myprint)
+            futures[FK.da] = tpex.submit(
+                trackermain.dataaggrator_dbg, argdic[ARG_KEYS.da])
 
             # reads the database Q and writes it to the database
-            futures['dbwriter'] = tpex.submit(
-                trackermain.dbQ_writer_dbg, argdic['dbargs'], debugResultQ=TESTQ)
+            futures[FK.db] = tpex.submit(
+                trackermain.dbQ_writer_dbg, argdic[ARG_KEYS.db], debugResultQ=TESTQ)
 
-            _ = tpex.submit(trackermain.breakwait, barrier)
+            _ = tpex.submit(trackermain._breakwait, barrier)
 
             Sleep(1)  # wait for a while to let the threads work
             #
 
-            trackermain.shutdown(futures, QUEUES, STOP_EVENTS)
+            waitresults: Tuple[Set, Set] = trackermain.shutdown(futures, QUEUES, STOP_EVENTS)
             self.assertEqual(0, TESTQ.qsize())
             for v in futures.values():
+                aa = v.done()
                 self.assertTrue(v.done())
-            self.assertTrue(futures['weather'].result() is None)
-            for k in ['noise', 'transfer', 'dataagragator', 'dbwriter']:
+
+            self.assertTrue(futures[FK.w].result() is None)
+            #for k in ['noise', 'transfer', 'dataagragator', 'dbwriter']:
+            for k in [FK.n, FK.t, FK.da, FK.db]:
                 self.assertEqual(0, len(futures[k].result()))
 
         cleartestq()
         RESET_STOP_EVENTS()
-        # turn on all threads except the radio thread
-        bollst: Tuple[bool] = (False, False, True, True, True)
-        # count them for barrier the plus 1 is for this thread
+        # turn enable t, da, and db threads
+        #bollst: Tuple[bool] = (False, False, True, True, True)
+        bollst: Tuple[bool, ...] = ENABLES(
+            w=False, n=False, t=True, da=True, db=True,)
+        # count them for barrier the plus 1 is for the barrier breaker
         bc: int = sum([1 for _ in bollst if _]) + 1
         barrier = CTX.Barrier(bc)
-        runtime = 15
+        runtime = 15  #15 seconds, 15 entries in the dataQ
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
 
             argdic = genargs(barrier, bollst)
 
             # mods for test
-            argdic['twargs'] = argdic['twargs']._replace(
+            argdic[ARG_KEYS.w] = argdic[ARG_KEYS.w]._replace(
                 interval=60, doit=trackermain.Get_LW_dbg)
-            argdic['nfargs'] = argdic['nfargs']._replace(
+            argdic[ARG_KEYS.n] = argdic[ARG_KEYS.n]._replace(
                 interval=1)
-            argdic['dqrargs'] = argdic['dqrargs']._replace(
+            argdic[ARG_KEYS.t] = argdic[ARG_KEYS.t]._replace(
                 interval=1)
-            argdic['daargs'] = argdic['daargs']._replace(
+            argdic[ARG_KEYS.da] = argdic[ARG_KEYS.da]._replace(
                 interval=1)
-            argdic['dbargs'] = argdic['dbargs']._replace(
+            argdic[ARG_KEYS.db] = argdic[ARG_KEYS.db]._replace(
                 interval=1)
 
             futures = {}
 
-            # gets weather data
-            futures['weather'] = tpex.submit(
-                trackermain.timed_work, argdic['twargs'], printfn=myprint)
+            # gets weather data disabled
+            futures[FK.w] = tpex.submit(
+                trackermain.timed_work, argdic[ARG_KEYS.w])
 
-            # gets banddata data
-            futures['noise'] = tpex.submit(
-                trackermain.Get_NF_dbg, argdic['nfargs'])
+            # gets banddata data disabled
+            futures[FK.n] = tpex.submit(
+                trackermain.Get_NF_dbg, argdic[ARG_KEYS.n])
 
             # reads the dataQ and sends to the data processing queue dpq
-            futures['transfer'] = tpex.submit(
-                trackermain.dataQ_reader_dbg, argdic['dqrargs'], printfn=myprint)
+            futures[FK.t] = tpex.submit(
+                trackermain.dataQ_reader_dbg, argdic[ARG_KEYS.t], printfn=myprint)
 
             # looks at the data and generates the approprate sql to send to dbwriter
-            futures['dataagragator'] = tpex.submit(
-                trackermain.dataaggrator_dbg, argdic['daargs'], printfn=myprint)
+            futures[FK.da] = tpex.submit(
+                trackermain.dataaggrator_dbg, argdic[ARG_KEYS.da], printfn=myprint)
 
             # reads the database Q and writes it to the database
-            futures['dbwriter'] = tpex.submit(
-                trackermain.dbQ_writer_dbg, argdic['dbargs'], debugResultQ=TESTQ)
+            futures[FK.db] = tpex.submit(
+                trackermain.dbQ_writer_dbg, argdic[ARG_KEYS.db], debugResultQ=TESTQ)
 
-            _ = tpex.submit(trackermain.breakwait, barrier)
+            _ = tpex.submit(trackermain._breakwait, barrier) # break the barrier
 
             for _ in range(runtime):
-                QUEUES['dataQ'].put(f'tick: {monotonic()}')
+                QUEUES[QK.dQ].put(f'tick: {monotonic()}')
                 Sleep(1)
-            #
-            trackermain.shutdown(futures, QUEUES, STOP_EVENTS)
+            # 15 seconds have passed, should have 15 ticks on the TESTQ
+            waitresults: Tuple[Set, Set] =trackermain.shutdown(futures, QUEUES, STOP_EVENTS)
 
         deck: Deck = Deck(400)
         deck.q2deck(TESTQ, True)
         self.assertTrue(runtime - 1 <= len(deck) <= runtime + 1)
+
 
     #def testx01a_multiproc_simple(self):
         #"""test01a_threaded_simple()
@@ -1692,7 +1815,7 @@ class TestTrackermain(unittest.TestCase):
             """tf()
 
             """
-            que = arg.qs['dataQ']
+            que = arg.qs[QK.dQ]
             data = f'tf th={threading.current_thread().getName()}, t={monotonic()}'
             que.put_nowait(data)
 
@@ -1703,7 +1826,7 @@ class TestTrackermain(unittest.TestCase):
             """
             def doita():  # the program to be run by _thread_template the return 0 says that no work need be done when stopping
                 data = f'{mma.name} th={threading.current_thread().getName()}, t={monotonic()}'
-                q = arg.qs['dataQ']
+                q = arg.qs[QK.dQ]
                 aa = q.put_nowait(data)
                 a = 0
                 return 1
@@ -1725,7 +1848,7 @@ class TestTrackermain(unittest.TestCase):
                 # (deckin, qin, qout, args, markdone=True, **kwargs) -> Tuple[int, int]:
 
                 aa = trackermain._qcpy(
-                    deck, mma.qs['dataQ'], mma.qs['dpQ'], arg)
+                    deck, mma.qs[QK.dQ], mma.qs[QK.dpQ], arg)
                 return aa
 
             # update the interval and function
@@ -1744,7 +1867,7 @@ class TestTrackermain(unittest.TestCase):
 
             def doita():
                 aa = trackermain._qcpy(
-                    deck, mma.qs['dpQ'], mma.qs['dbQ'], arg)
+                    deck, mma.qs[QK.dpQ], mma.qs[QK.dbQ], arg)
                 return aa
 
             # update the interval and function
@@ -1760,7 +1883,7 @@ class TestTrackermain(unittest.TestCase):
             deck: Deck = Deck(55)
 
             def doita():
-                aa = trackermain._qcpy(deck, mma.qs['dbQ'], TESTOUTQ, arg)
+                aa = trackermain._qcpy(deck, mma.qs[QK.dbQ], TESTOUTQ, arg)
                 return aa
 
             # update the interval and function
@@ -1769,29 +1892,31 @@ class TestTrackermain(unittest.TestCase):
             return _thread_template(mma, printfun=myprint, **kwargs)
 
         # select only transfer to run
-        bollst = [False, False, True, True, True]
+        #bollst = [False, False, True, True, True]
+        bollst: Tuple[bool, ...] = ENABLES(
+            w=False, n=False, t=True, da=True, db=True,)
         bc = sum([1 for _ in bollst if _]) + 1
         # set barrier to 2 threads this one and transfer (by count not by name)
         barrier = CTX.Barrier(bc)
 
         cleartestq()
         RESET_STOP_EVENTS()
-        QUEUES['dataQ'] = CTX.JoinableQueue(
+        QUEUES[QK.dQ] = CTX.JoinableQueue(
             maxsize=200)  # dataQ now has max size of 200
-        QUEUES['dpQ'] = CTX.JoinableQueue(
+        QUEUES[QK.dpQ] = CTX.JoinableQueue(
             maxsize=101)  # dataQ now has max size of 200
-        QUEUES['dbQ'] = CTX.JoinableQueue(
+        QUEUES[QK.dbQ] = CTX.JoinableQueue(
             maxsize=45)  # dataQ now has max size of 50
 
         try:
             for _ in range(200):
-                QUEUES['dataQ'].put(_)  # prefill the dataQ queue
+                QUEUES[QK.dQ].put(_)  # prefill the dataQ queue
         except Exception as _:
             pass
 
-        self.assertEqual(200, QUEUES['dataQ'].qsize())
+        self.assertEqual(200, QUEUES[QK.dQ].qsize())
 
-        dpQ = QUEUES['dpQ']
+        dpQ = QUEUES[QK.dpQ]
         self.assertTrue(dpQ.empty())
         readings = []
         numreadings = 0
@@ -1812,38 +1937,38 @@ class TestTrackermain(unittest.TestCase):
             # execute=False)
             # argdic['nfargs'] = argdic['nfargs']._replace(
             # execute=False)
-            argdic['dqrargs'] = argdic['dqrargs']._replace(
+            argdic[ARG_KEYS.t] = argdic[ARG_KEYS.t]._replace(
                 interval=1)
-            argdic['daargs'] = argdic['daargs']._replace(
+            argdic[ARG_KEYS.da] = argdic[ARG_KEYS.da]._replace(
                 interval=1)
-            argdic['dbargs'] = argdic['dbargs']._replace(
+            argdic[ARG_KEYS.db] = argdic[ARG_KEYS.db]._replace(
                 interval=1)
 
             futures = {}
 
             # gets weather data
-            futures['weather'] = tpex.submit(
-                trackermain.timed_work, argdic['twargs'], printfn=myprint)
+            futures[FK.w] = tpex.submit(
+                trackermain.timed_work, argdic[ARG_KEYS.w], printfn=myprint)
 
             # gets banddata data
-            futures['noise'] = tpex.submit(nf, argdic['nfargs'])
+            futures[FK.n] = tpex.submit(nf, argdic[ARG_KEYS.n])
 
             # reads the dataQ and sends to the data processing queue dpq
-            futures['transfer'] = tpex.submit(dqr, argdic['dqrargs'])
+            futures[FK.t] = tpex.submit(dqr, argdic[ARG_KEYS.t])
 
             # looks at the data and generates the approprate sql to send to dbwriter
-            futures['dataagragator'] = tpex.submit(da, argdic['daargs'])
+            futures[FK.da] = tpex.submit(da, argdic[ARG_KEYS.da])
 
             # reads the database Q and writes it to the database
-            futures['dbwriter'] = tpex.submit(db, argdic['dbargs'])
+            futures[FK.db] = tpex.submit(db, argdic[ARG_KEYS.db])
             for _ in range(10):
                 Sleep(1)
 
-            self.assertTrue(futures['weather'].done())
-            self.assertTrue(futures['noise'].done())
-            self.assertFalse(futures['dataagragator'].done())
-            self.assertFalse(futures['dbwriter'].done())
-            self.assertFalse(futures['transfer'].done())
+            self.assertTrue(futures[FK.w].done())
+            self.assertTrue(futures[FK.n].done())
+            self.assertFalse(futures[FK.t].done())
+            self.assertFalse(futures[FK.da].done())
+            self.assertFalse(futures[FK.db].done())
 
             _ = tpex.submit(breakwait, barrier)
             _.add_done_callback(bwdone)
@@ -1880,6 +2005,23 @@ class TestTrackermain(unittest.TestCase):
         self.assertEqual((200, 200,), futures['dataagragator'].result()[0])
         self.assertEqual((200, 200,), futures['dbwriter'].result()[0])
         #print('test02_queue_overflow -- end\n', end='')
+
+    def testA003_seperate_data(self):
+        decklst=[]
+        with open('mixedlst.pickle', 'rb') as fl:
+            try:
+                decklst=  pickle.load(fl)
+            except Exception as ex:
+                a = 0
+
+        sepstup:SepDataTup = trackermain.seperate_data(decklst)
+        textlst=sepstup.str
+        self.assertEqual(4,len(textlst))
+        nfqlst=sepstup.nfq
+        self.assertEqual(7,len(nfqlst))
+        lwqlst=sepstup.lwq
+        self.assertEqual(11,len(lwqlst))
+        self.assertFalse(sepstup.other)
 
     def testA002_trimdups(self):
         from localweather import LocalWeather, MyTime

@@ -20,6 +20,7 @@ import multiprocessing as mp
 
 from nfexceptions import StopEventException
 from queuesandevents import CTX, QUEUES, STOP_EVENTS
+from queuesandevents import QUEUE_KEYS as QK
 from nfresult import NFResult
 from userinput import UserInput
 from bandreadings import Bandreadings
@@ -209,6 +210,7 @@ class Noisefloor:
                 self.inter: float = interval
                 self.starttime: float = None
                 self.endtime: float = None
+                self.first: bool = True
                 pass
 
             def start(self):
@@ -235,18 +237,23 @@ class Noisefloor:
                         return timeleft
 
         def _do_intervals(intadj):
-            first: bool = True
+
             if self.stop_event.is_set():
                 raise StopEventException('Stop Event _do_intervals')
 
-            realint: float = intadj.getinterval()
-            if not first:
-                self.stop_event.wait(realint)
-            else:
-                first = False
+            if intadj.first:
+                intadj.first = False
 
+            else:
+                realint: float = intadj.getinterval()
+                self.stop_event.wait(realint)
+
+            if self.stop_event.is_set():
+                raise StopEventException('Stop Event _do_intervals')
             intadj.start()
+            print('<', end='')
             self.oneloop_all_bands(dups=_allow_dups)
+            print('>', end='')
             intadj.end()
 
         # initdata = self.initialize_flex() #if you need to look at the results
@@ -267,6 +274,7 @@ class Noisefloor:
                     if self.stop_event.is_set():
                         raise StopEventException('doit 1')
                     _do_intervals(intadj)
+                    print("|", end='')
 
             elif loops == 0:
                 start_time = datetime.datetime.now()
@@ -324,7 +332,7 @@ def main(stop_events: Mapping[str, CTX.Event], queues: Mapping[str, CTX.Joinable
         print('initializing dbg flex state')
         flexr.do_cmd_list(INITIALZE_FLEX)
         flexr.close()
-        resultQ = queues.get('dataQ')
+        resultQ = queues.get(QK.dQ)
         stop_event = stop_events.get('acquireData')
 
         NOISE = Noisefloor(flexr, resultQ, stop_event)

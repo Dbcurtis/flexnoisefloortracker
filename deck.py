@@ -7,7 +7,7 @@ import os
 import logging
 import logging.handlers
 import multiprocessing as mp
-from typing import Any, Deque, Iterable
+from typing import Any, Deque, Iterable, List
 #from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque, Iterable
 from collections import deque
 from multiprocessing import freeze_support
@@ -154,7 +154,7 @@ class Deck:
         return self.qlen
 
     def q2deck(self, inQ, mark_done: bool = False, wait_sec: float = 1.0, fn=_ident) -> int:
-        """load_from_Q(inQ, mark_done=False, wait_sec=10, fn=_ident)
+        """q2deck(inQ, mark_done=False, wait_sec=1.0, fn=_ident)
 
         loads the deck from the inQ and if mark_done is True, does so as each Q entry is added to the deck
         wait_sec is max amount to wait after the queue is empty.
@@ -189,13 +189,19 @@ class Deck:
         """
         count: int = None
         with self.tlock:
-            # if True:
-            #print('testing true needs to be deleated')
+
             if self.qlen == 0:
                 count = 0
             else:
                 count = self._loadQ(outQ, done_Q, fn)
         return count
+
+    def deck2lst(self) -> List[Any]:
+        result: Any = []
+        with self.tlock:
+            result = list(self.deck)
+
+        return result
 
     def _loadQ(self, outQ, done_Q=None, fn=_ident) -> int:
         """loadQ(outQ)

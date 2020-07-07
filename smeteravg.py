@@ -112,8 +112,8 @@ class SMeterAvg:
             def scoperv0():
                 var = 0
                 for _sm in arg:
-                    var += (_sm.signal_st.get('dBm') -
-                            self.dBm.get('adBm')) ** 2
+                    var += (_sm.signal_st.get('dBm')
+                            - self.dBm.get('adBm')) ** 2
 
                 var /= (len(arg) - 1)
                 self.signal_st['var'] = var
@@ -167,8 +167,14 @@ class SMeterAvg:
         self.noise = {}
         self.signal_st = {'var': None, 'stddv': None, 'sl': None, }
         self.usable = True
-
-        _init_phase1(arg)
+        try:
+            _init_phase1(arg)
+        except ZeroDivisionError as sde:
+            self.signal_st['var'] = 1000
+            self.signal_st['stddv'] = 1000
+            self.signal_st['sl'] = 'sE'
+            self.v = 0
+            return
 
         if self.dBm.get('adBm') <= -127.0:
             self.signal_st['sl'] = 'S0'
@@ -179,38 +185,6 @@ class SMeterAvg:
                     self.signal_st['sl'] = 'S{}'.format(_[2])
                     break
 
-    # def get_noise_freqs(self, type='highnoise'):
-        # """get_noise_freqs(type=val)
-
-        # val = 'highnoise', 'midnoise', or 'lownoise'
-
-        # """
-        # if type not in NOISE_TYPES:
-            # raise ValueError(
-                # 'illegal noise type: highnoise, midnoise, lownoise')
-        # return {sm.freq for sm in self.noise.get(type)}
-
-    # def badness(self):
-        # """badness()
-
-        # returns rzdio of high noise readings to low and mid noise readings
-        # calculated by nf = number of frequences checked,
-        # rf is readings per freq
-        # nhr is number of high readings
-        # nrt is total readings
-        # bad is nhr/(nrt-nhr)
-
-        # """
-        # result = None
-        # if self.noise:
-            # nlr = len(self.noise.get('lownoise'))
-            # nmr = len(self.noise.get('midnoise'))
-            # nhr = len(self.noise.get('highnoise'))
-            # nrt = nlr + nmr + nhr
-
-            # result = nhr / (nlr + nmr)
-
-        # return result
     def gen_sql(self) -> str:
 
         # sss = dbtools.get_bigint_timestamp(self.times['dt'])
@@ -325,8 +299,8 @@ def get_median(lst: List[SMeter]) -> float:
 
         if iseven:
             mididx = int(lstsize / 2)
-            median = (lst[mididx - 1].signal_st.get('dBm') +
-                      lst[mididx].signal_st.get('dBm')) / 2
+            median = (lst[mididx - 1].signal_st.get('dBm')
+                      + lst[mididx].signal_st.get('dBm')) / 2
         else:
             mididx = lstsize - \
                 1 if lstsize == 1 else int(math.trunc((lstsize) / 2))

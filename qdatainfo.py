@@ -56,6 +56,7 @@ class Qdatainfo:
 
 
 """The data queues are:
+
     'dataQ': CTX.JoinableQueue(maxsize=100),
     # database commands generateed (usually) ty the aggrator thread
     'dbQ': CTX.JoinableQueue(maxsize=100),
