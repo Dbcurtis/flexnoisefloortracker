@@ -7,6 +7,8 @@ import os
 import logging
 import logging.handlers
 import datetime
+# from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque
+from typing import Any, Tuple, List, Dict, Set, Callable
 
 
 LOGGER = logging.getLogger(__name__)
@@ -14,7 +16,7 @@ LOGGER = logging.getLogger(__name__)
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/smeter'
 
-_SREAD = (
+_SREAD: Tuple[Tuple[float, float, Any]] = (
     (-127.0, -121.0, 0),
     (-121.0, -115.0, 1, ),
     (-115.0, -109.0, 2, ),
@@ -39,7 +41,7 @@ _SREAD = (
 class SMeter:
     """SMeter(argin)
 
-    argin is a tuple or list (arg,freq)
+    argin is a 2 argument tuple or list (arg:str,freq:int)
     freq is an integer
     arg is the result from a ZZSM; cat command and looks like "ZZSM ABC;" where
     ABC are three digits from 000 to 260
@@ -48,24 +50,22 @@ class SMeter:
     ZZSM reads the received signal strength in dBm where S9 = -73 dBm. The range is -140 dBm to
     -10 dBm with a scale factor of 2 (P2 max = 260). The actual signal strength, in dBm,
     is the value of ZZSM divided by 2 minus 140.
-
-
     """
 
-    def __init__(self, argin):
+    def __init__(self, argin: Tuple[str, int]):
 
-        arg = argin[0]
-        freq = argin[1]
+        arg: str = argin[0]
+        freq: int = argin[1]
         try:
             _var = int(arg[4:-1])  # get the ABC
         except Exception as _jj:
             print(_jj)
             _var = 0
         _dBm = (_var / 2.0) - 140.0
-        self.signal_st = {'sl': 's?'}
+        self.signal_st: Dict[str, Any] = {'sl': 's?'}
         self.signal_st['dBm'] = _dBm
-        self.time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        self.freq = freq
+        self.time: str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        self.freq: int = freq
 
         if self.signal_st.get('dBm') <= -127.0:
             self.signal_st['sl'] = 'S0'
@@ -73,16 +73,16 @@ class SMeter:
             for _ in _SREAD:
                 if self.signal_st.get('dBm') >= _[0] \
                    and self.signal_st.get('dBm') < _[1]:
-                    self.signal_st['sl'] = f'S{_[2]}'  # .format(_[2])
+                    self.signal_st['sl'] = f'S{_[2]}'
                     break
 
     def __str__(self):
         return f'[SMeter: freq:{self.freq}, {self.signal_st.get("dBm") :.5f}dBm, { self.signal_st.get("sl")}]' \
-            #  .format(self.freq, self.signal_st.get('dBm'), self.signal_st.get('sl'))
+
 
     def __repr__(self):
         return f'SMeter: freq:{self.freq}, {self.signal_st.get("dBm") :.5f}dBm, {self.signal_st.get("sl")}' \
-            #  .format(self.freq, self.signal_st.get('dBm'), self.signal_st.get('sl'))
+
 
     def __lt__(self, other):
         if isinstance(other, self.__class__):
