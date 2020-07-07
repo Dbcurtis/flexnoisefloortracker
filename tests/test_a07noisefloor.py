@@ -112,7 +112,7 @@ class Testnoisefloor(unittest.TestCase):
     def test_A01SMeter(self):
         try:
 
-            smeter = SMeter(('ZZSM000;', 5_000_000, ))
+            smeter = SMeter(SMArgkeys('ZZSM000;', 5_000_000, ))
             self.assertEqual(
                 '[SMeter: freq:5000000, -140.00000dBm, S0]', str(smeter))
             gg = repr(smeter)

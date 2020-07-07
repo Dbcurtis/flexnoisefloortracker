@@ -4,6 +4,8 @@ Tests the local weather module
 """
 
 # import datetime
+# from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque
+from typing import Any, Tuple, List, Dict, Set, Callable
 import unittest
 import multiprocessing as mp
 from multiprocessing import queues
@@ -105,18 +107,6 @@ class Testnoisefloorresult(unittest.TestCase):
         self.assertEqual(112, len(queddata))
         nflst: list[NFResult] = [
             e.get() for e in queddata if repr(e).startswith('NFQ')]
-
-        #partialreadings = [0, 2, 12, 29, 41, 48, 50, 52, 55]
-        #equalreadings = [(3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (10, 11), (13, 14), (14, 15), (15, 16), (16, 17), (17, 18), (18, 19), (19, 20), (21, 22), (22, 23), (24, 25), (25, 26), (26, 27), (27, 28), (33, 34), (34, 35), (35, 36), (36, 37), (39, 40), (42, 43), (44, 45), (46, 47), (53, 54), (56, 57), (57, 58)]
-        # for _ in range(1, len(nflst)):
-        # if nflst[_ - 1] == nflst[_]:
-        #equalreadings.append((_ - 1, _,))
-        # for _ in range(len(nflst)):
-        #nfr = nflst[_]
-
-        # for r in nfr.readings:
-        # if r is None:
-        # partialreadings.append(_)
 
         nfr0: NFResult = nflst[0]
         nfr1: NFResult = nflst[1]

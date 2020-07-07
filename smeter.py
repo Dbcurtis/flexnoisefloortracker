@@ -7,6 +7,7 @@ import os
 import logging
 import logging.handlers
 import datetime
+from collections import namedtuple
 # from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque
 from typing import Any, Tuple, List, Dict, Set, Callable
 
@@ -15,6 +16,10 @@ LOGGER = logging.getLogger(__name__)
 
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/smeter'
+
+SMArgkeys = namedtuple('SMArgkeys', [
+    'c',
+    'f'])
 
 _SREAD: Tuple[Tuple[float, float, Any]] = (
     (-127.0, -121.0, 0),
@@ -41,7 +46,7 @@ _SREAD: Tuple[Tuple[float, float, Any]] = (
 class SMeter:
     """SMeter(argin)
 
-    argin is a 2 argument tuple or list (arg:str,freq:int)
+    argin is a 2 argument named tuple (argin:SMArgkeys)
     freq is an integer
     arg is the result from a ZZSM; cat command and looks like "ZZSM ABC;" where
     ABC are three digits from 000 to 260
@@ -52,10 +57,13 @@ class SMeter:
     is the value of ZZSM divided by 2 minus 140.
     """
 
-    def __init__(self, argin: Tuple[str, int]):
+    # def __init__(self, argin: Tuple[str, int]):
+    def __init__(self, argin: SMArgkeys):
+        if isinstance(argin, list):
+            raise ValueError
 
-        arg: str = argin[0]
-        freq: int = argin[1]
+        arg: str = argin.c
+        freq: int = argin.f
         try:
             _var = int(arg[4:-1])  # get the ABC
         except Exception as _jj:

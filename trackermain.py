@@ -61,9 +61,6 @@ Threadargs = namedtuple('Threadargs', ['execute', 'barrier', 'stope',
                                        'qs', 'name', 'interval', 'doit'])
 
 SepDataTup=namedtuple('SepDataTup',['str','nfq','lwq','other'])
-#Tuple[List[str],List[qdatainfo.NFQ],List[qdatainfo.LWQ],List[Any], ...]:])
-
-
 
 
 class Consolidate:
@@ -111,8 +108,6 @@ def _thread_template(arg: Threadargs, printfun=_myprint, **kwargs) -> List[int]:
 
     _thread_template shows that the proxie has been invoked or not, and ended.
     The default printfun does nothing.
-
-
 
     If the proxie is enabled, shows that, waits for the barrier, and then executes doit
     repeatedly at interval timeing, until the stop_event is set

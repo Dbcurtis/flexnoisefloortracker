@@ -1144,6 +1144,7 @@ class TestTrackermain(unittest.TestCase):
 
             shutdown_result = trackermain.shutdown(
                 futures, QUEUES, STOP_EVENTS)
+            self.assertFalse(shutdown_result.not_done)
 
         deck: Deck = Deck(400)
         deck.q2deck(TESTQ, True)
@@ -1154,21 +1155,7 @@ class TestTrackermain(unittest.TestCase):
         self.assertTrue(10<=len(sepstup.lwq)<=12)
         self.assertFalse(sepstup.other)
 
-        #self.assertEqual(12, len(decklst))
 
-        #jjj: Dict[str, List[Any]] = {}
-        #for k in decklst:
-            #kk = k.split(None, 1)
-            #try:
-                #jjj[kk[0]].append(kk[1])
-            #except:
-                #jjj[kk[0]] = []
-                #jjj[kk[0]].append(kk[1])
-
-        #self.assertEqual(2, len(jjj.keys()))
-        #nfr = jjj['Get_NF_dbg']
-        #lwr = jjj['timed_work_Get_LW_dbg']
-        print('may want to check out the times on these lists')
 # ---------------------------------
 
     def testB007_basic_thread_operation(self):
@@ -1183,7 +1170,7 @@ class TestTrackermain(unittest.TestCase):
         cleartestq()
         RESET_STOP_EVENTS()
         # turn on all threads
-        #bollst: Tuple[bool] = (True, True, True, True, True)
+
         bollst: Tuple[bool, ...] = ENABLES(
             w=True, n=True, t=True, da=True, db=True,)
         # count them for barrier the plus 1 is for this thread
@@ -1193,7 +1180,6 @@ class TestTrackermain(unittest.TestCase):
         shutdown_result: Tuple[Set, Set] = None
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
-
             argdic = genargs(barrier, bollst)
 
             # mods for test
@@ -1232,14 +1218,10 @@ class TestTrackermain(unittest.TestCase):
 
             _ = tpex.submit(trackermain._breakwait, barrier)
 
-            # for _ in range(runtime):
-            #QUEUES['dataQ'].put(f'tick: {monotonic()}')
-            # Sleep(1)
-            #
             Sleep(runtime)
             shutdown_result = trackermain.shutdown(
                 futures, QUEUES, STOP_EVENTS)
-            #print(shutdown_result.not_done)
+            self.assertFalse(shutdown_result.not_done)
 
         deck: Deck = Deck(400)
         deck.q2deck(TESTQ, True)

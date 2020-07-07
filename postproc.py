@@ -5,17 +5,16 @@
 import os
 import logging
 import logging.handlers
-#import typing
+# from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque
 from typing import List, Sequence, Mapping, Tuple, Dict, Any
-from smeter import SMeter
-
+#from smeter import SMeter, SMArgkeys
 
 LOGGER = logging.getLogger(__name__)
 
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/postproc'
 
-_MODE = {
+_MODE: Dict[str, str] = {
     '00': 'LSB',
     '01': 'USB',
     '03': 'CWL',
@@ -33,7 +32,7 @@ _MODE = {
 }
 
 
-def zzmdpost(code):
+def zzmdpost(code: str):
     """zzmdpost(code):
 
     """
@@ -89,54 +88,12 @@ def zzifpost(resulttup):
     temp = temp[2:]
     return ret
 
-# def savemode(arg):
-    # """savemode()
-
-    # """
-    #junk = arg
-    # pass
-
-
-# def save_freq(arg):
-    # """saveFreq()
-
-    # """
-    #_ = arg
-    # pass
-
-# def save_dsp_filter(arg):
-    # """saveDSPFilter()
-
-    # """
-    #_ = arg
-    # pass
-
-# def save_agc_mode(arg):
-    # """saveAGCMode()
-
-    # """
-    #_ = arg
-    # pass
-
-# def savewnb(arg):
-    # """savewnb()
-
-    # """
-    #_ = arg
-    # pass
-
-# def savenb(arg):
-    # """savenb()
-
-    # """
-    #_ = arg
-    # pass
-
 
 def smeter(arg):  # (arg, freq):
     """smeter()
     """
-    return SMeter(arg)
+    from smeter import SMeter, SMArgkeys
+    return SMeter(SMArgkeys(arg))
 
 
 """ INITIALZE_FLEX
@@ -146,8 +103,7 @@ commands to set the radio to an initial condition. To be used after
 
     # initalize the radio to a defined set of initial conditions.
 """
-INITIALZE_FLEX = [
-
+INITIALZE_FLEX: List[str] = [
     # initalize the radio to a defined set of initial conditions.
     'ZZTX0;',  # set MOX off
     'ZZAR000;',  # set vfo A agc threshhold to 0
@@ -174,17 +130,17 @@ INITIALZE_FLEX = [
 
    if more than 2 frequencies, then only those frequences are measured (60m band is channalized)
 """
-_BAND_DATA = {'80': (3_500_000, 4_000_000,),
-              '60': (5_330_500, 5_346_500, 5_357_000, 5_371_500, 5_403_500,),
-              '40': (7_000_000, 7_300_000,),
-              '30': (10_100_000, 10_150_000,),
-              '20': (14_000_000, 14_350_000,),
-              '17': (18_068_000, 18_168_000,),
-              '15': (21_025_000, 21_450_000,),
-              '12': (24_890_000, 24_990_000,),
-              '10': (28_000_000, 29_700_000,),
-              '6': (50_000_000, 54_000_000,),
-              }
+_BAND_DATA: Dict[str, Tuple[Any, ...]] = {'80': (3_500_000, 4_000_000,),
+                                          '60': (5_330_500, 5_346_500, 5_357_000, 5_371_500, 5_403_500,),
+                                          '40': (7_000_000, 7_300_000,),
+                                          '30': (10_100_000, 10_150_000,),
+                                          '20': (14_000_000, 14_350_000,),
+                                          '17': (18_068_000, 18_168_000,),
+                                          '15': (21_025_000, 21_450_000,),
+                                          '12': (24_890_000, 24_990_000,),
+                                          '10': (28_000_000, 29_700_000,),
+                                          '6': (50_000_000, 54_000_000,),
+                                          }
 
 # """RESTORE_FLEX
 # storage for the saved state of the flex, executing these commands will restor the flex
@@ -200,7 +156,7 @@ GET_SMETER_PROTO: List[Tuple[Any, Any]] = [
     ('ZZSM;', smeter, ),
 ]
 
-GET_DATA = [
+GET_DATA: List[Tuple[Any, ...]] = [
     # GET_DATA
     # list of tuples that include commands to the radio and handling processing of the return.
     # Also the wait provide delays between commands in decimal seconds
@@ -215,7 +171,7 @@ GET_DATA = [
 
 ]
 
-GET_FAST_DATA = [
+GET_FAST_DATA: List[Tuple[Any, ...]] = [
     # GET_DATA
     # list of tuples that include commands to the radio and handling processing of the return.
     # Also the wait provide delays between commands in decimal seconds
@@ -230,8 +186,8 @@ GET_FAST_DATA = [
 
 ]
 
-_NUM_BAND_SAMPLE = 10  # number of samples in band *3
-_SAMPLE_SPREAD = 1500  # +- samples from above
+_NUM_BAND_SAMPLE: int = 10  # number of samples in band *3
+_SAMPLE_SPREAD: int = 1500  # +- samples from above
 
 
 class BandPrams:
@@ -269,11 +225,13 @@ class BandPrams:
                                int(f), int(f + _SAMPLE_SPREAD)])
 
             # f'ZZFA{int(a) :011d};'
-            self._sample_freqcmdl = [f'ZZFA{int(fval) :011d};' for fval in freqs1]
+            self._sample_freqcmdl = [
+                f'ZZFA{int(fval) :011d};' for fval in freqs1]
             self._channeled = False
         else:
             self._freqs = bfreql[:]
-            self._sample_freqcmdl = [f'ZZFA{int(fval) :011d};' for fval in self._freqs]
+            self._sample_freqcmdl = [
+                f'ZZFA{int(fval) :011d};' for fval in self._freqs]
             self._channeled = True
 
     def __str__(self) -> str:
@@ -298,8 +256,8 @@ BANDS: Dict[str, BandPrams] = {}
 """BANDS
    a dictionary of string bandids ('20') with a BandPrams value
 """
-for i in _BAND_DATA.items():  # setup BANDS
-    BANDS[i[0]] = BandPrams(i)
+for _ in _BAND_DATA.items():  # setup BANDS
+    BANDS[_[0]] = BandPrams(_)
 
 
 def enable_bands(bndids: Sequence[str], val: bool = True) -> int:
@@ -323,29 +281,6 @@ def enable_bands(bndids: Sequence[str], val: bool = True) -> int:
 
 
 enable_bands(['30', '40', '20'])
-
-# class PostProc():
-# """PostProc()
-
-# """
-
-# def __init__(self, userI, testdata=None, testing=False):
-
-#self._ui = userI
-#self._td = None
-# if testdata:
-# if isinstance(testdata, list):
-#self._td = testdata
-# self._td.reverse()
-# else:
-#assert "illegal testdata type"
-
-# def __str__(self):
-# return '[{}, {}]'.format(self._ui, self._td)
-# return f'[{self._ui}, {self._td}'
-
-# def __repr__(self):
-# return f'[PostProc: {str(self)}]'
 
 
 def main():

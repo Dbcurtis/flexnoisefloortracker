@@ -8,7 +8,7 @@ import unittest
 import jsonpickle
 import datetime
 import context
-from smeter import SMeter
+from smeter import SMeter, SMArgkeys
 from flex import Flex
 #import smeteravg
 from smeteravg import SMeterAvg
@@ -21,34 +21,6 @@ class Testsmeteravg(unittest.TestCase):
     """Testsmeteravg
 
     """
-
-    # def setUp(self):
-    #_ui = UserInput()
-    # _ui.request('com4')
-    #self.flex = Flex(_ui)
-    # self.flex.open()
-    # self.flex.do_cmd_list(postproc.INITIALZE_FLEX)
-
-    # def tearDown(self):
-    # self.flex.close()
-
-    # @classmethod
-    # def setUpClass(cls):
-    #_ui = UserInput()
-    # _ui.request('com4')
-    #flex = Flex(_ui)
-    # flex.open()
-    #cls.initial_state = flex.save_current_state()
-    # flex.close()
-
-    # @classmethod
-    # def tearDownClass(cls):
-    #_ui = UserInput()
-    # _ui.request('com4')
-    #flex = Flex(_ui)
-    # flex.open()
-    # flex.restore_state(cls.initial_state)
-    # flex.close()
 
     def test00_functions(self):
         """test00_functions()
@@ -91,7 +63,8 @@ class Testsmeteravg(unittest.TestCase):
 
         """
         import smeteravg
-        sml = [SMeter(('ZZSM098;', 14_100_000 + i * 10000)) for i in range(3)]
+        sml = [SMeter(SMArgkeys('ZZSM098;', 14_100_000 + i * 10000))
+               for i in range(3)]
         datemarker = datetime.datetime.now().strftime('%Y-%m-%d')
         sma = SMeterAvg(sml, 20)
 
@@ -155,7 +128,8 @@ class Testsmeteravg(unittest.TestCase):
         """test02_variances()
 
         """
-        sml = [SMeter((f'ZZSM{98+i*2:03};', 14_100_000 + i * 10000)) for i in range(6)]
+        sml = [SMeter(
+            SMArgkeys(f'ZZSM{98+i*2:03};', 14_100_000 + i * 10000)) for i in range(6)]
         sma = SMeterAvg(sml, 20)
         self.assertEqual(-88.5, sma.dBm.get('adBm'))
         self.assertEqual(-88.5, sma.dBm.get('mdBm'))
@@ -171,7 +145,8 @@ class Testsmeteravg(unittest.TestCase):
         """ttest03_get_sql
 
         """
-        sml = [SMeter((f'ZZSM{98+i*2:03};', 14_100_000 + i * 10000)) for i in range(6)]
+        sml = [SMeter(
+            SMArgkeys(f'ZZSM{98+i*2:03};', 14_100_000 + i * 10000)) for i in range(6)]
         sma = SMeterAvg(sml, 20)
         self.assertEqual(-88.5, sma.dBm.get('adBm'))
         self.assertEqual(-88.5, sma.dBm.get('mdBm'))
