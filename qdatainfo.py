@@ -2,9 +2,7 @@
 
 """defines classes of objects that are sent over the Queues"""
 
-#import sys
 import os
-#import concurrent.futures
 from typing import Any, List
 #from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set
 
@@ -13,29 +11,14 @@ from typing import Any, List
 
 import logging
 import logging.handlers
-#import multiprocessing as mp
 
-#from trackermain import CTX, QUEUES
+
 from datetime import datetime as DateTime
-#from collections import deque
-
-#from deck import Deck
-
-#import threading
-#import userinput
-#import flex
-#from flex import Flex
-#from noisefloor import Noisefloor
-
 
 LOGGER = logging.getLogger(__name__)
 
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/qdatainfo'
-
-
-# class NFQ():
-# pass
 
 
 class Qdatainfo:
