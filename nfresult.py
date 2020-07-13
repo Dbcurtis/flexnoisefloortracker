@@ -4,7 +4,8 @@
 
 import sys
 import os
-from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict
+#from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict
+from typing import List
 import logging
 import logging.handlers
 #import datetime

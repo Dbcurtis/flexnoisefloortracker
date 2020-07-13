@@ -7,12 +7,15 @@ import logging
 import logging.handlers
 # from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque
 from typing import List, Sequence, Mapping, Tuple, Dict, Any
-#from smeter import SMeter, SMArgkeys
+from smeter import SMeter, SMArgkeys
+from collections import namedtuple
 
 LOGGER = logging.getLogger(__name__)
 
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/postproc'
+
+CMDListEnt = namedtuple('CMDListEnt', ['cmd', 'fn'])
 
 _MODE: Dict[str, str] = {
     '00': 'LSB',
@@ -92,8 +95,7 @@ def zzifpost(resulttup):
 def smeter(arg):  # (arg, freq):
     """smeter()
     """
-    from smeter import SMeter, SMArgkeys
-    return SMeter(SMArgkeys(arg))
+    return SMeter(SMArgkeys(arg[0], arg[1]))
 
 
 """ INITIALZE_FLEX
@@ -152,37 +154,38 @@ _BAND_DATA: Dict[str, Tuple[Any, ...]] = {'80': (3_500_000, 4_000_000,),
 # restore freq, mode, dsp agc wnb
 # }
 GET_SMETER_PROTO: List[Tuple[Any, Any]] = [
-    ('wait0.25', None, ),
-    ('ZZSM;', smeter, ),
+    CMDListEnt('wait0.25', None, ),
+    CMDListEnt('ZZSM;', smeter, ),
 ]
+
 
 GET_DATA: List[Tuple[Any, ...]] = [
     # GET_DATA
     # list of tuples that include commands to the radio and handling processing of the return.
     # Also the wait provide delays between commands in decimal seconds
-    ('wait0.5', None, ),
-    ('ZZSM;', smeter, ),
-    ('wait0.25', None, ),
-    ('ZZSM;', smeter, ),
-    ('wait0.25', None, ),
-    ('ZZSM;', smeter, ),
-    ('wait0.25', None, ),
-    ('ZZSM;', smeter, ),
+    CMDListEnt('wait0.5', None, ),
+    CMDListEnt('ZZSM;', smeter, ),
+    CMDListEnt('wait0.25', None, ),
+    CMDListEnt('ZZSM;', smeter, ),
+    CMDListEnt('wait0.25', None, ),
+    CMDListEnt('ZZSM;', smeter, ),
+    CMDListEnt('wait0.25', None, ),
+    CMDListEnt('ZZSM;', smeter, ),
 
 ]
 
 GET_FAST_DATA: List[Tuple[Any, ...]] = [
-    # GET_DATA
+    # GET_FAST_DATA
     # list of tuples that include commands to the radio and handling processing of the return.
     # Also the wait provide delays between commands in decimal seconds
-    ('wait0.125', None, ),
-    ('ZZSM;', smeter, ),
-    ('wait0.05', None, ),
-    ('ZZSM;', smeter, ),
-    ('wait0.05', None, ),
-    ('ZZSM;', smeter, ),
-    ('wait0.05', None, ),
-    ('ZZSM;', smeter, ),
+    CMDListEnt('wait0.125', None, ),
+    CMDListEnt('ZZSM;', smeter, ),
+    CMDListEnt('wait0.05', None, ),
+    CMDListEnt('ZZSM;', smeter, ),
+    CMDListEnt('wait0.05', None, ),
+    CMDListEnt('ZZSM;', smeter, ),
+    CMDListEnt('wait0.05', None, ),
+    CMDListEnt('ZZSM;', smeter, ),
 
 ]
 

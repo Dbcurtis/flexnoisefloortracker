@@ -12,8 +12,12 @@ from typing import Any, List
 import logging
 import logging.handlers
 
-
+import datetime
 from datetime import datetime as DateTime
+from datetime import timezone
+import time
+
+#from datetime import datetime as DateTime
 
 LOGGER = logging.getLogger(__name__)
 
@@ -21,15 +25,52 @@ LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/qdatainfo'
 
 
-class Qdatainfo:
-    def __init__(self, content: Any):
-        self.content: Any = content
-        self.utctime: DateTime = DateTime.now()
+class ComparableMixin(object):
+    def _compare(self, other, method):
+        try:
+            return method(self._cmpkey(), other._cmpkey())
+        except (AttributeError, TypeError):
+            # _cmpkey not implemented, or return different type,
+            # so I can't compare with "other".
+            return NotImplemented
 
-        pass
+    def __lt__(self, other):
+        return self._compare(other, lambda s, o: s < o)
+
+    def __le__(self, other):
+        return self._compare(other, lambda s, o: s <= o)
+
+    def __eq__(self, other):
+        return self._compare(other, lambda s, o: s == o)
+
+    def __ge__(self, other):
+        return self._compare(other, lambda s, o: s >= o)
+
+    def __gt__(self, other):
+        return self._compare(other, lambda s, o: s > o)
+
+    def __ne__(self, other):
+        return self._compare(other, lambda s, o: s != o)
+
+
+class Qdatainfo(ComparableMixin):
+    def __init__(self, content: Any, dtfmt='%Y/%m/%d %H%M:%S %z', **kwargs):
+        self.content: Any = content
+        self.utctime: DateTime = DateTime.now(
+            timezone.utc)
+        try:
+            dtime: str = kwargs['time'] + ' +0000'
+            aa: DateTime = DateTime.strptime(dtime, dtfmt)
+            self.utctime = aa
+        except KeyError:
+            pass
+        except:
+            raise
+        self.localtime: DateTime = self.utctime.astimezone()
+        self.tstamp: float = self.utctime.timestamp()
 
     def __str__(self):
-        return f"t: { self.utctime.ctime()}, c: {str(self.content)}"
+        return f"t: { self.localtime.ctime()}, c: {str(self.content)}"
 
     def __repr__(self):
         return f'Qdatainfo: {str(self)}'
@@ -37,15 +78,19 @@ class Qdatainfo:
     def get(self) -> Any:
         return self.content
 
+    def __hash__(self):
+        return self.tstamp
 
-"""The data queues are:
+    def _cmpkey(self):
+        return self.tstamp
 
-    'dataQ': CTX.JoinableQueue(maxsize=100),
+# The data queues are:
+
+    # QK.dA or 'dataQ': CTX.JoinableQueue(maxsize=100),
     # database commands generateed (usually) ty the aggrator thread
-    'dbQ': CTX.JoinableQueue(maxsize=100),
+    # QK.dbQ or 'dbQ': CTX.JoinableQueue(maxsize=100),
     # written to by the aggrator thread, read by the data processor which generates sql commands to dbq
-    'dpQ': CTX.JoinableQueue(maxsize=100)
-"""
+    # QK.dpQ or 'dpQ': CTX.JoinableQueue(maxsize=100)
 
 
 class DataQ(Qdatainfo):

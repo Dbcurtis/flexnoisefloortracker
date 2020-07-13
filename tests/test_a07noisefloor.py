@@ -401,8 +401,11 @@ class Testnoisefloor(unittest.TestCase):
         self.assertEqual(1, QUEUES[QK.dQ].qsize())
         nfqdta: NFQ = QUEUES[QK.dQ].get_nowait()
         nfr: NFResult = nfqdta.get()
-        self.assertTrue(nfr._started and nfr._ended)
-        self.assertEqual(4, len(nfr.readings))  # got all 4 bands
+        if (nfr is None):
+            print('nfr is none')
+        else:
+            self.assertTrue(nfr._started and nfr._ended)
+            self.assertEqual(4, len(nfr.readings))  # got all 4 bands
 
         bollst: Tuple[bool, ...] = ENABLES(
             w=False, n=True, t=False, da=False, db=False)

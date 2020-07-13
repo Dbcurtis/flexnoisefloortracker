@@ -8,7 +8,7 @@ import unittest
 import context
 import postproc
 from postproc import BandPrams
-from postproc import _BAND_DATA, BANDS, enable_bands
+from postproc import _BAND_DATA, BANDS, enable_bands, _MODE
 
 
 class Testpostproc(unittest.TestCase):
@@ -26,7 +26,34 @@ class Testpostproc(unittest.TestCase):
     def tearDownClass(cls):
         pass
 
-    def test_001instat(self):
+    def test_A001_constants(self):
+        self.assertEqual(14, len(_MODE))
+        self.assertEquals('LSB', postproc.zzmdpost('00'))
+        self.assertEquals('??', postproc.zzmdpost('xxx'))
+        self.assertEquals('??', postproc.zzmdpost(None))
+        a = 0
+
+    def test_A002_zzifpost(self):
+        arg = ('ZZIF000141500000001+00000000000070000000;',
+               '000141500000001+00000000000070000000;')
+        result = postproc.zzifpost(arg)
+        exp = "{'cmd': 'ZZIF', 'freq': '00014150000', 'stepsize': '0001', 'ritF': '+00000', 'rits': '0', 'xits': '0', 'mox': '0', 'mode': 'DIGU'}"
+        self.assertEqual(exp, str(result))
+
+    def test_A003_getdata(self):
+        dta = postproc.GET_DATA
+        dta0 = dta[0]
+        self.assertEqual('wait0.5', dta0.cmd)
+        self.assertTrue(dta0.fn is None)
+
+        dta1 = dta[1]
+        self.assertEqual('ZZSM;', dta1.cmd)
+        self.assertEqual('smeter', dta1.fn.__name__)
+
+    def test_A004_getdata(self):
+        pass
+
+    def test_B001instat_bandParms(self):
 
         bdl = list(_BAND_DATA.items())
         it1 = bdl[0]

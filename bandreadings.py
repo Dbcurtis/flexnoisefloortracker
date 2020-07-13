@@ -9,7 +9,7 @@ import logging.handlers
 from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict
 from statistics import mean
 import jsonpickle
-from postproc import BANDS, BandPrams, GET_SMETER_PROTO
+from postproc import BANDS, BandPrams, GET_SMETER_PROTO, CMDListEnt
 from flex import Flex
 from smeteravg import factory, SMeterAvg
 from userinput import UserInput
@@ -131,7 +131,8 @@ class Bandreadings:
                 retval: str = self.flexradio.do_cmd(cmd)
                 if retval == '?;':
                     print(f'cmd: {cmd}, ret: {retval}')
-                    raise Exception(f'illegal return {retval} for cmd: {cmd}')
+                    raise Exception(
+                        f'illegal return {retval} for cmd: {cmd}')
                 freq = int(retval[4:-1])
                 # freq = int(self.flexradio.do_cmd(
                 # self.makefreqcmd(freqn))[4:-1])
@@ -224,46 +225,50 @@ class Bandreadings:
 
         if testing is None:
             # for _freq in self.freqt:
-                #acmd = None
-                #ares = None
-                # trimedr: str = None
-                # try:
-                    # cmd: str = self.makefreqcmd(_freq)
-                    #acmd = cmd
-                    # result: str = ''
-                    # for _ in range(5):
-                        #result = self.flexradio.do_cmd(cmd)
-                        #ares = result
-                        # if 'ZZFA' in result:
-                            # break
-                        # time.sleep(0.5)
+            #acmd = None
+            #ares = None
+            # trimedr: str = None
+            # try:
+            # cmd: str = self.makefreqcmd(_freq)
+            #acmd = cmd
+            # result: str = ''
+            # for _ in range(5):
+            #result = self.flexradio.do_cmd(cmd)
+            #ares = result
+            # if 'ZZFA' in result:
+            # break
+            # time.sleep(0.5)
 
-                    # print(result)
-                    #trimedr = result[4:-1]
-                    #freq = int(trimedr)
-                    ##freq = int(self.flexradio.do_cmd(cmd)[4:-1])
-                    # band_sig_str_lst = self.flexradio.get_cat_data(
-                        # postproc.GET_DATA, freq)
-                    # self.readings.get(freq).extend(band_sig_str_lst)
-                # except ValueError as ve:
-                    # print(f'cmd: {acmd}, res: {ares},  trimedr: {trimedr}{ve}')
-                    #raise ve
+            # print(result)
+            #trimedr = result[4:-1]
+            #freq = int(trimedr)
+            ##freq = int(self.flexradio.do_cmd(cmd)[4:-1])
+            # band_sig_str_lst = self.flexradio.get_cat_data(
+            # postproc.GET_DATA, freq)
+            # self.readings.get(freq).extend(band_sig_str_lst)
+            # except ValueError as ve:
+            # print(f'cmd: {acmd}, res: {ares},  trimedr: {trimedr}{ve}')
+            #raise ve
 
             myband: BandPrams = BANDS[self.bandid]
             proto: List[Tuple[Any, Any]] = GET_SMETER_PROTO[:]
             cmdlst: List[Tuple[Any, Any]] = []
             cmd: str = None
             for cmd in myband.get_freq_cmds():
-                cmdlst.extend([(cmd, None)])
+                cmdlst.extend([CMDListEnt(cmd, None)])
                 cmdlst.extend(proto)
 
             cmdresult: List[Any] = self.flexradio.get_cat_dataA(cmdlst)
-            sm_readings: List[SMeter] = [_ for _ in cmdresult if isinstance(_, SMeter)]
+            sm_readings: List[SMeter] = [
+                _ for _ in cmdresult if isinstance(_, SMeter)]
             sm_readings.sort()
-            cmdresultB: List[Any] = [_ for _ in cmdresult if not isinstance(_, SMeter)]
+            cmdresultB: List[Any] = [
+                _ for _ in cmdresult if not isinstance(_, SMeter)]
 
-            maplist: List[Mapping[str, float]] = [list(_.signal_st.items()) for _ in sm_readings]
-            keyset: Set[str] = set([list(sm.signal_st.items())[0][1] for sm in sm_readings])
+            maplist: List[Mapping[str, float]] = [
+                list(_.signal_st.items()) for _ in sm_readings]
+            keyset: Set[str] = set(
+                [list(sm.signal_st.items())[0][1] for sm in sm_readings])
 
             noisedic: Dict[str, List[SMeter]] = {}
             for k in keyset:
@@ -273,7 +278,8 @@ class Bandreadings:
                 noisedic[ls[0][1]].append(ls[1][1])
 
             key = sorted(list(noisedic.keys()))[0]
-            low_noise_readings: List[SMeter] = [sm for sm in sm_readings if sm.signal_st['sl'] == key]
+            low_noise_readings: List[SMeter] = [
+                sm for sm in sm_readings if sm.signal_st['sl'] == key]
             self.band_signal_strength: SMeterAvg = SMeterAvg(
                 low_noise_readings, myband.bandid)
 
@@ -301,15 +307,15 @@ class Bandreadings:
         #bss = _s.band_signal_strength
         # json_of_self = f'{jsonpickle.encode(self)}\n'
         # sql = 'INSERT INTO BANDREADINGS ( \
-#recid, \
-#band, \
-#dbm, \
-#sval, \
-#var, \
-#stddf, \
-#timedone, \
+# recid, \
+# band, \
+# dbm, \
+# sval, \
+# var, \
+# stddf, \
+# timedone, \
 # json) Values' \
-        #' ({},{},{},\'{}\',{},{},\'{}\',\'{}\');' \
+        # ' ({},{},{},\'{}\',{},{},\'{}\',\'{}\');' \
         # .format(recid,
         # _s.bandid,
         # bss.dBm.get('mdBm'),

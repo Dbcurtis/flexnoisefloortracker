@@ -26,7 +26,8 @@ _DEFALT_Q_SIZE: int = 100
 Queuekeys = namedtuple('Queuekeys', ['dQ', 'dpQ', 'dbQ'])
 QUEUE_KEYS = Queuekeys('dataQ', 'dpQ', 'dbQ')
 
-QUEUES: Dict[QUEUE_KEYS, CTX.JoinableQueue] = {
+
+QUEUES: Dict[str, CTX.JoinableQueue] = {
     # from data acquisition threads, received by the aggragator thread
     QUEUE_KEYS.dQ: CTX.JoinableQueue(maxsize=_DEFALT_Q_SIZE),
     # written to by the aggrator thread, read by the data processor which generates sql commands to dbq
@@ -42,7 +43,7 @@ STOP_EVENT_KEYS = Stopeventkeys(
     'dataagragator',
     'dbwriter')
 
-STOP_EVENTS: Dict[STOP_EVENT_KEYS, mp.Event] = {
+STOP_EVENTS: Dict[str, mp.Event] = {
     STOP_EVENT_KEYS.ad: CTX.Event(),
     STOP_EVENT_KEYS.t: CTX.Event(),
     STOP_EVENT_KEYS.da: CTX.Event(),

@@ -82,6 +82,24 @@ class Testqdatainfo(unittest.TestCase):
             "c: [{'a': 'alpha', 'b': 'beta'}, (1, 2, 3), [1.2, 3.4, 5]]" in aa)
         self.assertTrue('Qdatainfo: t:' in aa)
 
+        qdi = Qdatainfo([{'a': 'alpha', 'b': 'beta'},
+                         (1, 2, 3), [1.2, 3.4, 5]], time='2020/01/30 1301:31')
+        self.assertEqual('2020-01-30 13:01:31+00:00', str(qdi.utctime))
+        self.assertEqual('2020-01-30 05:01:31-08:00', str(qdi.localtime))
+        self.assertEqual('1580389291.0', str(qdi.tstamp))
+
+        qdiE = Qdatainfo([{'a': 'alpha', 'b': 'beta'},
+                          (1, 2, 3), [1.2, 3.4, 5]], time='1980/01/30 1301:31')
+
+        qdiL = Qdatainfo([{'a': 'alpha', 'b': 'beta'},
+                          (1, 2, 3), [1.2, 3.4, 5]], time='2060/01/30 1301:31')
+
+        qdilst: List[Qdatainfo] = [qdi, qdiL, qdiE]
+        self.assertFalse(qdilst[0] < qdilst[1] < qdilst[2])
+        qdilsts: List[Qdatainfo] = sorted(qdilst)
+        self.assertTrue(qdilsts[0] < qdilsts[1] < qdilsts[2])
+        a = 0
+
     def test_02_inst_DataQ(self):
         from qdatainfo import DataQ, Qdatainfo
         qdi: DataQ = None

@@ -27,12 +27,11 @@ from statistics import fmean
 import context
 import qdatainfo
 from trackermain import SepDataTup
+
+from queuesandevents import QUEUES, CTX, STOP_EVENTS,RESET_STOP_EVENTS, ARG_KEYS
 from queuesandevents import RESET_QS as reset_queues
-from queuesandevents import RESET_STOP_EVENTS
-from queuesandevents import QUEUES, CTX, STOP_EVENTS
 from queuesandevents import QUEUE_KEYS as QK
 from queuesandevents import Enables as ENABLES
-from queuesandevents import ARG_KEYS
 from queuesandevents import POSSIBLE_F_TKEYS as FK
 from queuesandevents import STOP_EVENT_KEYS as SEK
 import trackermain
@@ -174,42 +173,42 @@ def _avragedict(timeddic) -> Dict[str, float]:
     return returnresult
 
 
-def startThreads(tpex, bollst, barrier, stopevents, queues):
-    """startThreads(tpex, bollst, barrier, stopevents, queues)
+#def startThreads(tpex, bollst, barrier, stopevents, queues):
+    #"""startThreads(tpex, bollst, barrier, stopevents, queues)
 
-     starts the weather, noise, transfer, dataagragator, and dbwriter threads responsive to the bollst boolena array
+     #starts the weather, noise, transfer, dataagragator, and dbwriter threads responsive to the bollst boolena array
 
-     tpex is the executor
-     bollst is the boolean list specifying which threads to start
-     barrier is the barrier to wait on for all the selected threads to start on
-     stopevents is the dict of stop events specifying which event the thread is to stop resonive to.
-     queues is the dict of queues.
+     #tpex is the executor
+     #bollst is the boolean list specifying which threads to start
+     #barrier is the barrier to wait on for all the selected threads to start on
+     #stopevents is the dict of stop events specifying which event the thread is to stop resonive to.
+     #queues is the dict of queues.
 
-     deprecated I think
-    """
+     #deprecated I think
+    #"""
 
-    threadinfo = {
-        'weather': (bollst.w, barrier, stopevents['acquireData'], queues,),
-        'noise': (bollst.n, barrier, stopevents['acquireData'], queues,),
-        'transfer': (bollst.t, barrier, stopevents['trans'], queues,),
-        'dataagragator': (bollst.da, barrier, stopevents['agra'], queues,),
-        'dbwriter': (bollst.db, barrier, stopevents['dbwrite'], queues,),
-    }
+    #threadinfo = {
+        #'weather': (bollst.w, barrier, stopevents['acquireData'], queues,),
+        #'noise': (bollst.n, barrier, stopevents['acquireData'], queues,),
+        #'transfer': (bollst.t, barrier, stopevents['trans'], queues,),
+        #'dataagragator': (bollst.da, barrier, stopevents['agra'], queues,),
+        #'dbwriter': (bollst.db, barrier, stopevents['dbwrite'], queues,),
+    #}
 
-    futures = {
-        # gets weather data
-        'weather': tpex.submit(trackermain.timed_work, threadinfo['weather'], 5, Get_LW),
-        # gets banddata data
-        'noise': tpex.submit(trackermain.timed_work, threadinfo['noise'], 5, Get_NF),
-        # reads the dataQ and sends to the data processing queue dpq
-        'transfer': tpex.submit(trackermain.dataQ_reader, threadinfo['transfer']),
-        # looks at the data and generates the approprate sql to send to dbwriter
-        'dataagragator': tpex.submit(trackermain.dataaggrator, threadinfo['dataagragator'], debugfn=aggrfn),
-        # reads the database Q and writes it to the database
-        'dbwriter': tpex.submit(trackermain.dbQ_writer, threadinfo['dbwriter'], debugfn=dbconsum)
+    #futures = {
+        ## gets weather data
+        #'weather': tpex.submit(trackermain.timed_work, threadinfo['weather'], 5, Get_LW),
+        ## gets banddata data
+        #'noise': tpex.submit(trackermain.timed_work, threadinfo['noise'], 5, Get_NF),
+        ## reads the dataQ and sends to the data processing queue dpq
+        #'transfer': tpex.submit(trackermain.dataQ_reader, threadinfo['transfer']),
+        ## looks at the data and generates the approprate sql to send to dbwriter
+        #'dataagragator': tpex.submit(trackermain.dataaggrator, threadinfo['dataagragator'], debugfn=aggrfn),
+        ## reads the database Q and writes it to the database
+        #'dbwriter': tpex.submit(trackermain.dbQ_writer, threadinfo['dbwriter'], debugfn=dbconsum)
 
-    }
-    return futures
+    #}
+    #return futures
 
 
 def dbconsum(thread_info):
@@ -1138,9 +1137,9 @@ class TestTrackermain(unittest.TestCase):
 
             _ = tpex.submit(trackermain._breakwait, barrier)
 
-            rt = int(runtime/2)
+            rt = int(runtime/4)
             for _ in range(rt):
-                Sleep(2)
+                Sleep(4)
 
             shutdown_result = trackermain.shutdown(
                 futures, QUEUES, STOP_EVENTS)
@@ -1150,7 +1149,7 @@ class TestTrackermain(unittest.TestCase):
         deck.q2deck(TESTQ, True)
         decklst = deck.deck2lst()
         sepstup:SepDataTup = trackermain.seperate_data(decklst)
-        self.assertEqual(4,len(sepstup.str))
+        self.assertEqual(4,len(sepstup.strr))
         self.assertTrue(6<=len(sepstup.nfq)<=8)
         self.assertTrue(10<=len(sepstup.lwq)<=12)
         self.assertFalse(sepstup.other)
@@ -1997,7 +1996,7 @@ class TestTrackermain(unittest.TestCase):
                 a = 0
 
         sepstup:SepDataTup = trackermain.seperate_data(decklst)
-        textlst=sepstup.str
+        textlst=sepstup.strr
         self.assertEqual(4,len(textlst))
         nfqlst=sepstup.nfq
         self.assertEqual(7,len(nfqlst))

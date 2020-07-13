@@ -10,7 +10,7 @@ import logging
 import logging.handlers
 from time import sleep as Sleep
 from userinput import UserInput
-from smeter import SMeter
+from smeter import SMeter, SMArgkeys
 
 
 LOGGER = logging.getLogger(__name__)
@@ -230,25 +230,25 @@ class Flex:
         results: List[SMeter] = []
         freq = None
 
-        for cmd in cmd_list:
+        for cmdt in cmd_list:
             result = None
-            c: str = cmd[0][0:4]
+            c: str = cmdt.cmd[0:4]
             if c == 'wait':
-                delay = float(cmd[0][4:])
+                delay = float(cmdt.cmd[4:])
                 Sleep(delay)
                 continue
 
             if c not in FLEX_CAT_ALL:
                 raise ValueError('illegal flex command')
 
-            result = self._ui.serial_port.docmd(cmd[0])
+            result = self._ui.serial_port.docmd(cmdt.cmd)
             if c == 'ZZFA':
                 while not result.startswith('ZZFA'):
-                    result = self._ui.serial_port.docmd(cmd[0])
-                _ = cmd[0][4:-1]  # get ascii rep of the frequency
+                    result = self._ui.serial_port.docmd(cmdt.cmd)
+                _ = cmdt.cmd[4:-1]  # get ascii rep of the frequency
                 freq = int(_)
 
-            if cmd[1]:  # process the result if provided
+            if cmdt.fn:  # process the result if provided
                 _ = result.split(';')
                 vals = None
                 if len(_) > 2:
@@ -262,7 +262,7 @@ class Flex:
                     result = f'ZZSM{avg :03d};'  # .format(avg)
 
                 # process the results by code in cmd[1]
-                result = cmd[1]((result, freq))
+                result = cmdt.fn((result, freq))
             results.append(result)
 
         return results
@@ -277,18 +277,18 @@ class Flex:
 
         """
         results: List[str] = []
-        cmd: str = None
-        for cmd in cmd_list:
-            if cmd[0][0:4] == 'wait':
-                delay = float(cmd[0][4:])
+        cmdt: str = None
+        for cmdt in cmd_list:
+            if cmdt.cmd[0:4] == 'wait':
+                delay = float(cmdt.cmd[4:])
                 Sleep(delay)
                 continue
 
-            if cmd[0][0:4] not in FLEX_CAT_ALL:
+            if cmdt.cmd[0:4] not in FLEX_CAT_ALL:
                 raise ValueError('illegal flex command')
 
-            result: str = self._ui.serial_port.docmd(cmd[0])
-            if cmd[1]:  # process the result if routine is provided
+            result: str = self._ui.serial_port.docmd(cmdt.cmd)
+            if cmdt.fn:  # process the result if routine is provided
                 _ = result.split(';')
                 vals = None
                 if len(_) > 2:
@@ -299,7 +299,7 @@ class Flex:
                     result = f'ZZSM{avg :03d};'  # .format(avg)
 
                 # process the results by code in cmd[1]
-                result = cmd[1]((result, freq))
+                result = cmdt.fn((result, freq))
             results.append(result)
 
         return results

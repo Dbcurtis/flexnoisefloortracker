@@ -7,7 +7,7 @@ import time
 import unittest
 from typing import List, Sequence, Dict, Mapping, Set
 import context
-from postproc import BANDS, BandPrams, GET_SMETER_PROTO
+from postproc import BANDS, BandPrams, GET_SMETER_PROTO, CMDListEnt
 from userinput import UserInput
 from flex import Flex
 from smeter import SMeter
@@ -27,13 +27,13 @@ class Testflex(unittest.TestCase):
 
     # """
 
-    #_ui = UserInput()
+    # _ui = UserInput()
     # _ui.request('com4')
-    #self.flex = Flex(_ui)
+    # self.flex = Flex(_ui)
     # self.flex.open()
     # self.initialize_flex()
     # self.flex.do_cmd_list(postproc.INITIALZE_FLEX)
-    #results = self.flex.do_cmd_list(postproc.INITIALZE_FLEX)
+    # results = self.flex.do_cmd_list(postproc.INITIALZE_FLEX)
     # return results
 
     def setUp(self):
@@ -145,8 +145,8 @@ class Testflex(unittest.TestCase):
         """testget_cat_data()
         """
         gdata1 = [
-            ('wait0.5', None, ),
-            ('ZZIF;', postproc.zzifpost, ),
+            CMDListEnt('wait0.5', None, ),
+            CMDListEnt('ZZIF;', postproc.zzifpost, ),
         ]
 
         stime = time.perf_counter()
@@ -156,7 +156,8 @@ class Testflex(unittest.TestCase):
         self.assertAlmostEqual(0.00, dtime, delta=0.001)
 
         stime = time.perf_counter()
-        results = self.flex.get_cat_data([('wait0.5', None, ), ], 14_000_000)
+        results = self.flex.get_cat_data(
+            [CMDListEnt('wait0.5', None, )], 14_000_000)
         etime = time.perf_counter()
         dtime = etime - stime
         self.assertAlmostEqual(0.50, dtime, delta=0.1)
@@ -181,25 +182,29 @@ class Testflex(unittest.TestCase):
             a = 0
             b = 0
 
-    def test11_get_cat_dataA(self):
+    def test000011_get_cat_dataA(self):
         myband: BandPrams = BANDS['20']
 
         proto: List[Tuple[Any, Any]] = GET_SMETER_PROTO[:]
         cmdlst: List[Tuple[Any, Any]] = []
-        for cmd in myband.get_freq_cmds():
-            cmdlst.extend([(cmd, None)])
+        for cmdt in myband.get_freq_cmds():
+            cmdlst.extend([CMDListEnt(cmdt, None)])
             cmdlst.extend(proto)
 
         cmdresult: List[Any] = self.flex.get_cat_dataA(cmdlst)
-        sm_readings: List[SMeter] = [_ for _ in cmdresult if isinstance(_, SMeter)]
+        sm_readings: List[SMeter] = [
+            _ for _ in cmdresult if isinstance(_, SMeter)]
         sm_readings.sort()
 
-        cmdresultB: List[Any] = [_ for _ in cmdresult if not isinstance(_, SMeter)]
+        cmdresultB: List[Any] = [
+            _ for _ in cmdresult if not isinstance(_, SMeter)]
         cmdrestup = tuple(cmdresultB)
         self.assertEqual(myband.get_freq_cmds(), cmdrestup)
 
-        maplist: List[Mapping[str, float]] = [list(_.signal_st.items()) for _ in sm_readings]
-        keyset: Set[str] = set([list(sm.signal_st.items())[0][1] for sm in sm_readings])
+        maplist: List[Mapping[str, float]] = [
+            list(_.signal_st.items()) for _ in sm_readings]
+        keyset: Set[str] = set(
+            [list(sm.signal_st.items())[0][1] for sm in sm_readings])
 
         noisedic: Dict[str, List[SMeter]] = {}
         for k in keyset:
@@ -209,7 +214,8 @@ class Testflex(unittest.TestCase):
             noisedic[ls[0][1]].append(ls[1][1])
 
         key = sorted(list(noisedic.keys()))[0]
-        dkdk: List[SMeter] = [sm for sm in sm_readings if sm.signal_st['sl'] == key]
+        dkdk: List[SMeter] = [
+            sm for sm in sm_readings if sm.signal_st['sl'] == key]
 
         sma: SMeterAvg = SMeterAvg(dkdk, myband.bandid)
         a = 0

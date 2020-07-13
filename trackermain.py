@@ -11,7 +11,8 @@ from typing import Any, Tuple, List, Dict, Set, Callable
 
 from queue import Empty as QEmpty, Full as QFull
 import concurrent.futures
-from concurrent.futures import ALL_COMPLETED #, FIRST_EXCEPTION, FIRST_COMPLETED
+# , FIRST_EXCEPTION, FIRST_COMPLETED
+from concurrent.futures import ALL_COMPLETED
 # import multiprocessing as mp
 
 import logging
@@ -60,7 +61,7 @@ TL = TML
 Threadargs = namedtuple('Threadargs', ['execute', 'barrier', 'stope',
                                        'qs', 'name', 'interval', 'doit'])
 
-SepDataTup=namedtuple('SepDataTup',['str','nfq','lwq','other'])
+SepDataTup = namedtuple('SepDataTup', ['strr', 'nfq', 'lwq', 'other'])
 
 
 class Consolidate:
@@ -157,7 +158,7 @@ def _thread_template(arg: Threadargs, printfun=_myprint, **kwargs) -> List[int]:
                     doitresult = TL.ttarg.doit()  # call it get the return
 
                     TL.results.append(doitresult)
-                    #Sleep(TL.ttarg.interval)    # and wait
+                    # Sleep(TL.ttarg.interval)    # and wait
                     TL.ttarg.stope.wait(float(TL.ttarg.interval))
 
         else:
@@ -173,22 +174,23 @@ def _thread_template(arg: Threadargs, printfun=_myprint, **kwargs) -> List[int]:
         printfun(_ss)
         return TL.results
 
-def seperate_data(lst:List[Any]) -> Tuple[List[str],List[qdatainfo.NFQ],List[qdatainfo.LWQ],List[Any]]:
-    textlst:List[str]= []
-    nfqlst:List[qdatainfo.NFQ] =[]
-    lwqlst:List[qdatainfo.LWQ] =[]
-    other:List[Any] = []
+
+def seperate_data(lst: List[Any]) -> Tuple[List[str], List[qdatainfo.NFQ], List[qdatainfo.LWQ], List[Any]]:
+    textlst: List[str] = []
+    nfqlst: List[qdatainfo.NFQ] = []
+    lwqlst: List[qdatainfo.LWQ] = []
+    other: List[Any] = []
     for _ in lst:
-        if isinstance(_,str):
+        if isinstance(_, str):
             textlst.append(_)
-        elif isinstance(_,qdatainfo.NFQ):
+        elif isinstance(_, qdatainfo.NFQ):
             nfqlst.append(_)
-        elif isinstance(_,qdatainfo.LWQ):
+        elif isinstance(_, qdatainfo.LWQ):
             lwqlst.append(_)
         else:
             other.append(_)
-    #SepDataTup=namedtuple('SepDataTup','str','nfq','lwq','other')
-    result = SepDataTup(textlst,nfqlst,lwqlst,other)
+    # SepDataTup=namedtuple('SepDataTup','str','nfq','lwq','other')
+    result = SepDataTup(textlst, nfqlst, lwqlst, other)
     return result
 
 
@@ -373,17 +375,17 @@ def genargs(barrier: CTX.Barrier, bollst: Tuple[bool, ...]) -> Dict[int, Threada
     result[AK.db] = Threadargs(
         bollst.db, barrier, STOP_EVENTS[SEK.db], QUEUES, name='db', interval=None, doit=None)
 
-    #result[AK.w] = twargs
-    #result[AK.n] = nfargs
-    #result[AK.t] = dqrargs
-    #result[AK.da] = daargs
-    #result[AK.db] = dbargs
+    # result[AK.w] = twargs
+    # result[AK.n] = nfargs
+    # result[AK.t] = dqrargs
+    # result[AK.da] = daargs
+    # result[AK.db] = dbargs
 
     return result
 
 
 def Get_LW_dbg(arg: Threadargs, **kwargs):
-    #arg: Threadargs = argin.replace(name='Get_LW_dbg')
+    # arg: Threadargs = argin.replace(name='Get_LW_dbg')
     que = arg.qs[QK.dQ]
     data = f'{arg.name + "_Get_LW_dbg"} th={threading.current_thread().getName()}, t={monotonic()}'
     que.put_nowait(data)
@@ -418,18 +420,18 @@ def Get_LW(arg: Threadargs, **kwargs):
     # >>>>>>>>>>>>>>>>name should be get_nf
 
     # """
-    #from noisefloor import Noisefloor
-    #_ui: UserInput = UserInput()
-    #_noisf = None
+    # from noisefloor import Noisefloor
+    # _ui: UserInput = UserInput()
+    # _noisf = None
     # try:
         # _ui.request(port='com4')
         # _ui.open()
-        #print("Requested Port can be opened")
-        #FLEX = Flex(_ui)
-        #_noisf = Noisefloor(FLEX, rawDataQ_OUT)
+        # print("Requested Port can be opened")
+        # FLEX = Flex(_ui)
+        # _noisf = Noisefloor(FLEX, rawDataQ_OUT)
         # _noisf.open()
         # 10 loops with a 30 second delay between each
-        #_noisf.doit(loops=10, interval=30)
+        # _noisf.doit(loops=10, interval=30)
         # _noisf.close()
 
     # except(Exception, KeyboardInterrupt) as exc:
@@ -443,7 +445,7 @@ def Get_LW(arg: Threadargs, **kwargs):
         # _noisf.close()
         # _ui.close()
         # sys.exit(str(exc))
-    ## _nf = NoiseFloor()
+    # _nf = NoiseFloor()
 
 
 def trim_dups(mydeck, boolfn):
@@ -488,7 +490,7 @@ def get_noise1(arg: Threadargs, **kwargs):
             raise see
 
         finally:
-            #print('restore flex prior state')
+            # print('restore flex prior state')
             flexr.restore_state(initial_state)
 
             if nf:
@@ -511,47 +513,47 @@ def dummy_timed(arg: Threadargs, **kwargs):
     return _thread_template(mma, printfun=myprint, **kwargs)
 
 
-#def get_noise(arg: Threadargs, **kwargs):
-    #"""get_noise(arg,**kwargs)
+# def get_noise(arg: Threadargs, **kwargs):
+    # """get_noise(arg,**kwargs)
 
-    #Threadargs', ['execute', 'barrier', 'stope',
-                                       #'qs', 'name', 'interval', 'doit'])
+    # Threadargs', ['execute', 'barrier', 'stope',
+                                      # 'qs', 'name', 'interval', 'doit'])
 
-    #A thread function to start the data acquisition thread on the flex.
+    # A thread function to start the data acquisition thread on the flex.
 
-    #"""
-    #from flex import Flex
-    #from postproc import BANDS, BandPrams, INITIALZE_FLEX
-    #from noisefloor import Noisefloor
+    # """
+    # from flex import Flex
+    # from postproc import BANDS, BandPrams, INITIALZE_FLEX
+    # from noisefloor import Noisefloor
 
-    #if arg.execute:  # execute:
-        #arg.barrier.wait()
-        #print('get_noise started\n', end="")
-        #UI: UserInput = UserInput()
-        #nf: Noisefloor = None
+    # if arg.execute:  # execute:
+       # arg.barrier.wait()
+       # print('get_noise started\n', end="")
+       # UI: UserInput = UserInput()
+       # nf: Noisefloor = None
 
-        #UI.request(port='com4')
-        #flexr: Flex = Flex(UI)
-        #print('saving flex state')
-        #initial_state = flexr.save_current_state()
-        #try:
-            #if not flexr.open():
-                #raise (RuntimeError('Flex not connected to serial serial port'))
+       # UI.request(port='com4')
+       # flexr: Flex = Flex(UI)
+       # print('saving flex state')
+       # initial_state = flexr.save_current_state()
+       # try:
+           # if not flexr.open():
+               # raise (RuntimeError('Flex not connected to serial serial port'))
 
-            #nf = Noisefloor(flexr, arg.qs[QK.dQ], arg.stope)
-            #nf.open()
-            #nf.doit(loops=0, interval=90, runtime=0, dups=True)
+           # nf = Noisefloor(flexr, arg.qs[QK.dQ], arg.stope)
+           # nf.open()
+           # nf.doit(loops=0, interval=90, runtime=0, dups=True)
 
-        #finally:
-            #print('restore flex prior state')
-            #flexr.restore_state(initial_state)
+       # finally:
+           # print('restore flex prior state')
+           # flexr.restore_state(initial_state)
 
-            #if nf:
-                #nf.close()
-            #UI.close()
+           # if nf:
+               # nf.close()
+           # UI.close()
 
-    #print('get_noise ended\n', end="")
-    #return
+    # print('get_noise ended\n', end="")
+    # return
 
 
 # -----------------------
@@ -758,6 +760,7 @@ def dataQ_reader_dbg(arg: Threadargs, **kwargs) -> List[Tuple[int, int]]:
     mma = arg._replace(doit=doita, name='dataQ_reader_dbg')
     return _thread_template(mma, **kwargs)
 
+
 """
             deck: Deck = Deck(10)
 
@@ -779,12 +782,22 @@ def dataQ_reader_dbg(arg: Threadargs, **kwargs) -> List[Tuple[int, int]]:
 
 def dataQ_reader(arg: Threadargs, **kwargs) -> List[Tuple[int, int]]:
 
-    #Threadargs', ['execute', 'barrier', 'stope',
-                                           #'qs', 'name', 'interval', 'doit'])
+    # Threadargs', ['execute', 'barrier', 'stope',
+                                          # 'qs', 'name', 'interval', 'doit'])
 
     dataQdeck: Deck = Deck(100)
     ndeck: Deck = Deck(50)
     wdeck: Deck = Deck(50)
+
+
+#"""
+#what should this do:
+#delete duplicates if any, but track the timestamps of each dup
+#sort by time stamps,
+
+
+#"""
+
 
     def doita() -> Tuple[int, int]:
         dataQdeck.q2deck(arg.qs[QK.dQ], mark_done=False, wait_sec=1.0)
@@ -793,10 +806,9 @@ def dataQ_reader(arg: Threadargs, **kwargs) -> List[Tuple[int, int]]:
             if repr(a).startswith('xx'):
                 pass
 
-
         return (0, 0)
 
-    #mma = arg._replace(doit=doita, name='dataQ_reader')
+    # mma = arg._replace(doit=doita, name='dataQ_reader')
     return _thread_template(arg._replace(doit=doita, name='dataQ_reader'), **kwargs)
 
 
@@ -818,15 +830,11 @@ def dataQ_readerold(arg: Threadargs, **kwargs):
     arg is named tuple Threadargs
     """
 
-
     mma: Threadargs = None
 
     def doita():
         # (deckin, qin, qout, args, markdone=True, **kwargs) -> Tuple[int, int]:
-
-
         dataQdeck.q2deck()
-
         _qcpy(deck, mma.qs[QK.dQ], mma.qs[QK.dpQ], arg)
         return 0
 
@@ -1160,11 +1168,8 @@ def shutdown(futures: Dict[str, Any], queues, stopevents, time_out=30) -> Tuple[
         FK.da: agra_shutdown,
         FK.db: dbwrite_shutdown
     }
-    for k,fn in shutdowns.items():
+    for k, fn in shutdowns.items():
         futures[k].add_done_callback(fn)
-
-
-
 
 
     alldone: bool = True
@@ -1205,7 +1210,7 @@ def main(hours: float = 0.5):
         w=True, n=True, t=True, da=True, db=True)
     bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
 
-    #barrier: CTX.Barrier = CTX.Barrier(bc)
+    # barrier: CTX.Barrier = CTX.Barrier(bc)
 
     trackerinitialized: float = monotonic()  # returns seconds
     trackerTimeout: float = trackerinitialized + timetup[2]
@@ -1507,8 +1512,8 @@ def datagen1(hours: float = 0.5):
 
     """
     THE_LOGGER.info('datagen1 executed')
-    #queues = QUEUES
-    #timetup: Tuple[float, ...] = (hours, 60 * hours, 3600 * hours,)
+    # queues = QUEUES
+    # timetup: Tuple[float, ...] = (hours, 60 * hours, 3600 * hours,)
     QUEUES[QK.dQ] = CTX.JoinableQueue(maxsize=2000)
     # enable selected threads
 
@@ -1521,9 +1526,9 @@ def datagen1(hours: float = 0.5):
                                           n=get_noise1, t=dummy_timed, da=dummy_timed, db=dummy_timed)
 
     # trackerinitialized: float = monotonic()  # returns seconds
-    #trackerTimeout: float = trackerinitialized + timetup[2]
+    # trackerTimeout: float = trackerinitialized + timetup[2]
 
-    #trackerstarted = None
+    # trackerstarted = None
 
     argdic: Dict[int, Threadargs] = genargs(barrier, bollst)
     # mods for test
@@ -1549,9 +1554,8 @@ def datagen1(hours: float = 0.5):
             for _ in range(60 *5):  # wait for a while to let the threads work
                 Sleep(3)
                 print('.', end='')
-        # STOP_EVENTS[SEK.da].set()  # stop the the data acquisition
         waitresults = shutdown(
-            futures, QUEUES, STOP_EVENTS, time_out=120)  # wait max 60 for the threads to stop
+            futures, QUEUES, STOP_EVENTS, time_out=120)  # wait max 120 for the threads to stop
         aa = 0
 
     deck = Deck(2000)
@@ -1580,7 +1584,7 @@ def datagen1(hours: float = 0.5):
 
         z = zip(aa, bb)
         for a, b in z:
-            zz=0
+            zz = 0
             ag = a.get()
             bg = b.get()
             ag.__eq__(bg)
