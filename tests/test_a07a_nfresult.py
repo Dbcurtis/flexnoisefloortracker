@@ -78,6 +78,8 @@ class Testnoisefloorresult(unittest.TestCase):
         self.assertEqual(6, len(nfqresultlst))
         nfq: NFQ = nfqresultlst[0]
         nfresult: NFResult = nfq.get()
+        nfqnew: NFQ = NFQ(nfresult)
+
         reads: List[NFResult] = nfq.content.readings
         nfr1.start(strftimein='Apr 11 2020 13:51:10')
         nfr1.end(reads, strftimein='Apr 11 2020 13:51:50')
@@ -99,7 +101,7 @@ class Testnoisefloorresult(unittest.TestCase):
         self.assertEqual(sample, nfr2)
         self.assertNotEqual(sample.endtime, nfr2.endtime)
 
-        with open('dadata3hr.pickle', 'rb') as f2:
+        with open('dadata3hour.pickle', 'rb') as f2:
             try:
                 queddata = pickle.load(f2)
             except Exception as ex:

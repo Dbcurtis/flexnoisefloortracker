@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 
-"""gets local weather info from openweathermap.org"""
-# from __future__ import annotations
+"""gets local weather info from openweathermap.org
+   see: https://openweathermap.org/current
+"""
+
 import qdatainfo
 import os
 import sys
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Tuple
 #from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque, Iterable
 from multiprocessing import freeze_support
 import logging
@@ -14,6 +16,8 @@ import requests
 import pickle
 from datetime import datetime as Dtc
 from datetime import timezone
+from collections import namedtuple
+
 from queue import Empty as QEmpty
 import multiprocessing as mp
 from time import sleep as Sleep
@@ -25,48 +29,53 @@ from queuesandevents import QUEUE_KEYS as QK
 
 
 LOGGER = logging.getLogger(__name__)
+logging.getLogger("requests").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 LOG_DIR = os.path.dirname(os.path.abspath(__file__)) + '/logs'
 LOG_FILE = '/localweather'
 
 # stuff needed to access the weather info
-OW_DEFAULTKEY = '&appid=a723524c61b7e34a683dfbc79bd683cd'
-OW_RVMKEY = '&appid=1320944048cabbe1aebe1fbe9c1c7d6c'
+#OW_DEFAULTKEY = '&appid=a723524c61b7e34a683dfbc79bd683cd'
+#OW_RVMKEY = '&appid=1320944048cabbe1aebe1fbe9c1c7d6c'
 OW_First = 'https://api.openweathermap.org/data/2.5/weather'
 PAYLOAD = {'id': str(MI['id']), 'APPID': '1320944048cabbe1aebe1fbe9c1c7d6c'}
 _VALID_UNITS = ['std', 'metric', 'imperial']
 
+TempTuple = namedtuple('TempTuple', ['k', 'c', 'f'])
+SpeedTuple = namedtuple('SpeedTuple', ['mps', 'mph'])
 
-def converttemp(k: Any) -> List[str]:
+
+def converttemp(kin: Any) -> Tuple[str, str, str]:
     """converttemp(k)
     k is degrees in Kelven as int, float or str
 
-    returns List [xK, xC, xF]
+    returns TempTuple [xK, xC, xF]
     """
-    result: List[str] = []
-    k1: float = 0.0
+    result: TempTuple = TempTuple('-K', '-C', '-F')
+    _k1: float = 0.0
     try:
-        k1 = float(k)
+        _k1 = float(kin)
     except ValueError:
         raise ValueError(
             'f(t) is not int, float or text of a float or int number')
 
-    c: float = k1 - 273.15
-    f: float = (c * (9 / 5)) + 32.0
-    result = [f'{k:.2f}K', f'{c:.2f}C', f'{f:.2f}F']
+    _c1: float = _k1 - 273.15
+    _f1: float = (_c1 * (9 / 5)) + 32.0
+    result = TempTuple(f'{_k1:.2f}K', f'{_c1:.2f}C', f'{_f1:.2f}F')
     return result
 
 
-def convertspeed(msin) -> float:
+def convertspeed(msin) -> Tuple[float, float]:
     """convertspeed(msin)
     msin - meters per seconds as int, float or str
 
-    return list (meters per sec, miles per hour)
+    return SpeedTuple (meters per sec, miles per hour)
     """
-    result = []
-    ms: float = float(msin)
-    mh: float = ms * 2.236936
-    result: float = [ms, round(mh, 2)]
+    result = SpeedTuple(-1.1, -1.1)
+    _ms: float = float(msin)
+    _mh: float = _ms * 2.236936
+    result: SpeedTuple = SpeedTuple(_ms, round(_mh, 2))
     return result
 
 
@@ -206,6 +215,7 @@ class LocalWeather(ComparableMixin):
         self.rjson = {}
         self.units = 'std'
         self.netstatus = None
+        self.times = None
 
     # def __eq__(self, other):
         # pass
@@ -468,10 +478,9 @@ def main():
 if __name__ == '__main__':
 
     freeze_support()
-    #from localweather import LocalWeather
-    #import datetime
+
     from datetime import timezone
-    #from time import sleep as Sleep
+
     if not os.path.isdir(LOG_DIR):
         os.mkdir(LOG_DIR)
 
@@ -490,11 +499,17 @@ if __name__ == '__main__':
     LC_HANDLER.setFormatter(LC_FORMATTER)
     LF_HANDLER.setFormatter(LF_FORMATTER)
     THE_LOGGER = logging.getLogger()
-    THE_LOGGER.setLevel(logging.INFO)
+
     THE_LOGGER.addHandler(LF_HANDLER)
     THE_LOGGER.addHandler(LC_HANDLER)
-    THE_LOGGER.info('localweather executed as main')
+
+    # THE_LOGGER.setLevel(logging.CRITICAL)
+    # THE_LOGGER.setLevel(logging.ERROR)
+    # THE_LOGGER.setLevel(logging.WARNING)
+    THE_LOGGER.setLevel(logging.INFO)
     # LOGGER.setLevel(logging.DEBUG)
+    # THE_LOGGER.setLevel(logging.NOTSET)
+    THE_LOGGER.info('localweather executed as main')
 
     try:
         main()

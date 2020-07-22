@@ -19,15 +19,16 @@ from queue import Empty as QEmpty
 import multiprocessing as mp
 
 from nfexceptions import StopEventException
+from deck import Deck
 from queuesandevents import CTX, QUEUES, STOP_EVENTS
 from queuesandevents import QUEUE_KEYS as QK
+from queuesandevents import STOP_EVENT_KEYS as SEK
 from nfresult import NFResult
 from userinput import UserInput
 from bandreadings import Bandreadings
 from flex import Flex
 from postproc import BANDS, BandPrams, INITIALZE_FLEX
 from qdatainfo import NFQ
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -333,7 +334,7 @@ def main(stop_events: Mapping[str, CTX.Event], queues: Mapping[str, CTX.Joinable
         flexr.do_cmd_list(INITIALZE_FLEX)
         flexr.close()
         resultQ = queues.get(QK.dQ)
-        stop_event = stop_events.get('acquireData')
+        stop_event = stop_events.get(SEK.da)
 
         NOISE = Noisefloor(flexr, resultQ, stop_event)
         NOISE.open()
@@ -345,26 +346,37 @@ def main(stop_events: Mapping[str, CTX.Event], queues: Mapping[str, CTX.Joinable
         except StopEventException:
             pass
 
-        indata: List[NFQ] = []
-        try:
+        if NOISE and NOISE.is_open:
+            flexr.restore_state(initial_state)
+            NOISE.close()
 
-            while True:
-                indata.append(resultQ.get(True, 1))
-                resultQ.task_done()
-        except QEmpty:
-            pass  # q is empty
-        except Exception as ex:
-            print(ex)
-            raise ex
+        indata: List[NFQ] = []
+        deck: Deck = Deck(1000)
+        deck.q2deck(resultQ, mark_done=True)
+        indata = deck.deck2lst()
+
+        # try:
+
+        # while True:
+        #indata.append(resultQ.get(True, 1))
+        # resultQ.task_done()
+        # except QEmpty:
+        # pass  # q is empty
+        # except Exception as ex:
+        # print(ex)
+        #raise ex
 
         with open('nfqlistdata.pickle', 'wb') as jso:
             pickle.dump(indata, jso)
+
         unpacked: List[NFResult] = [npq.get() for npq in indata]
         with open('nfrlistdata.pickle', 'wb') as jso:
             pickle.dump(unpacked, jso)
+
         reads: List[SMeterAvg] = []
         for nfr in unpacked:
             reads.extend(nfr.readings)
+
         with open('smavflistdata.pickle', 'wb') as jso:
             pickle.dump(reads, jso)
 
@@ -382,16 +394,17 @@ def main(stop_events: Mapping[str, CTX.Event], queues: Mapping[str, CTX.Joinable
         b = outdata[0]
 
     except(Exception, KeyboardInterrupt) as exc:
-        if NOISE:
+        if NOISE and NOISE.is_open:
+            flexr.restore_state(initial_state)
             NOISE.close()
         UI.close()
         raise exc
 
     finally:
         print('restore flex prior state')
-        flexr.restore_state(initial_state)
 
-        if NOISE:
+        if NOISE and NOISE.is_open:
+            flexr.restore_state(initial_state)
             NOISE.close()
         UI.close()
 
@@ -414,29 +427,17 @@ if __name__ == '__main__':
     LC_HANDLER.setFormatter(LC_FORMATTER)
     LF_HANDLER.setFormatter(LF_FORMATTER)
     THE_LOGGER = logging.getLogger()
+
+    # THE_LOGGER.setLevel(logging.CRITICAL)
+    # THE_LOGGER.setLevel(logging.ERROR)
+    # THE_LOGGER.setLevel(logging.WARNING)
+    # THE_LOGGER.setLevel(logging.INFO)
     THE_LOGGER.setLevel(logging.DEBUG)
+    # THE_LOGGER.setLevel(logging.NOTSET)
+
     THE_LOGGER.addHandler(LF_HANDLER)
     THE_LOGGER.addHandler(LC_HANDLER)
     THE_LOGGER.info('noisefloor executed as main')
-    # LOGGER.setLevel(logging.DEBUG)
-
-   # CTX = mp.get_context('spawn')  # threading context
-
-    # QUEUES = {
-    # from data acquisition threads, received by the aggragator thread
-    # 'dataQ': CTX.JoinableQueue(maxsize=100),
-    # database commands generateed (usually) ty the aggrator thread
-    # 'dbQ': CTX.JoinableQueue(maxsize=100),
-    # written to by the aggrator thread, read by the data processor which generates sql commands to dbq
-    # 'dpQ': CTX.JoinableQueue(maxsize=100)
-    # }
-
-    # STOP_EVENTS = {
-    # 'acquireData': CTX.Event(),
-    # 'trans': CTX.Event(),
-    # 'dbwrite': CTX.Event(),
-    # 'agra': CTX.Event(),
-    # }
 
     try:
         main(STOP_EVENTS, QUEUES)

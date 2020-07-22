@@ -8,7 +8,7 @@ import unittest
 import multiprocessing as mp
 #from multiprocessing import queues
 from time import sleep as Sleep
-import calendar
+#import calendar
 #from collections import deque
 
 #import jsonpickle
@@ -201,18 +201,24 @@ class TestLocalweather(unittest.TestCase):
         """
 
         temps = localweather.converttemp(233.15)
-        self.assertEqual(['233.15K', '-40.00C', '-40.00F'], temps)
+        self.assertEqual(('233.15K', '-40.00C', '-40.00F'), temps)
+        self.assertEqual('233.15K', temps.k)
+        self.assertEqual('-40.00C', temps.c)
+        self.assertEqual('-40.00F', temps.f)
         temps = localweather.converttemp(273.15)
-        self.assertEqual(['273.15K', '0.00C', '32.00F'], temps)
+        self.assertEqual(('273.15K', '0.00C', '32.00F'), temps)
 
         speed = localweather.convertspeed(0)
-        self.assertEqual([0.0, 0.0], speed)
+        self.assertEqual((0.0, 0.0), speed)
         speed = localweather.convertspeed(0.44704)
-        self.assertAlmostEqual([0.44704, 1.0], speed)
+        self.assertAlmostEqual((0.44704, 1.0), speed)
+        self.assertAlmostEqual(0.44704, speed.mps)
         speed = localweather.convertspeed(1.0)
-        self.assertAlmostEqual([1.0, 2.24], speed)
+        self.assertAlmostEqual((1.0, 2.24), speed)
+        self.assertAlmostEqual(2.24, speed.mph)
+
         speed = localweather.convertspeed(-1)
-        self.assertAlmostEqual([-1.0, -2.24], speed)
+        self.assertAlmostEqual((-1.0, -2.24), speed)
         print('need to test gusts')
 
     def test03_run_from_Q(self):
@@ -323,6 +329,29 @@ class TestLocalweather(unittest.TestCase):
         ans: str = ' '.join(aaa)
         #val: str = lw1.gen_sql()
         self.assertEqual(ans, lw1.gen_sql())
+
+    def test06_checkgen_dt(self):
+        print('10 MIN DELAY')
+        _lw1 = LocalWeather()
+        _lw1.load()
+        self.assertTrue(_lw1.valid)
+
+        Sleep(10)
+        _lw2 = LocalWeather()
+        _lw2.load()
+        self.assertTrue(_lw2.valid)
+
+        Sleep(610)
+        _lw3 = LocalWeather()
+        _lw3.load()
+        self.assertTrue(_lw3.valid)
+
+        diffs: List[bool] = []
+        diffs.append(_lw1.times['dt'].ts == _lw2.times['dt'].ts)
+        diffs.append(_lw2.times['dt'].ts == _lw3.times['dt'].ts)
+        diffs.append(_lw1.times['dt'].ts == _lw3.times['dt'].ts)
+        aa = sum(1 for x in diffs if x)
+        self.assertEqual(1, aa)
 
 
 if __name__ == '__main__':

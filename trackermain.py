@@ -35,8 +35,7 @@ from queuesandevents import ARG_KEYS as AK
 
 from nfexceptions import StopEventException
 from sequencer import Sequencer
-from deck import DeckFullError, OutQFullError
-from deck import Deck
+from deck import DeckFullError, OutQFullError, Deck
 from localweather import LocalWeather
 
 from userinput import UserInput
@@ -395,7 +394,7 @@ def Get_LW(arg: Threadargs, **kwargs):
     """Get_LW(arg: Threadargs, **kwargs)
 
     Runs on a timed_work thread
-    Gets Local Medfrod weather in a LocalWeather object and adds it to the rawDataQ_OUT queue.
+    Gets Local Medfrod weather in a LocalWeather object and adds it to the QK.dQ queue.
 
     """
     from qdatainfo import LWQ
@@ -1297,28 +1296,28 @@ def datagen3(hours: float = 0.5):
             try:
                 futures = {}
                 twargs: Threadargs = Threadargs(
-                    bollst.w, barrier, STOP_EVENTS['acquireData'], queues, name='timed_work', interval=60 * 10.5, doit=Get_LW)
+                    bollst.w, barrier, STOP_EVENTS[SEK.ad], queues, name='timed_work', interval=60 * 10.5, doit=Get_LW)
 
                 nfargs: Threadargs = Threadargs(
-                    bollst.n, barrier, STOP_EVENTS['acquireData'], queues, name='nf', interval=None, doit=None)
+                    bollst.n, barrier, STOP_EVENTS[SEK.ad], queues, name='nf', interval=None, doit=None)
 
                 dqrargs: Threadargs = Threadargs(
-                    bollst.t, barrier, STOP_EVENTS['trans'], queues, name='dqr', interval=None, doit=None)
+                    bollst.t, barrier, STOP_EVENTS[SEK.t], queues, name='dqr', interval=None, doit=None)
 
                 daargs: Threadargs = Threadargs(
-                    bollst.da, barrier, STOP_EVENTS['agra'], queues, name='da', interval=None, doit=None)
+                    bollst.da, barrier, STOP_EVENTS[SEK.da], queues, name='da', interval=None, doit=None)
 
                 dbargs: Threadargs = Threadargs(
-                    bollst.db, barrier, STOP_EVENTS['dbwrite'], queues, name='db', interval=None, doit=None)
+                    bollst.db, barrier, STOP_EVENTS[SEK.db], queues, name='db', interval=None, doit=None)
 
                 def bwdone(f):
                     print('breakwait done')
 
                 futures[FK.w] = tpex.submit(timed_work, twargs)
-                # futures[FK.n] = tpex.submit(get_noise, nfargs)
-                # futures[FK.t] = tpex.submit(dataQ_reader, dqrargs)
-                # futures[FK.da] = tpex.submit(dataaggrator, daargs)
-                # futures[FK.db]= tpex.submit(dbQ_writer, dbargs)
+                futures[FK.n] = tpex.submit(get_noise1, nfargs)
+                futures[FK.t] = tpex.submit(dataQ_reader, dqrargs)
+                futures[FK.da] = tpex.submit(dataaggrator, daargs)
+                futures[FK.db]= tpex.submit(dbQ_writer, dbargs)
 
                 # futures = {
                 # gets weather data
@@ -1342,11 +1341,11 @@ def datagen3(hours: float = 0.5):
             tempdec.deck2q(dq)
             dataQDeque: Deck = Deck(10000)
             print('main waiting for start')
-            for _ in range(200):
+            for _ in range(10):
                 ss = [(k, v) for k, v in futures.items()]
                 Sleep(1)
 
-            _ = tpex.submit(breakwait, barrier)
+            _ = tpex.submit(_breakwait, barrier)
             _.add_done_callback(bwdone)
             print('main continuing')
             for _ in range(2 * 3600):
@@ -1503,6 +1502,30 @@ def runthreads(barrier: CTX.Barrier, calls: Tuple[Callable, ...], argdicin: Dict
     _.add_done_callback(bwdone)
     return futures
 
+def dataval1():
+    bb=[]
+    with open('dadata3hour.pickle', 'rb') as f2:
+        try:
+            bb = pickle.load(f2)
+        except Exception as ex:
+            a = 0
+            raise
+
+    def didsigchange(_aa:List[Any]) -> bool:
+        aab:SepDataTup=seperate_data(bb)
+        aac:List[Tuple[NFresult,NFresult]] = []
+        aad:List[Tuple[NFresult,NFresult]] =[]
+
+        for _ in range(1,len(aab.nfq)):
+            aac.append((aab.nfq[_-1].get(),aab.nfq[_].get()))
+        for t in aac:
+            if t[0]!=t[1]:
+                aad.append(t)
+        return len(aad)>0
+
+    sigchange:bool = didsigchange(bb)
+    a=0
+
 
 def datagen1(hours: float = 0.5):
     """datagen1(hours=0.5)
@@ -1512,9 +1535,12 @@ def datagen1(hours: float = 0.5):
 
     """
     THE_LOGGER.info('datagen1 executed')
+    secdiv3 = int(round(3600.0*hours/3))
+
     # queues = QUEUES
     # timetup: Tuple[float, ...] = (hours, 60 * hours, 3600 * hours,)
-    QUEUES[QK.dQ] = CTX.JoinableQueue(maxsize=2000)
+    _maxqsize = 10000
+    QUEUES[QK.dQ] = CTX.JoinableQueue(maxsize=_maxqsize)
     # enable selected threads
 
     bollst: Tuple[bool, ...] = ENABLES(
@@ -1551,32 +1577,48 @@ def datagen1(hours: float = 0.5):
         for v in futures.values():
             isdone = isdone and v.done()
         if not isdone:
-            for _ in range(60 *5):  # wait for a while to let the threads work
+            for _ in range(secdiv3):  # wait for a while to let the threads work
                 Sleep(3)
                 print('.', end='')
         waitresults = shutdown(
             futures, QUEUES, STOP_EVENTS, time_out=120)  # wait max 120 for the threads to stop
         aa = 0
 
-    deck = Deck(2000)
+    deck = Deck(_maxqsize+5)
     deck.q2deck(QUEUES[QK.dQ], mark_done=True)
     aa: List[Any] = []
     bb: List[Any] = []
-    try:
-        while True:
-            aa.append(deck.popleft())
-    except:
-        pass
 
-    if aa:
+    aa = deck.deck2lst()
+    #
+    # check to see if signal changed
+    #
+    #def didsigchange(_aa:List[Any]) -> bool:
+        #aab:SepDataTup=seperate_data(aa)
+        #aac:List[Tuple[qdatainfo.NFQ,qdatainfo.NFQ]] = []
+        #aad:List[Tuple[qdatainfo.NFQ,qdatainfo.NFQ]] =[]
 
-        with open('dadata30min.pickle', 'wb') as fl:
+        #for _ in range(1,len(aab.nfq)):
+            #aac.append((aab.nfq[_-1],aab.nfq[_]))
+        #for t in aac:
+            #if t[0]!=t[1]:
+                #aad.append(t)
+        #return len(aad)>0
+
+
+    #sigchange:bool = didsigchange(aa)
+
+
+
+    if aa :#and sigchange:
+
+        with open('dadata3hour.pickle', 'wb') as fl:
             try:
                 pickle.dump(aa, fl)
             except Exception as ex:
                 a = 0
 
-        with open('dadata30min.pickle', 'rb') as f2:
+        with open('dadata3hour.pickle', 'rb') as f2:
             try:
                 bb = pickle.load(f2)
             except Exception as ex:
@@ -1591,6 +1633,8 @@ def datagen1(hours: float = 0.5):
             if ag != bg:
                 ag.__eq__(bg)
                 print(f'a:{ag}\nb:{bg}')
+
+
     return
 
 
@@ -1626,16 +1670,19 @@ if __name__ == '__main__':
             'Wrong epic starting date/time, must be Jan 1, 1970 midnight utc')
 
     try:
-        val = 1
+        val = 4
         if val == 0:
             main()
 
         elif val == 1:
-            datagen1()
+            datagen1(hours=3.0)
         elif val == 2:
             datagen2()
         elif val == 3:
             datagen3()
+        elif val==4:
+            dataval1()
+
         else:
             raise Exception("wrong val")
 
