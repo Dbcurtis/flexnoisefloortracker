@@ -1,0 +1,6 @@
+2019-05-15 13:45:48,101 - root - <module> - INFO - getports executed as main
+2019-05-15 13:45:54,620 - __main__ - __init__ - DEBUG - Created GetPorts
+2019-05-15 13:47:14,335 - root - <module> - INFO - getports executed as main
+2019-05-15 13:47:35,845 - __main__ - __init__ - DEBUG - Created GetPorts
+2019-05-15 13:48:06,948 - __main__ - get - DEBUG - entered get
+2019-05-15 13:49:28,881 - __main__ - get - DEBUG - exited get with ['COM4', 'COM7', 'COM104', 'COM105', 'COM5']

@@ -1,0 +1,51 @@
+2019-05-16 11:37:51,723 - root - <module> - INFO - userinput executed as main
+2019-05-16 11:38:43,302 - getports - __init__ - DEBUG - Created GetPorts
+2019-05-16 11:38:43,303 - getports - get - DEBUG - entered get
+2019-05-16 11:38:43,513 - getports - get - DEBUG - exited get with ['COM4', 'COM7', 'COM104']
+2019-05-16 13:57:25,337 - root - <module> - INFO - userinput executed as main
+2019-05-16 13:57:56,794 - getports - __init__ - DEBUG - Created GetPorts
+2019-05-16 13:57:56,794 - getports - get - DEBUG - entered get
+2019-05-16 13:57:57,005 - getports - get - DEBUG - exited get with ['COM4', 'COM7', 'COM104']
+2019-06-06 21:30:15,353 - root - <module> - INFO - userinput executed as main
+2019-06-06 21:30:15,354 - getports - __init__ - DEBUG - Created GetPorts
+2019-06-06 21:30:15,369 - getports - get - DEBUG - entered get
+2019-06-06 21:30:15,559 - getports - get - DEBUG - exited get with ['COM4', 'COM7', 'COM104']
+2019-06-06 21:30:30,171 - root - <module> - INFO - userinput executed as main
+2019-06-06 21:30:30,172 - getports - __init__ - DEBUG - Created GetPorts
+2019-06-06 21:30:30,172 - getports - get - DEBUG - entered get
+2019-06-06 21:30:30,366 - getports - get - DEBUG - exited get with ['COM4', 'COM7', 'COM104']
+2019-06-06 21:31:45,650 - root - <module> - INFO - userinput executed as main
+2019-06-06 21:31:45,651 - getports - __init__ - DEBUG - Created GetPorts
+2019-06-06 21:31:45,651 - getports - get - DEBUG - entered get
+2019-06-06 21:31:45,847 - getports - get - DEBUG - exited get with ['COM4', 'COM7', 'COM104']
+2020-03-09 15:44:57,343 - root - <module> - INFO - userinput executed as main
+2020-03-09 15:45:31,710 - root - <module> - INFO - userinput executed as main
+2020-03-09 15:45:50,479 - root - <module> - INFO - userinput executed as main
+2020-03-09 15:47:40,876 - root - <module> - INFO - userinput executed as main
+2020-03-09 15:47:45,090 - getports - __init__ - DEBUG - Created GetPorts
+2020-03-09 15:47:45,090 - getports - get - DEBUG - entered get
+2020-03-09 15:47:45,159 - getports - get - DEBUG - exited get with ['COM4', 'COM104']
+2020-03-09 15:49:26,940 - root - <module> - INFO - userinput executed as main
+2020-03-09 15:49:27,054 - getports - __init__ - DEBUG - Created GetPorts
+2020-03-09 15:49:27,055 - getports - get - DEBUG - entered get
+2020-03-09 15:49:27,121 - getports - get - DEBUG - exited get with ['COM4', 'COM104']
+2020-03-09 15:53:52,323 - root - <module> - INFO - userinput executed as main
+2020-03-09 15:53:52,392 - getports - __init__ - DEBUG - Created GetPorts
+2020-03-09 15:53:52,392 - getports - get - DEBUG - entered get
+2020-03-09 15:53:52,455 - getports - get - DEBUG - exited get with ['COM4', 'COM104']
+2020-03-09 15:54:41,043 - root - <module> - INFO - userinput executed as main
+2020-03-09 15:54:44,227 - getports - __init__ - DEBUG - Created GetPorts
+2020-03-09 15:54:44,228 - getports - get - DEBUG - entered get
+2020-03-09 15:54:44,293 - getports - get - DEBUG - exited get with ['COM4', 'COM104']
+2020-03-09 15:55:37,862 - root - <module> - INFO - userinput executed as main
+2020-03-09 15:55:37,930 - getports - __init__ - DEBUG - Created GetPorts
+2020-03-09 15:55:37,931 - getports - get - DEBUG - entered get
+2020-03-09 15:55:37,993 - getports - get - DEBUG - exited get with ['COM4', 'COM104']
+2020-03-09 15:57:45,175 - root - <module> - INFO - userinput executed as main
+2020-03-09 15:57:45,245 - getports - __init__ - DEBUG - Created GetPorts
+2020-03-09 15:57:45,245 - getports - get - DEBUG - entered get
+2020-03-09 15:57:45,308 - getports - get - DEBUG - exited get with ['COM4', 'COM104']
+2020-03-09 15:58:42,508 - root - <module> - INFO - userinput executed as main
+2020-03-09 15:58:42,574 - getports - __init__ - DEBUG - Created GetPorts
+2020-03-09 15:58:42,575 - getports - get - DEBUG - entered get
+2020-03-09 15:58:42,638 - getports - get - DEBUG - exited get with ['COM4', 'COM104']

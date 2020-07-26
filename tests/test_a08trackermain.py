@@ -89,7 +89,7 @@ def clearstopevents():
 
 
 def myprint(st):  # used to print output, and/or put the output on the TESTQ
-    print(st)
+    #print(st)
     TESTQ.put(st)
 
 
@@ -1263,8 +1263,6 @@ class TestTrackermain(unittest.TestCase):
         print(lwrtPDifs[0],nfrm)
         self.assertTrue(2.6<= lwrtPDifs[0]<=3.1)
         self.assertTrue(1.8<=nfrm<=2.1)
-        a=0
-
 
 
     def testB005_basic_thread_operation(self):
