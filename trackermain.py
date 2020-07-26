@@ -189,6 +189,8 @@ def seperate_data(lst: List[Any]) -> Tuple[List[str], List[qdatainfo.NFQ], List[
         else:
             other.append(_)
     # SepDataTup=namedtuple('SepDataTup','str','nfq','lwq','other')
+    nfqlst.sort()
+    lwqlst.sort()
     result = SepDataTup(textlst, nfqlst, lwqlst, other)
     return result
 
@@ -373,12 +375,6 @@ def genargs(barrier: CTX.Barrier, bollst: Tuple[bool, ...]) -> Dict[int, Threada
 
     result[AK.db] = Threadargs(
         bollst.db, barrier, STOP_EVENTS[SEK.db], QUEUES, name='db', interval=None, doit=None)
-
-    # result[AK.w] = twargs
-    # result[AK.n] = nfargs
-    # result[AK.t] = dqrargs
-    # result[AK.da] = daargs
-    # result[AK.db] = dbargs
 
     return result
 
@@ -1053,41 +1049,54 @@ def timed_work(arg: Threadargs, **kwargs):  # thread_info, delayseconds, fu):
         f'{TL.twarg.name} invoked on thread: {threading.current_thread().getName()}')
 
     if TL.twarg.execute:
-        TL.returnval = deque([], 10)  # queue of max length 10
+        if True:
+        #try:
 
-        TL.thread = threading.current_thread()
-        TL.tname = TL.thread.getName()
-        TL.fu = TL.twarg.doit
+            TL.returnval = deque([], 10)  # queue of max length 10
 
-        TL.myprint(
-            f'{TL.twarg.name} enabled,  waiting to pass barrier')
-        TL.twarg.barrier.wait()  # barrier pass
-        TL.myprint(f'{TL.twarg.name} started: {monotonic()}')
+            TL.thread = threading.current_thread()
+            TL.tname = TL.thread.getName()
+            TL.fu = TL.twarg.doit
 
-        TL.seq = Sequencer(TL.twarg.interval)
-        # wait to see if the stop event is set
-        # while not locald.stop_event.wait(0.45):  # wait is only false if the timeout happens
-        while True:
-            if TL.twarg.stope.is_set():
-                break
-            if TL.seq.do_it_now():
-                TL.returnval.append(
-                    f'{str(Dtc.now().time())}')
-                # print(locald.last10executtimes)
-                # print('invoke')
-                # TL.fu(TL.twarg.qs['dataQ'])
-                TL.fu(TL.twarg)
-            else:
-                _waittime = TL.seq.get_nxt_wait()
-                # print(_waittime)
-                if _waittime > 1.0:
-                    # print('sleep delay')
-                    Sleep(1.0)
-                elif _waittime <= 0.0009:
-                    continue
-                else:
-                    # the 0.001 should ensure that do_it_now returns true
-                    Sleep(_waittime + 0.001)
+            TL.myprint(
+                f'{TL.twarg.name} enabled,  waiting to pass barrier')
+            TL.twarg.barrier.wait()  # barrier pass
+            TL.myprint(f'{TL.twarg.name} started: {monotonic()}')
+
+            TL.seq = Sequencer(TL.twarg.interval)
+            # wait to see if the stop event is set
+            # while not locald.stop_event.wait(0.45):  # wait is only false if the timeout happens
+            while True:
+                if True:
+                #try:
+
+                    if TL.twarg.stope.is_set():
+                        break
+                    if TL.seq.do_it_now():
+                        try:
+
+                            TL.returnval.append(
+                                f'{str(Dtc.now().time())}')
+                            # print(locald.last10executtimes)
+                            # print('invoke')
+                            # TL.fu(TL.twarg.qs['dataQ'])
+                            TL.fu(TL.twarg)
+                        except TypeError as ex:
+                            aa=0
+                    else:
+                        _waittime = TL.seq.get_nxt_wait()
+                        # print(_waittime)
+                        if _waittime > 1.0:
+                            # print('sleep delay')
+                            Sleep(1.0)
+                        elif _waittime <= 0.0009:
+                            continue
+                        else:
+                            # the 0.001 should ensure that do_it_now returns true
+                            Sleep(_waittime + 0.001)
+
+                #except TypeError as ex:
+                    #aa=0
     else:
         TL.myprint(f'{TL.twarg.name} disabled')
 

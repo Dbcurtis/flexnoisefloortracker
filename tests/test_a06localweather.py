@@ -9,8 +9,9 @@ import multiprocessing as mp
 #from multiprocessing import queues
 from time import sleep as Sleep
 #import calendar
-#from collections import deque
-
+from collections import deque
+#from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque, Iterable
+from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque, Iterable
 #import jsonpickle
 import pickle
 import context
@@ -200,12 +201,15 @@ class TestLocalweather(unittest.TestCase):
         Tests if the windspeed and temp works
         """
 
-        temps = localweather.converttemp(233.15)
+        tempf = localweather.converttemp(233.15)
+        temps = localweather.temp2str(tempf)
         self.assertEqual(('233.15K', '-40.00C', '-40.00F'), temps)
         self.assertEqual('233.15K', temps.k)
         self.assertEqual('-40.00C', temps.c)
         self.assertEqual('-40.00F', temps.f)
-        temps = localweather.converttemp(273.15)
+        tempf = localweather.converttemp(273.15)
+        self.assertEqual((273.15, 0.00, 32.0), tempf)
+        temps = localweather.temp2str(tempf)
         self.assertEqual(('273.15K', '0.00C', '32.00F'), temps)
 
         speed = localweather.convertspeed(0)
@@ -247,7 +251,7 @@ class TestLocalweather(unittest.TestCase):
         except queue.Empty:
             pass
 
-        self.assertEquals(3, len(results))
+        self.assertEqual(3, len(results))
         self.assertTrue(q.empty())
         for _lw in results:
             q.task_done()
@@ -262,12 +266,12 @@ class TestLocalweather(unittest.TestCase):
         q.join()
         q.close()
 
-    def test04_lookatObjects(self):
+    def test0004_lookatObjects(self):
         """test04_lookatObjects(
 
         if object works
         """
-        local_weather_lst: LocalWeather = []
+        local_weather_lst: List[LocalWeather] = []
         # _lw:LocalWeather = LocalWeather()
         with open('testlocalWeather62.pickle', 'rb') as fl1:
             try:
@@ -277,21 +281,48 @@ class TestLocalweather(unittest.TestCase):
                 a = 0
                 raise ex
         #deck = deque(local_weather_lst)
+        self.assertEqual(10, len(local_weather_lst))
+
+        def _jj(other: LocalWeather) -> LocalWeather:
+            result = LocalWeather()
+            result.load_from_other(other)
+            return result
+
+        local_weather_lsta: List[LocalWeather] = [
+            _jj(x) for x in local_weather_lst]
+        self.assertEqual(10, len(local_weather_lsta))
+
         lw1: LocalWeather = local_weather_lst[0]
+        lw1a: LocalWeather = local_weather_lsta[0]
 
         # ftexttemp: str = lw1.get_temp()[0][2]
         temp: float = float(lw1.get_temp()[0][2][:-1])
         self.assertAlmostEqual(67.08, temp, places=2)
 
-        self.assertEquals(
+        temp = lw1a.get_temp()[0].f
+        self.assertAlmostEqual(67.08, temp, places=2)
+
+        self.assertEqual(
             'local: 2020/04/08 13:57:00 Pacific Daylight Time', lw1.get_DateTime())
-        self.assertEquals(
+        self.assertEqual(
             'UTC: 2020/04/08 20:57:00', lw1.get_DateTime(local=False))
+
+        self.assertEqual(
+            'local: 2020/04/08 13:57:00 Pacific Daylight Time', lw1a.get_DateTime())
+        self.assertEqual(
+            'UTC: 2020/04/08 20:57:00', lw1a.get_DateTime(local=False))
+
         self.assertEqual(
             "{'temp': 292.64, 'feels_like': 291.39, 'temp_min': 290.15, 'temp_max': 294.26, 'pressure': 1018, 'humidity': 51}", repr(lw1.get_Weather()))
 
         self.assertEqual(
+            "{'temp': 292.64, 'feels_like': 291.39, 'temp_min': 290.15, 'temp_max': 294.26, 'pressure': 1018, 'humidity': 51}", repr(lw1a.get_Weather()))
+
+        self.assertEqual(
             "{'speed': [['1.5 m/s', '3.4 mph'], ['0.0 m/s', '0.0 mph']], 'dir': '280 degrees'}", str(lw1.get_wind()))
+
+        self.assertEqual(
+            "{'speed': [['1.5 m/s', '3.4 mph'], ['0.0 m/s', '0.0 mph']], 'dir': '280 degrees'}", str(lw1a.get_wind()))
 
         self.assertEqual(200, lw1.netstatus)
         keylst = list(lw1.rjson.keys())
@@ -300,18 +331,66 @@ class TestLocalweather(unittest.TestCase):
         self.assertEqual(
             "['base', 'clouds', 'cod', 'coord', 'dt', 'id', 'main', 'name', 'sys', 'timezone', 'visibility', 'weather', 'wind']", str(keylst))
 
+        pairwise: List[Tuple[LocalWeather, LocalWeather]] = []
+        for i in range(1, len(local_weather_lsta)):
+            a: LocalWeather = local_weather_lsta[i - 1]
+            b: LocalWeather = local_weather_lsta[i]
+            pairwise.append((a, b))
+
+        pairwiseeql: List[bool] = []
+        pairwisedif1: List[bool] = []
+        pairwisedif2: List[bool] = []
+
+        for a, b in pairwise:
+            pairwiseeql.append(a == b)  # just check the creation datetime
+            pairwisedif1.append(a.has_changed(b))  # check the data way one
+            # check the data way two
+            pairwisedif2.append(localweather.different(a, b))
+        #
+        # remove the weather reports with the same generation time
+        #
+        self.assertEqual([False, True, False, True, False,
+                          True, False, True, False], pairwisedif1)
+        self.assertEqual([False, True, False, True, False,
+                          True, False, True, False], pairwisedif2)
+        self.assertEqual([True, False, True, False, True,
+                          False, True, False, True], pairwiseeql)
+
+        local_weather_lsta_trimmed: List[LocalWeather] = []
+
+        deq: deque = deque()
+        deq.extend(local_weather_lsta)
+        ref: LocalWeather = deq.popleft()
+        local_weather_lsta_trimmed.append(ref)
+        try:
+            while True:
+                aa = deq.popleft()
+                if aa == ref:
+                    continue
+                ref = aa
+                local_weather_lsta_trimmed.append(ref)
+        except IndexError:
+            pass
+
+        self.assertEqual(5, len(local_weather_lsta_trimmed))
+
     def test05_gen_sql(self):
         #from localweather import LocalWeather, MyTime
 
-        local_weather_lst: LocalWeather = []
+        local_weather_lsta: LocalWeather = []
         # _lw:LocalWeather = LocalWeather()
         with open('testlocalWeather62.pickle', 'rb') as fl1:
             try:
-                local_weather_lst = pickle.load(fl1)
+                local_weather_lsta = pickle.load(fl1)
 
             except Exception as ex:
                 raise ex
         #deck = deque(local_weather_lst)
+        local_weather_lst: List[LocalWeather] = []
+        for x in local_weather_lsta:
+            nlw: LocalWeather = LocalWeather()
+            nlw.load_from_json(x.rjson)
+            local_weather_lst.append(nlw)
         lw1: LocalWeather = local_weather_lst[0]
         a = str(lw1)
 
@@ -321,13 +400,12 @@ class TestLocalweather(unittest.TestCase):
         lw3.load_from_other(lw1)
 
         aaa: List[str] = [
-            'INSERT INTO weather SET Sunset = 1586375106000000,',
-            'Sunrise = 1586328050000000,',
+            'INSERT INTO weather SET Sunset = 1586375106000000, Sunrise = 1586328050000000,',
             'RecDT = 1586354220000000,',
-            'Humidity = 51.0, TempF = 67.08, WindS = 3.4, WindD = 280, WindG = 0.0'
+            'Humidity = 51.0, TempF = 67, WindS = 3.4, WindD = 280, WindG = 0.0'
         ]
         ans: str = ' '.join(aaa)
-        #val: str = lw1.gen_sql()
+        val: str = lw1.gen_sql()
         self.assertEqual(ans, lw1.gen_sql())
 
     def test06_checkgen_dt(self):

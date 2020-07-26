@@ -18,7 +18,7 @@ from datetime import datetime as Dtc
 from datetime import timezone
 from collections import namedtuple
 
-from queue import Empty as QEmpty
+#from queue import Empty as QEmpty
 import multiprocessing as mp
 from time import sleep as Sleep
 #import qdatainfo
@@ -43,16 +43,17 @@ PAYLOAD = {'id': str(MI['id']), 'APPID': '1320944048cabbe1aebe1fbe9c1c7d6c'}
 _VALID_UNITS = ['std', 'metric', 'imperial']
 
 TempTuple = namedtuple('TempTuple', ['k', 'c', 'f'])
+TempTupleStr = namedtuple('TempTupleStr', ['k', 'c', 'f'])
 SpeedTuple = namedtuple('SpeedTuple', ['mps', 'mph'])
 
 
-def converttemp(kin: Any) -> Tuple[str, str, str]:
+def converttemp(kin: Any) -> Tuple[float, float, float]:
     """converttemp(k)
     k is degrees in Kelven as int, float or str
 
     returns TempTuple [xK, xC, xF]
     """
-    result: TempTuple = TempTuple('-K', '-C', '-F')
+    result: TempTuple = TempTuple(0, 0, 0)
     _k1: float = 0.0
     try:
         _k1 = float(kin)
@@ -62,7 +63,13 @@ def converttemp(kin: Any) -> Tuple[str, str, str]:
 
     _c1: float = _k1 - 273.15
     _f1: float = (_c1 * (9 / 5)) + 32.0
-    result = TempTuple(f'{_k1:.2f}K', f'{_c1:.2f}C', f'{_f1:.2f}F')
+    #result = TempTuple(f'{_k1:.2f}K', f'{_c1:.2f}C', f'{_f1:.2f}F')
+    result = TempTuple(_k1, _c1, _f1)
+    return result
+
+
+def temp2str(tt: TempTuple) -> TempTupleStr:
+    result = TempTupleStr(f'{tt.k:.2f}K', f'{tt.c:.2f}C', f'{tt.f:.2f}F')
     return result
 
 
@@ -124,7 +131,6 @@ class MyTime(ComparableMixin):
         self.localtz: str = self.localt.tzname()
         _tcs = self.localt.utcoffset()
         self.localoffset: int = int(24 * _tcs.days + _tcs.seconds / 3600)
-        a = 0
 
     def get_local_sql_timestamp_Notneeded(self) -> str:
         """
@@ -140,7 +146,7 @@ class MyTime(ComparableMixin):
     def get(self) -> List[Any]:
         """get()
 
-        returns a list of the  the utc and local times, the local time zone, and the local offset
+        returns a list of strings for  the utc and local times, the local time zone, and the local offset
         """
         return [self.utcats, self.localtz, self.localoffset]
 
@@ -224,7 +230,8 @@ class LocalWeather(ComparableMixin):
         # pass
 
     def _cmpkey(self):
-        return self.times['dt'].get()[0]
+        return self.times['dt'].ts
+        # return self.times['dt'].get()[0]
 
     def __hash__(self):
         return self.times['dt'].get()[0]
@@ -266,7 +273,7 @@ class LocalWeather(ComparableMixin):
 
         mm = self.maint
 
-        tempf = mm['temp'][0][2][:-1].strip()
+        tempf = f'{round(mm["temp"][0].f) :1d}'  # mm['temp'][0].f
         wnd = mm['wind']
         wnds = wnd['speed'][0][1][:-3].strip()
         wdir = wnd['dir'][:-8].strip()
@@ -285,8 +292,11 @@ class LocalWeather(ComparableMixin):
         result: str = f'INSERT INTO weather SET {times}, {htemp}, {wind}'
         return result
 
-    def has_changed(self, other: Any):
+    def has_changed(self, other: Any) -> bool:
         """has_changed(other)
+
+        checks if the weather parameters are different, not related to the time the data was collected
+        which would be (Not equals)
 
         """
         result = False
@@ -336,7 +346,7 @@ class LocalWeather(ComparableMixin):
         degree = -11.0
         try:
             degree = round(float(wind['deg']), 0)
-        except KeyError as ke:
+        except KeyError:
             pass
 
         rspeed = convertspeed(speed)
@@ -391,8 +401,8 @@ class LocalWeather(ComparableMixin):
         return self.maint['temp']
 
 
-def different(arg1: Any, arg2: Any) -> bool:
-    """different(other)
+def different(arg1: LocalWeather, arg2: LocalWeather) -> bool:
+    """different(arg1,arg2)
 
     """
 
@@ -433,18 +443,17 @@ def main():
                 Sleep(15)
 
         with open(fn, 'wb') as fl:
-
             try:
                 pickle.dump(saved, fl)
-            except Exception as ex:
-                a = 0
+            except Exception:  # as ex:
+                pass
 
         restored: List[LocalWeather] = None
         with open(fn, 'rb') as fl:
             try:
                 restored = pickle.load(fl)
-            except Exception as ex:
-                a = 0
+            except Exception:
+                pass
 
         if restored[0] != saved[0]:
             print('saved and restored first entry are not equal')
@@ -452,8 +461,8 @@ def main():
     with open(f'./tests/{fn}', 'rb') as fl:
         try:
             saved = pickle.load(fl)
-        except Exception as ex:
-            a = 0
+        except Exception:
+            pass
 
     for v in saved:
         qv: LWQ = LWQ(v)
@@ -478,7 +487,6 @@ def main():
 if __name__ == '__main__':
 
     freeze_support()
-
     from datetime import timezone
 
     if not os.path.isdir(LOG_DIR):

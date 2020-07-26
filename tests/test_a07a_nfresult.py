@@ -107,33 +107,36 @@ class Testnoisefloorresult(unittest.TestCase):
             except Exception as ex:
                 a = 0
         self.assertEqual(112, len(queddata))
-        nflst: list[NFResult] = [
+        nflst: List[NFResult] = [
             e.get() for e in queddata if repr(e).startswith('NFQ')]
+
+        nflsttup: List[Tuple[NFResult, NFResult, int]] = []
+        for _ in range(1, len(nflst)):
+            nflsttup.append((nflst[_ - 1], nflst[_], _,))
+        nflstdif: List[Tupal[bool, int]] = [
+            (a == b, c,)for a, b, c in nflsttup]
 
         nfr0: NFResult = nflst[0]
         nfr1: NFResult = nflst[1]
         nfr2: NFResult = nflst[2]
+        nfr3: NFResult = nflst[3]
 
         self.assertTrue(nfr0.__eq__(nfr0))
         self.assertFalse(nfr0.__ne__(nfr0))
         self.assertEqual(nfr0, nfr0)
 
-        self.assertFalse(nfr0 == nfr1)
-        self.assertNotEqual(nfr0, nfr1)
-        self.assertTrue(nfr0.__ne__(nfr1))
+        self.assertFalse(nfr1 == nfr2)
+        self.assertEqual(nfr0, nfr1)
+        self.assertTrue(nfr1.__ne__(nfr2))
 
-        nfr3: NFResult = nflst[3]
-        nfr11: NFResult = nflst[11]
-        self.assertEqual(nfr3, nfr11)
+        self.assertEqual(nflst[13], nflst[14])
 
-        nfr30: NFResult = nflst[30]
-        nfr31: NFResult = nflst[31]
-        self.assertNotEqual(nfr30, nfr31)
+        self.assertNotEqual(nflst[32], nflst[33])
 
-        expres = 'NoiseFloor reading\nJun 09 2020 23:40:01\n    b:40, S6, 1.35\n    b:30, S5, 0.42\nJun 09 2020 23:41:05'
-        self.assertEqual(expres, str(nfr0))
-        expres = 'NFResult: st:Jun 09 2020 23:40:01, et:Jun 09 2020 23:41:05\nb:40, S6, stddv:1.351, adBm: -86.464, mdBm: -86.464\nb:30, S5, stddv:0.415, adBm: -94.048, mdBm: -94.048'
-        self.assertEqual(expres, repr(nfr0))
+        expres = 'NoiseFloor reading\nJul 13 2020 14:47:55\n    b:40, S6, 1.25\n    b:30, S5, 0.46\n    b:20, S3, 0.49\nJul 13 2020 14:49:01'
+        self.assertEqual(expres, str(nflst[0]))
+        expres = 'NFResult: st:Jul 13 2020 14:47:55, et:Jul 13 2020 14:49:01\nb:40, S6, stddv:1.247, adBm: -86.485, mdBm: -86.485\nb:30, S5, stddv:0.456, adBm: -94.516, mdBm: -94.516\nb:20, S3, stddv:0.492, adBm: -104.083, mdBm: -104.083'
+        self.assertEqual(expres, repr(nflst[0]))
 
         dupsnfrlst: List[Tuple[int, NFResult]] = []
         reducednfrlst: List[NFResult] = nflst[0:1]
@@ -143,8 +146,8 @@ class Testnoisefloorresult(unittest.TestCase):
             else:
                 dupsnfrlst.append((i, nflst[i]))
 
-        self.assertEqual(29, len(reducednfrlst))
-        self.assertEqual(31, len(dupsnfrlst))
+        self.assertEqual(40, len(reducednfrlst))
+        self.assertEqual(20, len(dupsnfrlst))
         self.assertEqual(60, len(nflst))
 
 

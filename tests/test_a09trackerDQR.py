@@ -75,7 +75,7 @@ class TestTrackerDQR(unittest.TestCase):
         RESET_STOP_EVENTS()
         RESET_QS()
         self.QUEUEDDATA = []
-        with open('dadata3hr.pickle', 'rb') as f2:  # should contain duplicate records
+        with open('dadata3hour.pickle', 'rb') as f2:  # should contain duplicate records
             try:
                 self.QUEUEDDATA = pickle.load(f2)
             except Exception as ex:
@@ -110,7 +110,7 @@ class TestTrackerDQR(unittest.TestCase):
         import pickle
         queddata: List[Any]
 
-        with open('dadata3hr.pickle', 'rb') as f2:  # should contain duplicate records
+        with open('dadata3hour.pickle', 'rb') as f2:  # should contain duplicate records
             try:
                 queddata = pickle.load(f2)
             except Exception as ex:
@@ -138,9 +138,9 @@ class TestTrackerDQR(unittest.TestCase):
         temp1: List[Tuple[NFResult, NFResult]] = []
         temsort = sepstup.nfq[:]
 
-        def myfun(a: ) -> float:
+        def myfun(a: Any) -> float:
             return
-        aa: List[NFQ] = [] need to sort this stuff
+
         for _i in range(1, nfqlen):
             temp1.append((sepstup.nfq[_i - 1].get(), sepstup.nfq[_i].get()))
 

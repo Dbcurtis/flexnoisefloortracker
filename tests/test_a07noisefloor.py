@@ -145,11 +145,11 @@ class Testnoisefloor(unittest.TestCase):
 
         self.assertEqual(10, len(results))
         samp: NFResult = results[2].get()
-        self.assertEqual('Apr 12 2020 23:31:39', samp.starttime)
-        self.assertEqual('Apr 12 2020 23:32:43', samp.endtime)
+        self.assertEqual('Jul 15 2020 11:14:43', samp.starttime)
+        self.assertEqual('Jul 15 2020 11:15:49', samp.endtime)
         r0bss: SMeterAvg = samp.readings[0]
         self.assertEqual('40', r0bss.band)
-        self.assertEqual(-104.0, r0bss.dBm['mdBm'])
+        self.assertEqual(-86.5, r0bss.dBm['mdBm'])
 
     def test_B01NoiseFloorStopEvent(self):
         """test_005NoiseFloorStopEvent
@@ -481,7 +481,7 @@ class Testnoisefloor(unittest.TestCase):
             td: TD = t1 - t0
             if not isclose(td.total_seconds(), 90.0, abs_tol=0.5):
                 nfqtimel.append((i, td, t0, t1,))
-        self.assertEqual(6, len(nfqtimel))
+        self.assertEqual(4, len(nfqtimel))
 
         # index, time delta between starts, time taken
         nfrlderr: List[Tuple[int, TD, TD]] = []
@@ -494,7 +494,7 @@ class Testnoisefloor(unittest.TestCase):
             dur: TD = et - st1
             if not isclose(sd.seconds, 90.0, abs_tol=0.5) or not isclose(dur.seconds, 65.0, abs_tol=3.0):
                 nfrlderr.append((i, sd, dur))
-        self.assertEqual(6, len(nfrlderr))
+        self.assertEqual(3, len(nfrlderr))
 
 
 if __name__ == '__main__':
