@@ -388,16 +388,19 @@ class TestLocalweather(unittest.TestCase):
         #deck = deque(local_weather_lst)
         local_weather_lst: List[LocalWeather] = []
         for x in local_weather_lsta:
-            nlw: LocalWeather = LocalWeather()
-            nlw.load_from_json(x.rjson)
+            #nlw: LocalWeather = LocalWeather()
+            # nlw.load_from_json(x.rjson)
+            nlw: LocalWeather = localweather.factory(x)
             local_weather_lst.append(nlw)
         lw1: LocalWeather = local_weather_lst[0]
         a = str(lw1)
 
-        lw2 = LocalWeather()
-        lw2.load_from_json(lw1.rjson)
-        lw3 = LocalWeather()
-        lw3.load_from_other(lw1)
+        #lw2 = LocalWeather()
+        # lw2.load_from_json(lw1.rjson)
+        lw2: LocalWeather = localweather.factory(lw1)
+        lw3: LocalWeather = localweather.factory(lw1)
+        # = LocalWeather()
+        # lw3.load_from_other(lw1)
 
         aaa: List[str] = [
             'INSERT INTO weather SET Sunset = 1586375106000000, Sunrise = 1586328050000000,',

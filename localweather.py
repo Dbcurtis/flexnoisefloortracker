@@ -210,7 +210,7 @@ class LocalWeather(ComparableMixin):
     units = 'std'
     netstatus = []
     maint = {}
-    version = '00.00.01'
+    version = '00.00.02'
 
     def __init__(self):
         """LocalWeather()
@@ -313,6 +313,7 @@ class LocalWeather(ComparableMixin):
 
         return result
 
+    # TODO should be deprecated and replaced by localweather.factory
     def load_from_other(self, other: Any):
         """load_from_other(other)
 
@@ -418,6 +419,12 @@ def different(arg1: LocalWeather, arg2: LocalWeather) -> bool:
             mains['temp_max'] != omains['temp_max'] or \
             arg1.rjson['wind'] != o.rjson['wind']
 
+    return result
+
+
+def factory(lwin: LocalWeather) -> LocalWeather:
+    result = LocalWeather()
+    result.load_from_json(lwin.rjson)
     return result
 
 
