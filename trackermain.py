@@ -90,6 +90,33 @@ def _breakwait(barrier):
     """
     barrier.wait()
 
+_validmin:List[int]=[0,10,15,20,30,40,45,50,60]
+def _genfilename(hours) -> str:
+    result:str = 'H:?, M:?'
+    hrs:int = int(hours)
+    fhrs = hours-hrs
+    mins:int = int(fhrs*60)
+
+    difs:List[int] = [abs(lg-mins) for lg in _validmin]
+    x=1000000000000000
+    idx=None
+    for i in range(len(difs)):
+        y=difs[i]
+        if y<x:
+            x=y
+            idx = i
+
+
+    mins = _validmin[idx]
+
+    return f'{hrs}:{mins}'
+
+
+
+
+
+    return result
+
 
 def _thread_template(arg: Threadargs, printfun=_myprint, **kwargs) -> List[int]:
     """_thread_template(arg, printfun=_myprint, **kwargs)
@@ -508,95 +535,6 @@ def dummy_timed(arg: Threadargs, **kwargs):
     return _thread_template(mma, printfun=myprint, **kwargs)
 
 
-# def get_noise(arg: Threadargs, **kwargs):
-    # """get_noise(arg,**kwargs)
-
-    # Threadargs', ['execute', 'barrier', 'stope',
-                                      # 'qs', 'name', 'interval', 'doit'])
-
-    # A thread function to start the data acquisition thread on the flex.
-
-    # """
-    # from flex import Flex
-    # from postproc import BANDS, BandPrams, INITIALZE_FLEX
-    # from noisefloor import Noisefloor
-
-    # if arg.execute:  # execute:
-       # arg.barrier.wait()
-       # print('get_noise started\n', end="")
-       # UI: UserInput = UserInput()
-       # nf: Noisefloor = None
-
-       # UI.request(port='com4')
-       # flexr: Flex = Flex(UI)
-       # print('saving flex state')
-       # initial_state = flexr.save_current_state()
-       # try:
-           # if not flexr.open():
-               # raise (RuntimeError('Flex not connected to serial serial port'))
-
-           # nf = Noisefloor(flexr, arg.qs[QK.dQ], arg.stope)
-           # nf.open()
-           # nf.doit(loops=0, interval=90, runtime=0, dups=True)
-
-       # finally:
-           # print('restore flex prior state')
-           # flexr.restore_state(initial_state)
-
-           # if nf:
-               # nf.close()
-           # UI.close()
-
-    # print('get_noise ended\n', end="")
-    # return
-
-
-# -----------------------
-
-
-# try:
-    # if not flexr.open():
-    # raise (RuntimeError('Flex not connected to serial serial port'))
-    # print('saving current flex state')
-    # initial_state = flexr.save_current_state()
-    # print('initializing dbg flex state')
-    # flexr.do_cmd_list(INITIALZE_FLEX)
-    # flexr.close()
-    # resultQ = queues.get('dataQ')
-    # stop_event = stop_events.get('acquireData')
-
-    # NOISE = Noisefloor(flexr, resultQ, stop_event)
-    # NOISE.open()
-    # loops must be less than 100 as that is the queue size and I am not emptying it here
-    # NOISE.doit(loops=90, interval=90, dups=True)
-    # NOISE.doit(runtime=1, interval=60)
-    # stop_event.set()
-
-    # indata: List[NFQ] = []
-
-    # a = indata[0]
-    # b = outdata[0]
-
-# except(Exception, KeyboardInterrupt) as exc:
-    # if NOISE:
-    # NOISE.close()
-    # UI.close()
-    # raise exc
-
-# finally:
-    # print('restore flex prior state')
-    # flexr.restore_state(initial_state)
-
-    # if NOISE:
-    # NOISE.close()
-    # UI.close()
-
-
-# ---------------------
-# write_2_q):
-
-
-# , fn=lambda outQ, data: outQ.put(data, False)):
 def dataQ_reader_datagen(*args, **kwargs):
     """
 
@@ -1544,7 +1482,10 @@ def datagen1(hours: float = 0.5):
 
     """
     THE_LOGGER.info('datagen1 executed')
+    nameval = str(hours)
     secdiv3 = int(round(3600.0*hours/3))
+
+
 
     # queues = QUEUES
     # timetup: Tuple[float, ...] = (hours, 60 * hours, 3600 * hours,)
@@ -1559,11 +1500,6 @@ def datagen1(hours: float = 0.5):
     barrier = CTX.Barrier(bc)
     calls: Tuple[Callable, ...] = ENABLES(w=timed_work,
                                           n=get_noise1, t=dummy_timed, da=dummy_timed, db=dummy_timed)
-
-    # trackerinitialized: float = monotonic()  # returns seconds
-    # trackerTimeout: float = trackerinitialized + timetup[2]
-
-    # trackerstarted = None
 
     argdic: Dict[int, Threadargs] = genargs(barrier, bollst)
     # mods for test
@@ -1593,47 +1529,29 @@ def datagen1(hours: float = 0.5):
             futures, QUEUES, STOP_EVENTS, time_out=120)  # wait max 120 for the threads to stop
         aa = 0
 
-    deck = Deck(_maxqsize+5)
+    deck:Deck = Deck(_maxqsize+5)
     deck.q2deck(QUEUES[QK.dQ], mark_done=True)
-    aa: List[Any] = []
-    bb: List[Any] = []
+    writelst: List[Any] = []
+    readlst: List[Any] = []
 
-    aa = deck.deck2lst()
-    #
-    # check to see if signal changed
-    #
-    #def didsigchange(_aa:List[Any]) -> bool:
-        #aab:SepDataTup=seperate_data(aa)
-        #aac:List[Tuple[qdatainfo.NFQ,qdatainfo.NFQ]] = []
-        #aad:List[Tuple[qdatainfo.NFQ,qdatainfo.NFQ]] =[]
-
-        #for _ in range(1,len(aab.nfq)):
-            #aac.append((aab.nfq[_-1],aab.nfq[_]))
-        #for t in aac:
-            #if t[0]!=t[1]:
-                #aad.append(t)
-        #return len(aad)>0
+    writelst = deck.deck2lst()
 
 
-    #sigchange:bool = didsigchange(aa)
-
-
-
-    if aa :#and sigchange:
+    if writelst :#and sigchange:
 
         with open('dadata3hour.pickle', 'wb') as fl:
             try:
-                pickle.dump(aa, fl)
+                pickle.dump(writelst, fl)
             except Exception as ex:
                 a = 0
 
         with open('dadata3hour.pickle', 'rb') as f2:
             try:
-                bb = pickle.load(f2)
+                readlst = pickle.load(f2)
             except Exception as ex:
                 a = 0
 
-        z = zip(aa, bb)
+        z = zip(writelst, readlst)
         for a, b in z:
             zz = 0
             ag = a.get()
@@ -1679,7 +1597,7 @@ if __name__ == '__main__':
             'Wrong epic starting date/time, must be Jan 1, 1970 midnight utc')
 
     try:
-        val = 4
+        val = 1
         if val == 0:
             main()
 

@@ -1162,6 +1162,40 @@ class TestTrackermain(unittest.TestCase):
 
 
 # ---------------------------------
+    def testA004_genfilename(self):
+        aa:str = trackermain._genfilename(0)
+        self.assertEqual('0:0', aa)
+        aa:str = trackermain._genfilename(.25)
+        self.assertEqual('0:15', aa)
+        aa:str = trackermain._genfilename(.5)
+        self.assertEqual('0:30', aa)
+        aa:str = trackermain._genfilename(1.0)
+        self.assertEqual('1:0', aa)
+        aa:str = trackermain._genfilename(0.1666666)
+        self.assertEqual('0:10', aa)
+        aa:str = trackermain._genfilename(0.3333333)
+        self.assertEqual('0:20', aa)
+        aa:str = trackermain._genfilename(1.3333333)
+        self.assertEqual('1:20', aa)
+
+        aa:str = trackermain._genfilename(.1)
+        self.assertEqual('0:10', aa)
+        aa:str = trackermain._genfilename(.24)
+        self.assertEqual('0:15', aa)
+        aa:str = trackermain._genfilename(.26)
+        self.assertEqual('0:15', aa)
+        aa:str = trackermain._genfilename(.4)
+        self.assertEqual('0:20', aa)
+        aa:str = trackermain._genfilename(.6)
+        self.assertEqual('0:40', aa)
+        aa:str = trackermain._genfilename(1.01)
+        self.assertEqual('1:0', aa)
+        aa:str = trackermain._genfilename(0.2)
+        self.assertEqual('0:10', aa)
+        aa:str = trackermain._genfilename(0.34)
+        self.assertEqual('0:20', aa)
+        aa:str = trackermain._genfilename(1.12445)
+        self.assertEqual('1:10', aa)
 
     def testB007_basic_thread_operation(self):
         """
