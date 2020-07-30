@@ -285,6 +285,27 @@ def enable_bands(bndids: Sequence[str], val: bool = True) -> int:
 
 enable_bands(['30', '40', '20'])
 
+_validmin: List[int] = [0, 10, 15, 20, 30, 40, 45, 50, 60]
+DatedFileArg = namedtuple('DatedFileArg', ['pre', 'hours', 'post', 'ext'])
+def _get_dated_Pickle_filename(arg: DatedFileArg) -> str:
+
+    hrs: int = int(arg.hours)
+    fhrs = arg.hours - hrs
+    mins: int = int(fhrs * 60)
+
+    difs: List[int] = [abs(lg - mins) for lg in _validmin]
+    x = 1000000000000000
+    idx = None
+    for i in range(len(difs)):
+        y = difs[i]
+        if y < x:
+            x = y
+            idx = i
+
+    mins = _validmin[idx]
+
+    return f'{arg.pre}_{hrs :02d}_{mins :02d}_{arg.post}.{arg.ext}'
+
 
 def main():
     pass

@@ -1162,40 +1162,6 @@ class TestTrackermain(unittest.TestCase):
 
 
 # ---------------------------------
-    def testA004_genfilename(self):
-        aa:str = trackermain._genfilename(0)
-        self.assertEqual('0:0', aa)
-        aa:str = trackermain._genfilename(.25)
-        self.assertEqual('0:15', aa)
-        aa:str = trackermain._genfilename(.5)
-        self.assertEqual('0:30', aa)
-        aa:str = trackermain._genfilename(1.0)
-        self.assertEqual('1:0', aa)
-        aa:str = trackermain._genfilename(0.1666666)
-        self.assertEqual('0:10', aa)
-        aa:str = trackermain._genfilename(0.3333333)
-        self.assertEqual('0:20', aa)
-        aa:str = trackermain._genfilename(1.3333333)
-        self.assertEqual('1:20', aa)
-
-        aa:str = trackermain._genfilename(.1)
-        self.assertEqual('0:10', aa)
-        aa:str = trackermain._genfilename(.24)
-        self.assertEqual('0:15', aa)
-        aa:str = trackermain._genfilename(.26)
-        self.assertEqual('0:15', aa)
-        aa:str = trackermain._genfilename(.4)
-        self.assertEqual('0:20', aa)
-        aa:str = trackermain._genfilename(.6)
-        self.assertEqual('0:40', aa)
-        aa:str = trackermain._genfilename(1.01)
-        self.assertEqual('1:0', aa)
-        aa:str = trackermain._genfilename(0.2)
-        self.assertEqual('0:10', aa)
-        aa:str = trackermain._genfilename(0.34)
-        self.assertEqual('0:20', aa)
-        aa:str = trackermain._genfilename(1.12445)
-        self.assertEqual('1:10', aa)
 
     def testB007_basic_thread_operation(self):
         """
@@ -2027,20 +1993,24 @@ class TestTrackermain(unittest.TestCase):
 
     def testA003_seperate_data(self):
         decklst=[]
-        with open('mixedlst.pickle', 'rb') as fl:
+        with open('dadata3hour.pickle', 'rb') as fl:
             try:
                 decklst=  pickle.load(fl)
             except Exception as ex:
                 a = 0
 
+        self.assertEqual(112,len(decklst))
+        decklst.append('teststr1')
+        decklst.append('teststr2')
+        decklst.append((1,2,3,))
         sepstup:SepDataTup = trackermain.seperate_data(decklst)
         textlst=sepstup.strr
-        self.assertEqual(4,len(textlst))
+        self.assertEqual(2,len(textlst))
         nfqlst=sepstup.nfq
-        self.assertEqual(7,len(nfqlst))
+        self.assertEqual(60,len(nfqlst))
         lwqlst=sepstup.lwq
-        self.assertEqual(11,len(lwqlst))
-        self.assertFalse(sepstup.other)
+        self.assertEqual(52,len(lwqlst))
+        self.assertEqual(1,len(sepstup.other))
 
     def testA002_trimdups(self):
         from localweather import LocalWeather, MyTime

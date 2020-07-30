@@ -7,7 +7,7 @@ import os
 
 
 # from typing import Any, Union, Tuple, Callable, TypeVar, Generic, Sequence, Mapping, List, Dict, Set, Deque
-from typing import Any, Tuple, List, Dict, Set, Callable
+from typing import Any, Tuple, List, Dict, Set, Callable, Deque
 
 from queue import Empty as QEmpty, Full as QFull
 import concurrent.futures
@@ -90,33 +90,6 @@ def _breakwait(barrier):
     """
     barrier.wait()
 
-_validmin:List[int]=[0,10,15,20,30,40,45,50,60]
-def _genfilename(hours) -> str:
-    result:str = 'H:?, M:?'
-    hrs:int = int(hours)
-    fhrs = hours-hrs
-    mins:int = int(fhrs*60)
-
-    difs:List[int] = [abs(lg-mins) for lg in _validmin]
-    x=1000000000000000
-    idx=None
-    for i in range(len(difs)):
-        y=difs[i]
-        if y<x:
-            x=y
-            idx = i
-
-
-    mins = _validmin[idx]
-
-    return f'{hrs}:{mins}'
-
-
-
-
-
-    return result
-
 
 def _thread_template(arg: Threadargs, printfun=_myprint, **kwargs) -> List[int]:
     """_thread_template(arg, printfun=_myprint, **kwargs)
@@ -130,7 +103,7 @@ def _thread_template(arg: Threadargs, printfun=_myprint, **kwargs) -> List[int]:
        the proxi was disabled and then that the thread has ended
     3) if the proxi is enabled, it waits until the barrier is passed and optional prints the proxi started
     4) if interval is None or 0, will run the proxi once, and with return the proxi value if interval is 0, else returns None
-    5) if the interval is a pos number, will run the proxi each interval times accumulating a list of proxie results and
+    5) if the interval is a pos number, will run the proxi each interval times accumulating a list of proxie results
        and will end when the stop event is set and will return the result list
 
     _thread_template shows that the proxie has been invoked or not, and ended.
@@ -202,10 +175,10 @@ def _thread_template(arg: Threadargs, printfun=_myprint, **kwargs) -> List[int]:
 
 
 def seperate_data(lst: List[Any]) -> Tuple[List[str], List[qdatainfo.NFQ], List[qdatainfo.LWQ], List[Any]]:
-    textlst: List[str] = []
-    nfqlst: List[qdatainfo.NFQ] = []
-    lwqlst: List[qdatainfo.LWQ] = []
-    other: List[Any] = []
+    textlst: Deque[str] = []
+    nfqlst: Deque[qdatainfo.NFQ] = []
+    lwqlst: Deque[qdatainfo.LWQ] = []
+    other: Deque[Any] = []
     for _ in lst:
         if isinstance(_, str):
             textlst.append(_)
@@ -216,9 +189,12 @@ def seperate_data(lst: List[Any]) -> Tuple[List[str], List[qdatainfo.NFQ], List[
         else:
             other.append(_)
     # SepDataTup=namedtuple('SepDataTup','str','nfq','lwq','other')
-    nfqlst.sort()
-    lwqlst.sort()
-    result = SepDataTup(textlst, nfqlst, lwqlst, other)
+    tempnfq:List[qdatainfo.NFQ]=list(nfqlst)
+    tempnfq.sort()
+    templwq:List[qdatainfo.LWQ]=list(lwqlst)
+    templwq.sort()
+
+    result = SepDataTup(list(textlst), tempnfq, templwq, list(other))
     return result
 
 
@@ -733,7 +709,7 @@ def dataQ_reader(arg: Threadargs, **kwargs) -> List[Tuple[int, int]]:
 
 
     def doita() -> Tuple[int, int]:
-        dataQdeck.q2deck(arg.qs[QK.dQ], mark_done=False, wait_sec=1.0)
+        dataQdeck.q2deck(arg.qs[QK.dQ], mark_done=True, wait_sec=1.0)
         while True:
             a = dataQdeck.popleft()
             if repr(a).startswith('xx'):
@@ -1216,6 +1192,13 @@ def datagen3(hours: float = 0.5):
     """datagen3(hours=0.5)
 
     """
+
+    from postproc import _get_dated_Pickle_filename
+    from postproc import DatedFileArg as DFA
+
+    _: DFA = DFA('dadata', hours, '', 'pickle',)
+    filename = _get_dated_Pickle_filename(_)    ### not yet implemented in this function
+
     THE_LOGGER.info('datagen3 executed')
     tsi = sys.getswitchinterval()
     # sys.setswitchinterval(3)
@@ -1330,6 +1313,12 @@ def datagen2(hours: float = 0.5):
     """datagen2(hours=0.5)
 
     """
+    from postproc import _get_dated_Pickle_filename
+    from postproc import DatedFileArg as DFA
+
+    _: DFA = DFA('dadata', hours, '', 'pickle',)
+    filename = _get_dated_Pickle_filename(_)    ### not yet implemented in this function
+
     THE_LOGGER.info('datagen2 executed')
     queues = QUEUES
     dq = queues[QK.dQ]
@@ -1481,15 +1470,18 @@ def datagen1(hours: float = 0.5):
     generates a list of the stuff in the queue and pickles it to a file
 
     """
+
+    from postproc import _get_dated_Pickle_filename
+    from postproc import DatedFileArg as DFA
+
+    _: DFA = DFA('dadata', hours, 'dups', 'pickle',)
+    filename = _get_dated_Pickle_filename(_)
+
     THE_LOGGER.info('datagen1 executed')
-    nameval = str(hours)
+
     secdiv3 = int(round(3600.0*hours/3))
 
-
-
-    # queues = QUEUES
-    # timetup: Tuple[float, ...] = (hours, 60 * hours, 3600 * hours,)
-    _maxqsize = 10000
+    _maxqsize = 30000
     QUEUES[QK.dQ] = CTX.JoinableQueue(maxsize=_maxqsize)
     # enable selected threads
 
@@ -1532,34 +1524,34 @@ def datagen1(hours: float = 0.5):
     deck:Deck = Deck(_maxqsize+5)
     deck.q2deck(QUEUES[QK.dQ], mark_done=True)
     writelst: List[Any] = []
-    readlst: List[Any] = []
+
 
     writelst = deck.deck2lst()
+    if writelst : #and sigchange:
 
-
-    if writelst :#and sigchange:
-
-        with open('dadata3hour.pickle', 'wb') as fl:
+        with open(filename, 'wb') as fl:
             try:
                 pickle.dump(writelst, fl)
             except Exception as ex:
                 a = 0
 
-        with open('dadata3hour.pickle', 'rb') as f2:
-            try:
-                readlst = pickle.load(f2)
-            except Exception as ex:
-                a = 0
+        if False:
+            readlst: List[Any] = []
+            with open(filename, 'rb') as f2:
+                try:
+                    readlst = pickle.load(f2)
+                except Exception as ex:
+                    a = 0
 
-        z = zip(writelst, readlst)
-        for a, b in z:
-            zz = 0
-            ag = a.get()
-            bg = b.get()
-            ag.__eq__(bg)
-            if ag != bg:
+            z = zip(writelst, readlst)
+            for a, b in z:
+                zz = 0
+                ag = a.get()
+                bg = b.get()
                 ag.__eq__(bg)
-                print(f'a:{ag}\nb:{bg}')
+                if ag != bg:
+                    ag.__eq__(bg)
+                    print(f'a:{ag}\nb:{bg}')
 
 
     return
@@ -1602,7 +1594,7 @@ if __name__ == '__main__':
             main()
 
         elif val == 1:
-            datagen1(hours=3.0)
+            datagen1(hours=3.25)
         elif val == 2:
             datagen2()
         elif val == 3:

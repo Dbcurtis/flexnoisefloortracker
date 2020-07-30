@@ -4,6 +4,7 @@ Test file for need
 """
 import os
 import sys
+import pickle
 import unittest
 import context
 import postproc
@@ -31,7 +32,6 @@ class Testpostproc(unittest.TestCase):
         self.assertEquals('LSB', postproc.zzmdpost('00'))
         self.assertEquals('??', postproc.zzmdpost('xxx'))
         self.assertEquals('??', postproc.zzmdpost(None))
-        a = 0
 
     def test_A002_zzifpost(self):
         arg = ('ZZIF000141500000001+00000000000070000000;',
@@ -52,6 +52,107 @@ class Testpostproc(unittest.TestCase):
 
     def test_A004_getdata(self):
         pass
+
+    def testA005_get_dated_Pickle_filename(self):
+        from postproc import DatedFileArg as DFA
+        arg: DFA = DFA('pre', 0.5, 'post', 'ext',)
+        aa: str = postproc._get_dated_Pickle_filename(arg)
+        self.assertEqual('pre_00_30_post.ext', aa)
+
+        arg = DFA('', 0.5, '', '',)
+        aa = postproc._get_dated_Pickle_filename(arg)
+        self.assertEqual('_00_30_.', aa)
+
+        arg = DFA('', 0.0, '', '',)
+        self.assertEqual(
+            '_00_00_.', postproc._get_dated_Pickle_filename(arg))
+
+        arg = DFA('', 0.25, '', '',)
+        self.assertEqual(
+            '_00_15_.', postproc._get_dated_Pickle_filename(arg))
+
+        arg = DFA('', 0.5, '', '',)
+        self.assertEqual(
+            '_00_30_.', postproc._get_dated_Pickle_filename(arg))
+
+        arg = DFA('', 1, '', '',)
+        self.assertEqual(
+            '_01_00_.', postproc._get_dated_Pickle_filename(arg))
+
+        arg = DFA('', 0.1666666, '', '',)
+        self.assertEqual(
+            '_00_10_.', postproc._get_dated_Pickle_filename(arg))
+
+        arg = DFA('', 0.3333333, '', '',)
+        self.assertEqual(
+            '_00_20_.', postproc._get_dated_Pickle_filename(arg))
+
+        arg = DFA('', 1.3333333, '', '',)
+        self.assertEqual(
+            '_01_20_.', postproc._get_dated_Pickle_filename(arg))
+
+        arg = DFA('', .1, '', '',)
+        self.assertEqual(
+            '_00_10_.', postproc._get_dated_Pickle_filename(arg))
+
+        arg = DFA('', .24, '', '',)
+        self.assertEqual(
+            '_00_15_.', postproc._get_dated_Pickle_filename(arg))
+
+        arg = DFA('', .26, '', '',)
+        self.assertEqual(
+            '_00_15_.', postproc._get_dated_Pickle_filename(arg))
+
+        arg = DFA('', .4, '', '',)
+        self.assertEqual(
+            '_00_20_.', postproc._get_dated_Pickle_filename(arg))
+
+        arg = DFA('', .6, '', '',)
+        self.assertEqual(
+            '_00_40_.', postproc._get_dated_Pickle_filename(arg))
+
+        arg = DFA('', 1.01, '', '',)
+        self.assertEqual(
+            '_01_00_.', postproc._get_dated_Pickle_filename(arg))
+
+        arg = DFA('', 1.01, '', '',)
+        self.assertEqual(
+            '_01_00_.', postproc._get_dated_Pickle_filename(arg))
+
+        arg = DFA('', .2, '', '',)
+        self.assertEqual(
+            '_00_10_.', postproc._get_dated_Pickle_filename(arg))
+
+        arg = DFA('', .34, '', '',)
+        self.assertEqual(
+            '_00_20_.', postproc._get_dated_Pickle_filename(arg))
+
+        arg = DFA('', 1.12445, '', '',)
+        self.assertEqual(
+            '_01_10_.', postproc._get_dated_Pickle_filename(arg))
+
+        arg = DFA('deleteme', 1.12445, 'dm', 'pickle',)
+        filename = postproc._get_dated_Pickle_filename(arg)
+        testlst = [1, 'one', 2, 'two']
+        testlst1 = []
+
+        with open(filename, 'wb') as fl:
+            try:
+                pickle.dump(testlst, fl)
+            except Exception as ex:
+                a = 0
+
+        with open(filename, 'rb') as fl:
+            try:
+                testlst1 = pickle.load(fl)
+            except Exception as ex:
+                a = 0
+
+        self.assertEqual(testlst, testlst1)
+
+        os.remove(filename)
+
+        a = 0
 
     def test_B001instat_bandParms(self):
 

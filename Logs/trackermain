@@ -48,3 +48,21 @@
 2020-07-15 09:24:30,121 - urllib3.connectionpool - _make_request - DEBUG - https://api.openweathermap.org:443 "GET /data/2.5/weather?id=5740099&APPID=1320944048cabbe1aebe1fbe9c1c7d6c HTTP/1.1" 200 466
 2020-07-15 09:56:07,677 - root - <module> - INFO - trackermain executed as main
 2020-07-15 10:10:15,306 - root - <module> - INFO - trackermain executed as main
+2020-07-27 10:08:52,830 - root - <module> - INFO - trackermain executed as main
+2020-07-29 21:27:58,281 - root - <module> - INFO - trackermain executed as main
+2020-07-29 21:27:58,281 - root - datagen1 - INFO - datagen1 executed
+2020-07-30 08:40:53,405 - root - <module> - INFO - trackermain executed as main
+2020-07-30 08:48:08,570 - root - <module> - INFO - trackermain executed as main
+2020-07-30 08:49:03,321 - root - datagen1 - INFO - datagen1 executed
+2020-07-30 09:36:00,424 - root - <module> - INFO - trackermain executed as main
+2020-07-30 09:36:12,458 - root - datagen1 - INFO - datagen1 executed
+2020-07-30 10:08:35,951 - root - <module> - INFO - trackermain executed as main
+2020-07-30 10:08:35,951 - root - datagen1 - INFO - datagen1 executed
+2020-07-30 10:09:21,844 - root - <module> - INFO - trackermain executed as main
+2020-07-30 10:09:21,845 - root - datagen1 - INFO - datagen1 executed
+2020-07-30 10:09:38,929 - root - <module> - INFO - trackermain executed as main
+2020-07-30 10:09:38,929 - root - datagen1 - INFO - datagen1 executed
+2020-07-30 10:10:01,546 - root - <module> - INFO - trackermain executed as main
+2020-07-30 10:10:01,546 - root - datagen1 - INFO - datagen1 executed
+2020-07-30 10:10:51,292 - root - <module> - INFO - trackermain executed as main
+2020-07-30 10:10:51,292 - root - datagen1 - INFO - datagen1 executed
