@@ -1077,7 +1077,8 @@ class TestTrackermain(unittest.TestCase):
         testB007_basic_thread_operation
         Similar to testB005, but testing data gen in trackermain
         """
-
+        #TODO this test may never stop, need to check
+        print('this test may never stop, need to check')
         barrier: CTX.Barrier = None
         futures: Dict[str, Any] = {}
 

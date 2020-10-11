@@ -25,6 +25,10 @@ CTX = mp.get_context('spawn')  # threading context
 _DEFALT_Q_SIZE: int = 100
 Queuekeys = namedtuple('Queuekeys', ['dQ', 'dpQ', 'dbQ'])
 QUEUE_KEYS = Queuekeys('dataQ', 'dpQ', 'dbQ')
+"""QUEUE_KEYS
+
+QK.dQ = 'dataQ'; QK.dpQ = 'dpQ'; QK.dbQ = 'dbQ'
+"""
 
 
 QUEUES: Dict[str, CTX.JoinableQueue] = {
@@ -43,6 +47,11 @@ STOP_EVENT_KEYS = Stopeventkeys(
     'dataagragator',
     'dbwriter')
 
+"""STOP_EVENT_KEYS
+
+SEK.ad = 'acquireData'; SEK.t = 'transfer'; SEK.da = 'dataagragator'; SEK.db = 'dbwriter'
+"""
+
 STOP_EVENTS: Dict[str, mp.Event] = {
     STOP_EVENT_KEYS.ad: CTX.Event(),
     STOP_EVENT_KEYS.t: CTX.Event(),
@@ -51,7 +60,39 @@ STOP_EVENTS: Dict[str, mp.Event] = {
 }
 
 
+POSSIBLE_F_KEYS: List[str] = [
+    'weather',
+    'noise',
+    'transfer',
+    'dataagragator',
+    'dbwriter'
+]
+
+Futurekeys = namedtuple('Futurekeys', [
+    'w',
+    'n',
+    't',
+    'da',
+    'db'])
+
+POSSIBLE_F_TKEYS = Futurekeys('weather',
+                              'noise',
+                              'transfer',
+                              'dataagragator',
+                              'dbwriter')
+
+
+Enables = namedtuple('Enables', Futurekeys._fields)
+
+Argkeys = namedtuple('Argkeys', Futurekeys._fields)
+ARG_KEYS = Argkeys(0, 1, 2, 3, 4)
+
+
 def RESET_STOP_EVENTS():
+    """RESET_STOP_EVENTS()
+
+    clears the events in STOP_EVENTS
+    """
     for v in STOP_EVENTS.values():
         v.clear()
 
@@ -70,27 +111,3 @@ def RESET_QS():
             continue
 
 
-POSSIBLE_F_KEYS: List[str] = [
-    'weather',
-    'noise',
-    'transfer',
-    'dataagragator',
-    'dbwriter'
-]
-Futurekeys = namedtuple('Futurekeys', [
-    'w',
-    'n',
-    't',
-    'da',
-    'db'])
-
-POSSIBLE_F_TKEYS = Futurekeys('weather',
-                              'noise',
-                              'transfer',
-                              'dataagragator',
-                              'dbwriter')
-
-Enables = namedtuple('Enables', Futurekeys._fields)
-
-Argkeys = namedtuple('Argkeys', Futurekeys._fields)
-ARG_KEYS = Argkeys(0, 1, 2, 3, 4)

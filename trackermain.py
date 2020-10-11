@@ -175,6 +175,13 @@ def _thread_template(arg: Threadargs, printfun=_myprint, **kwargs) -> List[int]:
 
 
 def seperate_data(lst: List[Any]) -> Tuple[List[str], List[qdatainfo.NFQ], List[qdatainfo.LWQ], List[Any]]:
+    """seperate_data(lst)
+
+    returns a (List[str], List[qdatainfo.NFQ], List[qdatainfo.LWQ], List[Any],)
+
+    The NFQ and LWQ lists are sorted
+
+    """
     textlst: Deque[str] = []
     nfqlst: Deque[qdatainfo.NFQ] = []
     lwqlst: Deque[qdatainfo.LWQ] = []
@@ -1022,9 +1029,16 @@ def shutdown(futures: Dict[str, Any], queues, stopevents, time_out=30) -> Tuple[
     """shutdown(futures, queues, stopevents)
     returns wait results
 
+    sequences the shutdown process
+    Shutting down the Data Acquisition threads, weather and noise,
+    then when they are done, stopping the transfer thread,
+    then the dataagragator thread
+    and finally the dbwriter thread
+
+
     """
 
-    # contains the keys for the defined importaint threads
+    # contains the future keys for the defined importaint threads
 
     fkeys_inorder: List[str] = [
         k for k in list(FK) if k in futures.keys() and futures[k]]
@@ -1032,21 +1046,40 @@ def shutdown(futures: Dict[str, Any], queues, stopevents, time_out=30) -> Tuple[
         return None
 
     class DataaccShutdown:
+        """DataaccShutdown()
+
+
+
+        """
         def __init__(self):
             self.w_is_shutdown = not FK.w in fkeys_inorder
             self.n_is_shutdown = not FK.n in fkeys_inorder
             self.disabled = self.w_is_shutdown and self.n_is_shutdown  # this object is invalid
-            pass
+            a=0
 
         def w_sd(self):
-            self.w_is_shutdown = True
-            self.donext()
+            """w_sd()
+
+
+            """
+            if not self.w_is_shutdown:
+                self.w_is_shutdown = True
+                self.donext()
 
         def n_sd(self):
-            self.n_is_shutdown = True
-            self.donext()
+            """n_sd()
+
+
+            """
+            if not self.n_is_shutdown:
+                self.n_is_shutdown = True
+                self.donext()
 
         def donext(self):
+            """donext()
+
+
+            """
             if not self.disabled \
                and self.n_is_shutdown \
                and self.w_is_shutdown \
@@ -1083,7 +1116,7 @@ def shutdown(futures: Dict[str, Any], queues, stopevents, time_out=30) -> Tuple[
         STOP_EVENTS[SEK.db].set()
         pass
 
-    shutdowns: Dict[str, Callable] = {
+    shutdowns: Dict[str, Callable] = { #Dictionary for Future Keys to completion callbacks
         FK.w: weather_shutdown,
         FK.n: noise_shutdown,
         FK.t: transfer_shutdown,
@@ -1091,11 +1124,12 @@ def shutdown(futures: Dict[str, Any], queues, stopevents, time_out=30) -> Tuple[
         FK.db: dbwrite_shutdown
     }
     for k, fn in shutdowns.items():
-        futures[k].add_done_callback(fn)
+        futures[k].add_done_callback(fn)  #inject the callback routines
+    a=0
 
 
     alldone: bool = True
-    for _ in futures.values():
+    for _ in futures.values():  # check if the futures are all doing
         alldone = alldone and _.done()
 
     if not alldone:
@@ -1120,6 +1154,91 @@ def main(hours: float = 0.5):
     """main(hours=0.5)
 
     """
+    #--------------------------------new
+
+
+    THE_LOGGER.info('main executed')
+
+    secdiv3 = int(round(3600.0*hours/3))
+
+    _maxqsize = 30000
+    QUEUES[QK.dQ] = CTX.JoinableQueue(maxsize=_maxqsize)
+    # enable selected threads
+
+    bollst: Tuple[bool, ...] = ENABLES(w=True, n=True, t=True, da=True, db=True)
+    bc: int = sum([1 for _ in bollst if _]) + 1  # count them for barrier
+
+    barrier = CTX.Barrier(bc)
+    calls: Tuple[Callable, ...] = ENABLES(w=timed_work,
+                                          n=get_noise1, t=dummy_timed, da=dummy_timed, db=dummy_timed)
+
+    argdic: Dict[int, Threadargs] = genargs(barrier, bollst)
+    # mods for test
+    argdic[AK.w] = argdic[AK.w]._replace(
+        name='timed_work', interval=60 * 3.5, doit=Get_LW)
+    argdic[AK.n] = argdic[AK.n]._replace(
+        interval=None)
+    argdic[AK.t] = argdic[AK.t]._replace(
+        interval=1)
+    argdic[AK.da] = argdic[AK.da]._replace(
+        interval=1)
+    argdic[AK.db] = argdic[AK.db]._replace(
+        interval=1)
+
+    futures: Dict[str, Any] = {}
+    waitresults: Tuple[Set, Set] = None
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='dbc-') as tpex:
+        futures = runthreads(barrier, calls, argdic, tpex)
+        isdone: bool = True
+        for v in futures.values():
+            isdone = isdone and v.done()
+        if not isdone:
+            for _ in range(secdiv3):  # wait for a while to let the threads work
+                Sleep(3)
+                print('.', end='')
+        waitresults = shutdown(
+            futures, QUEUES, STOP_EVENTS, time_out=120)  # wait max 120 for the threads to stop
+        aa = 0
+
+    deck:Deck = Deck(_maxqsize+5)
+    deck.q2deck(QUEUES[QK.dQ], mark_done=True)
+    writelst: List[Any] = []
+
+
+    writelst = deck.deck2lst()
+    if writelst : #and sigchange:
+
+        with open(filename, 'wb') as fl:
+            try:
+                pickle.dump(writelst, fl)
+            except Exception as ex:
+                a = 0
+
+        if False:
+            readlst: List[Any] = []
+            with open(filename, 'rb') as f2:
+                try:
+                    readlst = pickle.load(f2)
+                except Exception as ex:
+                    a = 0
+
+            z = zip(writelst, readlst)
+            for a, b in z:
+                zz = 0
+                ag = a.get()
+                bg = b.get()
+                ag.__eq__(bg)
+                if ag != bg:
+                    ag.__eq__(bg)
+                    print(f'a:{ag}\nb:{bg}')
+
+
+    return
+
+
+
+
+    #-----------------------------old below
     def breakwait(barrier):
         barrier.wait()
         myprint('breakwait started')
@@ -1409,6 +1528,13 @@ def myprint(*arg):
 
 
 def runthreads(barrier: CTX.Barrier, calls: Tuple[Callable, ...], argdicin: Dict[str, Threadargs], tpex) -> Dict[str, Any]:
+    """runthreads(barrier, calls, argdicin,tpex)
+
+    calls is a named tuple
+
+    returns a Dict[str, Any]
+
+    """
 
     def bwdone(f):
         pass

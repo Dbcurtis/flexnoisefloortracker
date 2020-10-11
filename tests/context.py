@@ -1,6 +1,6 @@
-#!/usr/bin/env python3
+#!/usr / bin / env python3
 """
-context for tests
+ context for tests
 """
 import os
 import sys

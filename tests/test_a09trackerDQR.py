@@ -69,16 +69,22 @@ def removeadjdups(lstin: List[Qdatainfo]) -> List[Qdatainfo]:
 
 
 def _removeadjdups(lstin: List[Any], sfn=lambda a, b: a != b) -> List[Any]:
+    """_removedadjdups(lstin: List[Any], sfn=lambda a, b: a != b) ->List[Any]
+
+    lstin is a list of Any
+    sfn defaults to a lambda (a,b) that returns a!=b
+
+    """
     tempdeque = deque(lstin)
     resultdq = deque()
-    cur: Any = tempdeque.popleft()
-    resultdq.append(cur)
+    cur: Any = tempdeque.popleft()  # use the first item as my current item
+    resultdq.append(cur)  # and put it on the results
     try:
         while True:
-            neew = tempdeque.popleft()
+            neew = tempdeque.popleft()  # keep popping till out of pops
             if sfn(cur, neew):  # cur != neew:
-                cur = neew
-                resultdq.append(neew)
+                cur = neew  # different so make neew cur
+                resultdq.append(neew)  # and save neew
     except:
         pass
 
@@ -130,6 +136,16 @@ class TestTrackerDQR(unittest.TestCase):
             q.close()
 
     def testA000_dataQpickleread(self):
+        """testA000_dataQpickleread()
+
+        Just check that I can read a picked file with a mixture of NFQ, LWQ, Text, and Other entries
+        and be able to separate them out.
+
+        This checks that the test setup read works correctly
+
+        Also does the first check on trackermain.seperate_data
+
+        """
         import pickle
         queddata: List[Any]
 
@@ -150,6 +166,7 @@ class TestTrackerDQR(unittest.TestCase):
         deck.append('text1')
         deck.append('text2')
         deck.append({'d': 1})
+        self.assertEqual(124, len(deck))
         sepstup: SepDataTup = trackermain.seperate_data(deck.deck2lst())
         self.assertEqual(2, len(sepstup.strr))
         self.assertEqual(65, len(sepstup.nfq))
@@ -157,22 +174,30 @@ class TestTrackerDQR(unittest.TestCase):
         self.assertEqual(1, len(sepstup.other))
 
     def testA001_dataQ(self):
+        """testA001_dataQ()
+
+        Check that sorting the queued data operates as expected.
+
+        show I can append the list to itsself, sort, remove duplicates and have the origninal list back
+        """
 
         queddata: List[Any] = self.QUEUEDDATA[:]
         self.assertEqual(121, len(queddata))
         self.assertNotEqual(str(queddata[0]), str(queddata[1]))
-        queddata.extend(self.QUEUEDDATA[:])
+        queddata.extend(self.QUEUEDDATA[:])  # duplicate the list
 
         self.assertEqual(242, len(queddata))
+        # shows the list is not sorted
         self.assertNotEqual(str(queddata[0]), str(queddata[1]))
         queddata.sort()  # timnestamp order
+        # shows the list is sorted correctly
         self.assertEqual(str(queddata[0]), str(queddata[1]))
-        aaa: List[Any] = _removeadjdups(queddata)
-        self.assertEqual(121, len(aaa))
+        #aaa: List[Any] = _removeadjdups(queddata)
+        self.assertEqual(121, len(_removeadjdups(queddata)))
 
         queddata = self.QUEUEDDATA[:]
 
-        queddata.sort()
+        queddata.sort()  # sorts by time queued
 
         sepstup: SepDataTup = trackermain.seperate_data(queddata)
         self.assertEqual(65, len(sepstup.nfq))
@@ -182,6 +207,7 @@ class TestTrackerDQR(unittest.TestCase):
 
         nfqlstdirty: List[NFQ] = sepstup.nfq[:]
         nfqlstdirty.sort()
+        # checks that sepstup.nfq is sorted
         self.assertTrue(sepstup.nfq == nfqlstdirty)
         nfqnotimedup = removeadjdups(nfqlstdirty)
         self.assertTrue(nfqnotimedup == nfqlstdirty)
@@ -199,10 +225,19 @@ class TestTrackerDQR(unittest.TestCase):
         self.assertEqual(19, len(_removeadjdups(lwlst)))
 
     def testA002_dataQ(self):
+        """testA002_dataQ()
+
+
+        """
         queddata: List[Any] = self.QUEUEDDATA[:]
         queddata.sort()  # sorts by time queued
 
         def valid_check(nnfr: NFResult) -> bool:
+            """valid_check(nnfr: NFResult) -> bool
+
+            Checks if a NFResult is valid. Invalid ones have .signal_st['sl] == 'sE'
+
+            """
             result: bool = True
             for _ in nnfr.readings:
                 aa = _.signal_st['sl']
@@ -212,6 +247,9 @@ class TestTrackerDQR(unittest.TestCase):
             return result
 
         def reducenfq(arg: List[NFQ], sfn1=lambda a, b: a == b, sfn2=lambda a, b: a != b) -> List[NFQ]:
+            """reducenfq(arg: List[NFQ], sfn1=lambda a, b: a == b, sfn2=lambda a, b: a != b) -> List[NFQ]:
+
+            """
             deck: Deque[NFQ] = deque(arg)
 
             curnfq: NFQ = deck.popleft()
@@ -241,6 +279,9 @@ class TestTrackerDQR(unittest.TestCase):
             return resultdq
 
         def reducelwq(arg: List[LWQ]) -> List[LWQ]:
+            """reducelwq(arg: List[LWQ]) -> List[LWQ]:
+
+            """
             deck: Deque[LWQ] = deque(arg)
             resultdq = deque()
             curlwq: LWQ = deck.popleft()
@@ -265,6 +306,7 @@ class TestTrackerDQR(unittest.TestCase):
         ad.extend(bd)
         cl = list(ad)
         cl.sort()
+        # skip till the first lwq entry which holds the reference date.
         while not isinstance(cl[0], LWQ):
             cl.pop(0)
 

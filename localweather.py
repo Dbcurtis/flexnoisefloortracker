@@ -403,7 +403,7 @@ class LocalWeather(ComparableMixin):
 
 
 def different(arg1: LocalWeather, arg2: LocalWeather) -> bool:
-    """different(arg1,arg2)
+    """different(arg1: LocalWeather, arg2: LocalWeather) -> bool:
 
     """
 
@@ -423,6 +423,9 @@ def different(arg1: LocalWeather, arg2: LocalWeather) -> bool:
 
 
 def factory(lwin: LocalWeather) -> LocalWeather:
+    """factory(lwin: LocalWeather) -> LocalWeather
+
+    """
     result = LocalWeather()
     result.load_from_json(lwin.rjson)
     return result
