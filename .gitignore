@@ -1,0 +1,16 @@
+# ignore all wing admin files
+*.wp[ru]
+
+# ignore all files in the cache
+__pycache__/
+tests/__pycache__/
+
+# ignore all files in the logs dir
+logs/
+Logs/
+
+# ignore all files in the python virtual env
+.wvenv/
+
+# my private prams file
+
